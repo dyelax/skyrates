@@ -1,12 +1,13 @@
 import { cargoUsed, PORTS, type GameState, type PortId } from './model'
+import { CITY_ECONOMY } from './city-economy'
 import { icon } from './icons'
 import { mountDockTalk } from './dock-talk'
-import { lightHarbor } from './harbor-air'
+import type { HarborWorld } from './voxel/harbor-world'
+import './voxel/harbor.css'
 import { bell, soundEnabled, toggleSound } from './audio'
 import type { InteriorView } from './interiors'
 
-type Place = 'market' | 'local' | 'authority' | 'ship' | 'shipyard'
-type Point = [number, number]
+type Place = 'market' | 'local' | 'authority' | 'ship' | 'shipyard' | 'civic'
 // Boxes and pins are percentages of the painted plate, independent of the viewport.
 type Zone = [left: number, top: number, right: number, bottom: number, pinX: number, pinY: number]
 interface Quay {
@@ -14,7 +15,6 @@ interface Quay {
   weather: string
   local: string
   role: string
-  glass: Point
   zones: Record<Place, Zone>
 }
 const quays: Record<PortId, Quay> = {
@@ -23,8 +23,8 @@ const quays: Record<PortId, Quay> = {
     weather: 'Clear skies',
     local: 'Moss Pellar',
     role: 'Orchard porter',
-    glass: [38, 34],
     zones: {
+      civic: [5, 20, 25, 36, 19, 30],
       market: [1, 37, 24, 85, 14, 62],
       local: [26, 57, 36, 95, 30, 64],
       authority: [25, 16, 53, 64, 42, 47],
@@ -37,8 +37,8 @@ const quays: Record<PortId, Quay> = {
     weather: 'Violet haze',
     local: 'Sella Venn',
     role: 'Master glazier',
-    glass: [21, 26],
     zones: {
+      civic: [3, 14, 25, 30, 16, 24],
       market: [1, 32, 28, 67, 15, 49],
       local: [19, 59, 32, 98, 24, 65],
       authority: [35, 7, 59, 65, 48, 48],
@@ -51,8 +51,8 @@ const quays: Record<PortId, Quay> = {
     weather: 'Fair winds',
     local: 'Skipper Neri',
     role: 'Tender skipper',
-    glass: [88, 56],
     zones: {
+      civic: [3, 15, 26, 30, 17, 23],
       market: [1, 30, 23, 86, 14, 57],
       local: [22, 55, 32, 94, 27, 63],
       authority: [27, 14, 58, 69, 44, 47],
@@ -65,8 +65,8 @@ const quays: Record<PortId, Quay> = {
     weather: 'High cirrus',
     local: 'Pilot Sen',
     role: 'Weather pilot',
-    glass: [47, 32],
     zones: {
+      civic: [39, 9, 55, 23, 46, 18],
       market: [1, 30, 25, 81, 13, 55],
       local: [23, 58, 34, 95, 28, 64],
       authority: [28, 13, 58, 68, 44, 46],
@@ -76,18 +76,25 @@ const quays: Record<PortId, Quay> = {
   },
 }
 const glyphs: Record<Place, string> = {
+  civic: 'compass',
   market: 'shopping-basket',
   local: 'message-circle',
   authority: 'scroll-text',
   ship: 'sailboat',
   shipyard: 'hammer',
 }
-const places: Place[] = ['market', 'authority', 'ship', 'shipyard', 'local']
+const places: Place[] = ['market', 'authority', 'ship', 'shipyard', 'local', 'civic']
 
 function placeDetails(s: GameState, place: Place): [string, string, string] {
   switch (place) {
-    case 'market':
-      return ['Port Market', 'Trade cargo', 'Visit Port Market']
+    case 'market': {
+      const name = CITY_ECONOMY[s.port].market
+      return [name, 'Trade cargo', 'Visit Port Market · ' + name]
+    }
+    case 'civic': {
+      const name = CITY_ECONOMY[s.port].institution
+      return [name, 'Local institution', 'Visit ' + name]
+    }
     case 'local':
       return [quays[s.port].local, quays[s.port].role, 'Talk to ' + quays[s.port].local]
     case 'authority':
@@ -99,7 +106,7 @@ function placeDetails(s: GameState, place: Place): [string, string, string] {
     case 'ship':
       return ['The Wayfarer', 'Board your schooner', 'Board The Wayfarer']
     case 'shipyard':
-      return ['Shipyard', 'Refit & recruit', 'Visit Shipyard']
+      return [CITY_ECONOMY[s.port].yard, 'Refit & recruit', 'Visit Shipyard · ' + CITY_ECONOMY[s.port].yard]
   }
 }
 function spot(s: GameState, place: Place): string {
@@ -124,9 +131,9 @@ export function mountHarbor(
   const lit = state.mission === 'lit' && ['sunstep', 'glasshouse'].includes(state.port)
   const scenery = 'art/quay-' + state.port + (lit ? '-lit' : '') + '.webp'
   main.innerHTML = `<section class="quay" aria-label="${PORTS[state.port].name} harbor">
+    <div class="walk-view"><canvas aria-label="Walkable 3D harbor. Walk with W A S D, drag to look, or tap the paving to walk."></canvas></div>
     <div class="quay-scroll" tabindex="-1"><div class="quay-track"><div class="quay-plate">
       <img class="quay-art" alt="The working docks at ${PORTS[state.port].name}" src="${scenery}" fetchpriority="high">
-      <canvas class="quay-air" aria-hidden="true"></canvas>
       ${places.map((place) => spot(state, place)).join('')}
     </div></div></div>
     <div class="quay-shade" aria-hidden="true"></div>
@@ -136,6 +143,7 @@ export function mountHarbor(
     <div class="field-tools"><button class="chart-tool" type="button" data-go="chart" aria-label="Sky chart"><img src="compass.svg" alt=""><span>Sky chart</span></button>
       <button class="scene-tool journal-tool" type="button" data-go="log" aria-label="Captain’s log" title="Captain’s log">${icon('book-open')}</button></div>
     <button class="discover" type="button" data-tool="labels" aria-pressed="false" title="Toggle place names (H)">${icon('scan-eye')}<span>Show places</span><kbd>H</kbd></button>
+    <div class="walk-help"><span class="walk-instructions">WASD walk · Drag to look · Click paving to walk</span><button data-home type="button" aria-label="Return to the landing" title="Return to the landing (Home)">⌂</button></div>
     <div class="pan-hints"><button type="button" aria-label="Pan left" data-pan="-1">‹</button><button type="button" aria-label="Pan right" data-pan="1">›</button></div>
     <div class="quay-overlay" hidden></div></section>`
   const scene = main.querySelector<HTMLElement>('.quay')!
@@ -160,7 +168,23 @@ export function mountHarbor(
     },
     { passive: true },
   )
-  const stopAir = lightHarbor(scene.querySelector('canvas')!, quay.glass, lit)
+  let world: HarborWorld | null = null
+  let closed = false
+  if (state.firstWatch !== 'new' || state.day !== 1)
+    void import('./voxel/harbor-world')
+      .then(({ mountWorld }) => {
+        if (closed) return
+        world = mountWorld(scene, state, (place) => {
+          scene.querySelector<HTMLButtonElement>('[data-place="' + place + '"]')?.click()
+        })
+      })
+      .catch(() => {
+        if (!closed) {
+          const help = scene.querySelector<HTMLElement>('.walk-instructions')!
+          scene.classList.add('illustrated-mode')
+          help.textContent = 'Illustrated harbor · 3D rendering unavailable'
+        }
+      })
 
   function labelsOn() {
     const show = scene.classList.toggle('show-places')
@@ -246,7 +270,7 @@ export function mountHarbor(
     }
   }
   function keyboard(ev: KeyboardEvent) {
-    if (ev.ctrlKey || ev.metaKey || ev.altKey) return
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || document.querySelector('dialog[open]')) return
     if (!overlay.hidden) {
       if (ev.key === 'Escape') {
         ev.preventDefault()
@@ -280,7 +304,12 @@ export function mountHarbor(
   }
   // Tabbing to a person on a narrow display pans the painted scene with its marker.
   plate.addEventListener('focusin', (ev) => {
-    if (!(ev.target instanceof HTMLButtonElement) || !ev.target.matches(':focus-visible') || !scene.classList.contains('pannable')) return
+    if (!(ev.target instanceof HTMLButtonElement) || !ev.target.matches(':focus-visible')) return
+    if (world) {
+      if (ev.target.classList.contains('pin-outside')) world.framePlace(ev.target.dataset.place as Place)
+      return
+    }
+    if (!scene.classList.contains('pannable')) return
     const marker = ev.target.querySelector('.place-pin')?.getBoundingClientRect()
     if (marker && (marker.left < 35 || marker.right > scroller.clientWidth - 35))
       scroller.scrollBy({ left: marker.left + marker.width / 2 - scroller.clientWidth / 2 })
@@ -289,7 +318,8 @@ export function mountHarbor(
   document.addEventListener('keydown', keyboard)
   return () => {
     resize.disconnect()
-    stopAir()
+    closed = true
+    world?.dispose()
     document.removeEventListener('keydown', keyboard)
     scene.removeEventListener('click', click)
   }

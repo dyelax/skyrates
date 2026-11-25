@@ -1,0 +1,80 @@
+.watch-handbook,
+.first-watch-note {
+  background: #17272bee;
+  color: #f4ead6;
+  border: 1px solid #887954;
+  box-shadow: 0 8px 36px #020a0e66;
+  border-radius: 5px;
+}
+.watch-handbook {
+  width: min(32rem, calc(100% - 2rem));
+  max-height: 85dvh;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+.watch-handbook::backdrop {
+  background: #07121bb8;
+}
+.watch-handbook header,
+.first-watch-note div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+.watch-handbook h2 {
+  font: 600 2.3rem/1.1 var(--font-serif);
+}
+.watch-handbook small,
+.first-watch-note small {
+  color: #f1d394;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+.watch-handbook p {
+  margin: 0.8rem 0;
+  line-height: 1.45;
+}
+.watch-handbook details {
+  border-top: 1px solid #415257;
+  padding: 0.7rem 0;
+}
+.watch-handbook summary {
+  cursor: pointer;
+  color: #e8d3a1;
+  font-weight: 600;
+}
+.first-watch-note {
+  z-index: 6;
+  position: absolute;
+  left: clamp(1rem, 3vw, 2.75rem);
+  bottom: 6.5rem;
+  width: min(19rem, calc(100% - 2rem));
+  padding: 0.85rem 1.1rem;
+}
+.first-watch-note p {
+  margin: 0.35rem 0 0.7rem;
+}
+.first-watch-note div {
+  justify-content: flex-start;
+}
+.watch-handbook button,
+.first-watch-note button {
+  background: #25383b;
+  border: 1px solid #8a8061;
+  border-radius: 3px;
+  color: #f1e4c3;
+  padding: 0.3rem 0.7rem;
+}
+.first-watch-note .watch-dismiss {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  background: transparent;
+  border: 0;
+}
+@media (max-height: 500px) {
+  .first-watch-note {
+    bottom: 4rem;
+  }
+}
