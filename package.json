@@ -7,17 +7,20 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "play:local": "npm run build && node companion/server.mjs"
   },
   "dependencies": {
-    "phaser": "3.90.0",
-    "lucide-static": "^0.563.0",
     "@fontsource/barlow": "^5.2.0",
-    "@fontsource/cormorant-garamond": "^5.2.0"
+    "@fontsource/cormorant-garamond": "^5.2.0",
+    "@mlc-ai/web-llm": "^0.2.89",
+    "jose": "^6.2.18",
+    "lucide-static": "^0.563.0",
+    "phaser": "3.90.0"
   },
   "devDependencies": {
-    "typescript": "~5.9.3",
     "tsx": "^4.20.6",
+    "typescript": "~5.9.3",
     "vite": "^7.2.2"
   }
 }
