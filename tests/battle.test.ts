@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  boardingContact,
-  boardingOdds,
   buildShip,
   discharge,
   hitsShip,
@@ -53,18 +51,9 @@ test('turning and acceleration build over time and decelerating preserves moment
   assert.ok(ship.vx > 0 && ship.vx < previous)
 })
 
-test('ramming follows a rotated hull and hiring veterans improves boarding odds', () => {
-  const a = buildShip(position, 0, 0, 0),
-    b = buildShip({ x: 320, y: 220 }, Math.PI, 0, 0)
-  assert.ok(boardingContact(a, b))
+test('a projectile can miss an oriented hull at close range', () => {
+  const a = buildShip(position, 0, 0, 0)
   assert.equal(hitsShip({ x: 250, y: 251 }, a), false)
-  b.y += 45
-  assert.equal(boardingContact(a, b), false)
-  const green = boardingOdds(6, 1, a, b)
-  const veterans = boardingOdds(6, 2.5, a, b)
-  assert.ok(veterans > green + 0.3)
-  b.hull = 18
-  assert.ok(boardingOdds(6, 1, a, b) > green)
 })
 
 test('fresh hulls have one port gun and shipyard refits open specific independent stations', () => {

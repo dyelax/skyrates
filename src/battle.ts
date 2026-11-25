@@ -1019,13 +1019,8 @@ class SkyBattle extends Phaser.Scene {
     if (this.drill) this.exerciseHelm(dt)
     else this.enemyHelm(dt)
     const p = this.player
-    if (
-      this.escaping &&
+    const atEscapeEdge = this.escaping &&
       (p.x < 27 || p.y < this.area.top + 27 || p.x > this.area.width - 27 || p.y > this.area.bottom - 27)
-    ) {
-      this.finish('escaped')
-      return
-    }
     // Keep practice shots within range, including tall phone and tablet viewports.
     const mid = (this.area.top + this.area.bottom) / 2
     p.x = clamp(p.x, this.drill ? 140 : 24, this.drill ? 765 : this.area.width - 24)
@@ -1087,7 +1082,7 @@ class SkyBattle extends Phaser.Scene {
           this.tell(this.touching ? 'Rails touching · Crews engaged. Push off to separate.' : 'Rails clear · Crews disengaged.', 1.8)
           this.saveIn = 0
         }
-        const ending = combatEnding(p, this.foe, this.crew)
+        const ending = combatEnding(p, this.foe, this.crew) ?? (atEscapeEdge ? 'escaped' : null)
         if (ending) { this.finish(ending); return }
       }
       if (this.drill) {

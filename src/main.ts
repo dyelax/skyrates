@@ -21,7 +21,8 @@ import {
   raiderToll,
   saveGame,
   seizureLabel,
-  type BattleResult,
+  CAMPAIGN_RESULTS,
+  checkpointBattle,
   type Command,
 } from './model'
 import { renderInterior, type InteriorView } from './interiors'
@@ -159,6 +160,12 @@ function render() {
   }
   else if (view === 'battle' && (state.voyage || state.drill)) {
     const leg = state.voyage
+    const pending = leg?.battle
+    if (!state.drill && leg && pending?.terminal) {
+      dispatch({ type: 'resolveBattle', id: leg.id, result: CAMPAIGN_RESULTS[pending.terminal],
+        hull: pending.player.hull, enemyHull: pending.enemy.hull })
+      return
+    }
     main.innerHTML = '<section class="battle-loading" role="status">Taking the helm…</section>'
     const unavailable = () => {
       if (token !== renderToken) return
@@ -169,22 +176,24 @@ function render() {
       main.querySelector('[data-retry]')?.addEventListener('click', render)
       main.querySelector('[data-withdraw]')?.addEventListener('click', () =>
         state.drill ? dispatch({ type: 'endDrill', skip: true })
-          : leg && dispatch({ type: 'resolveBattle', id: leg.id, result: 'lost', hull: state.ship.hull }),
+          : leg && dispatch({ type: 'resolveBattle', id: leg.id, result: 'lost', hull: state.voyage?.battle?.player.hull ?? state.ship.hull }),
       )
     }
     void import('./battle')
       .then(({ mountBattle }) => {
         if (token !== renderToken || state.voyage?.id !== leg?.id) return
         main.replaceChildren()
-        const results: Record<string, BattleResult> = {
-          victory: 'won',
-          boarded: 'boarded',
-          defeat: 'lost',
-          escaped: 'escaped',
-        }
         battleUnmount = mountBattle(main, {
           opponent: state.drill ? WATCH_CUTTER : raiderToll(state).profile,
           onUnavailable: unavailable,
+          savedBattle: leg?.battle,
+          onSave: snapshot => {
+            if (!leg || token !== renderToken) return
+            const next = checkpointBattle(state, leg.id, snapshot)
+            if (next === state) return
+            state = next
+            stored = saveGame(state)
+          },
           crew: state.ship.crew,
           skill: boardingStrength(state) / state.ship.crew,
           gunLevel: state.ship.guns,
@@ -206,8 +215,8 @@ function render() {
           quickGunnery: state.ability === 'gunner',
           startingHull: state.ship.hull,
           shipName: 'The Wayfarer',
-          onFinish: (outcome, hull) =>
-            leg && dispatch({ type: 'resolveBattle', id: leg.id, result: results[outcome], hull }),
+          onFinish: (outcome, hull, enemyHull) =>
+            leg && token === renderToken && dispatch({ type: 'resolveBattle', id: leg.id, result: CAMPAIGN_RESULTS[outcome], hull, enemyHull }),
         })
       })
       .catch(unavailable)
