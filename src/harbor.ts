@@ -276,6 +276,7 @@ export function mountHarbor(
     }
   }
   function keyboard(ev: KeyboardEvent) {
+    if (document.querySelector('dialog[open]')) return
     if (ev.ctrlKey || ev.metaKey || ev.altKey || document.querySelector('dialog[open]')) return
     if (!overlay.hidden) {
       if (ev.key === 'Escape') {

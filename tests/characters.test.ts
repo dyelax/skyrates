@@ -91,3 +91,11 @@ test('relationships survive old saves and honor earlier single-use deeds without
   assert.ok(!characterContext(returned, 'fen').relationship.score)
   assert.deepEqual(restore(returned), returned)
 })
+
+test('captains get actionable answers for charter repayment and ship supplies', async()=>{
+  const {docketAnswer}=await import('../src/dialogue-facts')
+  assert.match(docketAnswer('vale','Who pays me back for the lens?')!,/Pilot Sen at Meridian Spire to collect 300/)
+  assert.match(docketAnswer('moss','What is the cost of the lens?')!,/signed terms/)
+  assert.match(docketAnswer('sella','Do I need rations?')!,/without buying food/)
+  assert.equal(docketAnswer('iona','What do you remember about the furnace?'),undefined)
+})

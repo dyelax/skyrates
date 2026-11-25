@@ -1,0 +1,79 @@
+.voice-room {
+  width: min(33rem, calc(100% - 1.5rem));
+  max-height: 84dvh;
+  overflow: auto;
+  margin: auto;
+  padding: 1.2rem;
+  background: #17272c;
+  color: #eee5d3;
+  border: 1px solid #938569;
+  border-radius: 5px;
+  box-shadow: 0 10px 50px #07121aa6;
+}
+.voice-room::backdrop {
+  background: #07121bb0;
+}
+.voice-room header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.voice-room h2 {
+  font: 600 2.05rem/1.1 var(--font-serif);
+}
+.voice-room h3 {
+  font: 600 1.35rem var(--font-serif);
+  margin: 1rem 0 0.35rem;
+}
+.voice-room p {
+  margin: 0.55rem 0;
+}
+.voice-room button,
+.voice-room select,
+.voice-room a,
+.voice-room textarea {
+  font: inherit;
+  color: #fff0cb;
+  background: #273b40;
+  border: 1px solid #80795f;
+  border-radius: 3px;
+  padding: 0.37rem 0.6rem;
+}
+.voice-room button,
+.voice-room select,
+.voice-room a {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0.22rem 0.35rem 0.22rem 0;
+}
+.voice-room select {
+  overflow: hidden;
+}
+.voice-room .voice-byline {
+  color: #d4b98c;
+}
+.voice-transcript {
+  overflow: auto;
+  max-height: 37vh;
+  scrollbar-width: thin;
+}
+.voice-transcript b {
+  color: #dfbf83;
+}
+.voice-room form {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+.voice-room textarea {
+  min-width: 0;
+  flex: 1;
+  resize: vertical;
+  color: #fff8ec;
+}
+.voice-room p[role='status'] {
+  font-size: 0.85rem;
+  color: #c4d3c7;
+  overflow-wrap: anywhere;
+}

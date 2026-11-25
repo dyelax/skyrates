@@ -400,7 +400,7 @@ export function characterContext(state: GameState, npc: NpcId) {
         BEACON_COMMISSION.invoiceCost +
         ' crowns. Meridian repays principal and a ' +
         BEACON_COMMISSION.premium +
-        ' crown premium once the first relighting certificate arrives.',
+        ' crown premium. Pilot Sen at Meridian Spire alone countersigns and pays when the captain hands over Iona’s certificate. Keeper Iona at Glasshouse Reach sells the replacement lens.',
     )
   if (npc === 'neri' && state.tender === 'passed')
     knowledge.push('I recognized this sail from my unanswered distress call.')

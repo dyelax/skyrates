@@ -1,10 +1,12 @@
 import { seasonalPosting } from './seasonal-trade'
 import { openHandbook } from './handbook'
 import { routeWeather, seasonAt, CLIMATES } from './weather'
+import { openVoiceSettings } from './npc-voices'
 import { openPrologue } from './prologue'
 import { voyageWeather } from './weather'
 import { paintedWeather } from './scene-weather'
 import './interiors.css'
+import { startDialogue } from './character-dialogue'
 import { characterContext, npcAtPort, npcName, type ContactWriter } from './characters'
 import { mountStationTalk } from './dock-talk'
 import { CITY_ECONOMY, nextPosting, RARITY } from './city-economy'
@@ -232,7 +234,7 @@ function logbook(state: GameState, ui: Controls) {
     <aside class="sk-stack"><article class="sk-card"><div class="sk-card-head"><h2>Reputation</h2><span class="sk-tag">${state.notoriety} renown</span></div><h3>${safe(prestigeTitle(state))}</h3>
     <p class="sk-info">${state.tender === 'helped' ? 'The tender skipper remembers your tow. At Copperfall, that friendship opens a freight contract.' : state.tender === 'passed' ? 'You left the stranded tender to hail another ship. Its skipper remembers the sail on the horizon.' : 'Word of your deeds travels with dock crews and freight skippers.'}</p></article>
     <article class="sk-card"><div class="sk-card-head"><h2>Captain ability</h2></div>${abilities}</article>
-    <article class="sk-card"><div class="sk-card-head"><h2>The Skyway Beacon</h2></div><p>${missionNote(state)}</p></article><article class="sk-card"><h2>Your first watch</h2>${ui.button('Open captain’s handbook', () => openHandbook(state))} ${ui.button('Replay opening cinematic', () => openPrologue(), { secondary: true })}</article></aside></div>`
+    <article class="sk-card"><div class="sk-card-head"><h2>The Skyway Beacon</h2></div><p>${missionNote(state)}</p></article><article class="sk-card"><h2>Your first watch</h2>${ui.button('Open captain’s handbook', () => openHandbook(state))} ${ui.button('Conversation voices', () => openVoiceSettings(), { secondary: true })} ${ui.button('Replay opening cinematic', () => openPrologue(), { secondary: true })}</article></aside></div>`
   )
 }
 
@@ -520,6 +522,15 @@ export function renderInterior(
     (insideRoom ? `<div class="sk-room-overlay"><div class="sk-room-ledger">${content}</div></div>` : content)
   if (view === 'authority') {
     const npc = npcAtPort(state.port, 'authority')
+    const speaker = page.querySelector<HTMLElement>('.sk-office-dialogue')
+    if (speaker) {
+      const talk = document.createElement('button')
+      talk.type = 'button'
+      talk.className = 'sk-button sk-secondary'
+      talk.textContent = 'Speak freely with ' + npcName(npc)
+      talk.onclick = () => startDialogue(npc,recordContact)
+      speaker.append(talk)
+    }
     for (const topic of page.querySelectorAll<HTMLDetailsElement>('[data-contact-topic]')) {
       topic.addEventListener('toggle', () => {
         if (topic.open) recordContact({type: 'rememberNpc', npc, memory:'You asked me, “'+topic.querySelector('summary')!.textContent+'”'})
