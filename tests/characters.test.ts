@@ -99,3 +99,15 @@ test('captains get actionable answers for charter repayment and ship supplies', 
   assert.match(docketAnswer('sella','Do I need rations?')!,/without buying food/)
   assert.equal(docketAnswer('iona','What do you remember about the furnace?'),undefined)
 })
+
+test('guessing a secret cannot make the character confirm it and Sen keeps shelter bearings private', async()=>{
+  const {confidenceReply}=await import('../src/characters')
+  const s=initialState()
+  assert.doesNotMatch(confidenceReply(s,'moss','Are you tutoring the dismissed apprentice?')!,/dismissed|teaching her/)
+  assert.ok(confidenceReply(s,'moss','What is the weather?', 'I am teaching her after sunset.'))
+  assert.equal(confidenceReply(s,'vale','What is the weather?'),undefined)
+  s.contacts.moss={visits:2,lastVisit:2,helpedCity:true,memories:[]}
+  assert.match(confidenceReply(s,'moss','Can you tell me in confidence?')!,/dismissed her/)
+  s.contacts.sen={visits:2,lastVisit:2,helpedCity:true,memories:[]}
+  assert.match(confidenceReply(s,'sen','What is the exact bearing to the shelter?')!,/stays off your chart/)
+})

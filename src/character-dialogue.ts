@@ -1,4 +1,4 @@
-import { characterContext, type NpcId, type ContactWriter } from './characters'
+import { characterContext, confidenceReply, type NpcId, type ContactWriter } from './characters'
 import { openConversation } from './npc-voices'
 
 export function startDialogue(npc: NpcId, record: ContactWriter) {
@@ -9,6 +9,7 @@ export function startDialogue(npc: NpcId, record: ContactWriter) {
     name: character.name,
     role: character.role,
     context: () => characterContext(state, npc),
+    confidence: (question, answer) => confidenceReply(state, npc, question, answer),
     remember: (memory) => {
       state = record({ type: 'rememberNpc', npc, memory })
     },
