@@ -542,3 +542,74 @@ body:has(.air-duel) {
 .air-duel .duel-meter-title b { white-space: nowrap; }
 .air-duel .duel-hull-track { margin-top: 2px; }
 .air-duel .duel-banner { top: max(84px, 13%); }
+
+.air-duel .duel-markers {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ship-marker {
+  --hull-color: #93d5c5;
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: var(--marker-width);
+  height: 32px;
+  padding: 2px 5px;
+  border-left: 2px solid var(--hull-color);
+  border-radius: 2px;
+  background: #132a30ee;
+  color: #fff6dd;
+  font: 600 11px/14px var(--font-sans, Barlow, sans-serif);
+}
+.ship-marker[data-ship='enemy'] { --hull-color: #ffad82; }
+.duel-markers.boarding .ship-marker { height: 47px; }
+.ship-marker strong {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ship-meter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+}
+.ship-meter i {
+  flex: 1;
+  height: 4px;
+  overflow: hidden;
+  background: #4b5b5b;
+}
+.ship-meter b { display: block; height: 100%; transform-origin: left; background: var(--hull-color); }
+.ship-marker .crew-meter { display: none; }
+.boarding .ship-marker .crew-meter { display: flex; }
+.ship-meter.crew-meter b,
+.air-duel .duel-ship-readout .duel-hull-track [data-fill$='Crew'] { background: #f8d479; }
+.air-duel .duel-hull-track { height: 4px; }
+.air-duel .duel-meter-title { font-size: 11px; letter-spacing: .025em; }
+.air-duel .duel-banner { z-index: 2; }
+@media (max-width: 540px) {
+  .air-duel .duel-readouts,
+  .air-duel.is-drill .duel-readouts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: calc(100% - 18px);
+    max-width: none;
+    padding-right: 78px;
+  }
+  .air-duel .duel-range {
+    position: absolute;
+    right: 4px;
+    bottom: 3px;
+    min-width: 64px;
+    gap: 1px;
+  }
+  .air-duel .duel-heading { z-index: 4; top: 10px; right: 11px; }
+  .air-duel .duel-meter-title { text-transform: none; letter-spacing: 0; gap: 2px; }
+  .air-duel .duel-ship-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .air-duel .duel-foot:has([data-read='crew']:empty) { visibility: hidden; }
+}

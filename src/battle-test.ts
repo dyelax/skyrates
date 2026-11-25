@@ -76,7 +76,7 @@ function showDesk(result?: TrialEnd, error = '') {
       ${result ? `<p class="card-label">${title}</p>` : `<label for="${player ? 'your-fit' : 'opponent-fit'}">${title}</label>`}
       ${result ? `<h2>${name}</h2>` : `<select id="${player ? 'your-fit' : 'opponent-fit'}" aria-label="${title}">${options(names, player ? fitIndex : enemyIndex)}</select>`}
       <div class="ship-plate"><img src="${artwork(player ? 'schooner-top' : 'raider-top')}" alt=""></div>
-      <dl><div><dt>Hull</dt><dd>${hull}</dd></div><div><dt>Crew strength</dt><dd>${crew}</dd></div><div class="battery"><dt>Battery</dt><dd>${armamentLabel(player ? ship.guns.length : enemy.cannons)}</dd></div></dl>
+      <dl><div><dt>Hull</dt><dd>${hull}</dd></div><div><dt>${result ? 'Crew health' : 'Starting crew strength'}</dt><dd>${crew}</dd></div><div class="battery"><dt>Battery</dt><dd>${armamentLabel(player ? ship.guns.length : enemy.cannons)}</dd></div></dl>
     </article>`
   }
   desk.innerHTML = `<section class="test-desk">

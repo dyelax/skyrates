@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
 import { mountBattleFx } from './battle-fx'
+import { prepareHull } from './battle-damage'
+import { BattleMarkers } from './battle-markers'
 import './battle-fx.css'
 import type { WeatherReport } from './weather'
 import { CloudDeck } from './cloud-deck'
@@ -100,9 +102,18 @@ function measureSky(root: HTMLElement): FlightArea {
   return { width: SKY.width, height, top, bottom }
 }
 
+// Chart distances stay in world units. Only the drawing buffer follows the
+// display density, bounded for large desktop screens and small mobile GPUs.
+function drawingSize(container: HTMLElement) {
+  const width = Math.max(1, container.clientWidth)
+  const height = Math.max(1, container.clientHeight)
+  const density = Math.min(window.devicePixelRatio || 1, 3, 4096 / Math.max(width, height), Math.sqrt(8_300_000 / (width * height)))
+  return { width: Math.max(1, Math.round(width * density)), height: Math.max(1, Math.round(height * density)) }
+}
+
 function hullCard(title: string, id: string): string {
-  const meter = (label: string, key: string) => `<div class="duel-meter-title"><span>${label}</span><b data-read="${key}"></b></div><div class="duel-hull-track"><i data-fill="${key}"></i></div>`
-  return `<div class="duel-ship-readout"><strong class="duel-ship-name">${title}</strong>${meter('Hull', id)}${meter('Crew', id + 'Crew')}</div>`
+  const meter = (label: string, key: string) => `<div class="duel-meter-title"><span id="gauge-${key}">${label}</span><b data-read="${key}"></b></div><div class="duel-hull-track" role="meter" aria-labelledby="vessel-${id} gauge-${key}" aria-valuemin="0"><i data-fill="${key}"></i></div>`
+  return `<div class="duel-ship-readout"><strong class="duel-ship-name" id="vessel-${id}">${title}</strong>${meter('Hull', id)}${meter('Crew health', id + 'Crew')}</div>`
 }
 
 function battery(side: Side, count: number): string {
@@ -134,9 +145,9 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
     : `<figure class="duel-wind"><div class="duel-anemoscope" aria-hidden="true"><i style="transform:rotate(${windAngle}deg)">➜</i></div><figcaption><strong>${weather.knots} kn · ${weather.bearing}</strong><span>${weather.kind} · ${weather.season}</span></figcaption>${options.onExit ? '<button type="button" data-exit-test>Leave test</button>' : ''}</figure>`
   root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause"><kbd>P</kbd> Pause</button></div>
     <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : options.opponent.name, 'enemy')}</div>
-    ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div><div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
+    ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div><div class="duel-markers" aria-hidden="true"></div><div class="duel-banner" role="status"></div></div>
     <div class="duel-console">${battery('port', cannons)}${battery('starboard', cannons)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Steer to contact or push the touching ships apart"><kbd>B</kbd> <span data-read="ramOrder">Close in</span></button><button type="button" data-action="escape"><kbd>R</kbd> <span data-read="escapeOrder">Break away</span></button></div></div></div>
-    <div class="duel-foot"><span>${options.drill ? 'Watch exercise · Chalk rounds' : '<kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Fire along the rail marks · Touch to engage crews'}</span><span data-read="crew"></span></div>`
+    <div class="duel-foot"><span>${options.drill ? 'Watch exercise · Chalk rounds' : '<kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Fire along the rail marks · Touch to engage crews'}</span><span data-read="crew" role="status"></span></div>`
   if (options.drill) {
     root.insertAdjacentHTML(
       'beforeend',
@@ -149,32 +160,42 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
   host.replaceChildren(root)
   const container = root.querySelector<HTMLElement>('.duel-canvas')!
   const area = measureSky(root)
+  const surface = drawingSize(container)
   const scene = new SkyBattle(root, options, area)
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: container,
-    width: area.width,
-    height: area.height,
+    width: surface.width,
+    height: surface.height,
     scene: [scene],
     backgroundColor: '#122f39',
     banner: false,
     audio: { noAudio: true },
-    render: { antialias: true, roundPixels: false, powerPreference: 'high-performance' },
+    render: { antialias: true, roundPixels: false, mipmapFilter: 'LINEAR_MIPMAP_LINEAR', powerPreference: 'high-performance' },
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, expandParent: false },
     fps: { target: 60, forceSetTimeOut: false },
   })
   root.tabIndex = -1
   root.focus({ preventScroll: true })
-  const resize = new ResizeObserver(() => {
+  const resizeChart = () => {
     if (!game.isBooted) return
     const next = measureSky(root)
+    const nextSurface = drawingSize(container)
+    if (game.scale.width !== nextSurface.width || game.scale.height !== nextSurface.height)
+      game.scale.setGameSize(nextSurface.width, nextSurface.height)
     scene.resizeSky(next)
-    if (game.scale.height !== next.height) game.scale.setGameSize(next.width, next.height)
     game.scale.refresh()
-  })
-  resize.observe(container)
+  }
+  const resize = new ResizeObserver(resizeChart)
+  try {
+    resize.observe(container, { box: 'device-pixel-content-box' })
+  } catch {
+    resize.observe(container)
+  }
+  window.addEventListener('resize', resizeChart)
   return () => {
     resize.disconnect()
+    window.removeEventListener('resize', resizeChart)
     scene.disconnect()
     game.destroy(true)
     root.remove()
@@ -187,7 +208,7 @@ class SkyBattle extends Phaser.Scene {
   private chalk?: ChalkRun
   private buoy?: Point
   private chalkDelay = 0
-  private chartLabels: Phaser.GameObjects.Text[] = []
+  private markers: BattleMarkers
   private opts: BattleOptions
   private player: Vessel
   private foe: Vessel
@@ -201,7 +222,7 @@ class SkyBattle extends Phaser.Scene {
   private sparks: Spark[] = []
   private aiDelay = 3.5
   private hudIn = 0
-  private bannerTTL = 3
+  private bannerTTL = 0
   private pressed = new Set<string>()
   private course?: Point
   private wind: Point
@@ -245,6 +266,11 @@ class SkyBattle extends Phaser.Scene {
     this.crew = { ...this.crewMax }
     if (options.savedBattle && !this.drill) this.restore(options.savedBattle)
     this.banner = root.querySelector('.duel-banner')!
+    this.markers = new BattleMarkers(
+      root.querySelector('.duel-markers')!,
+      'You · ' + (options.shipName || 'Wayfarer'),
+      this.drill ? 'Watch · Lark' : options.opponent.name,
+    )
     root.querySelectorAll<HTMLElement>('[data-read]').forEach((el) => {
       this.readings[el.dataset.read!] = el
     })
@@ -261,8 +287,8 @@ class SkyBattle extends Phaser.Scene {
   preload() {
     for (const [name, file] of [
       ['sea', 'cloud-sea'],
-      ['schooner', 'schooner-top'],
-      ['opponent', this.drill ? 'watch-top' : 'raider-top'],
+      ['schooner-art', 'schooner-top'],
+      ['opponent-art', this.drill ? 'watch-top' : 'raider-top'],
     ]) {
       this.load.image(name, new URL(`art/${file}.webp`, document.baseURI).href)
     }
@@ -270,7 +296,7 @@ class SkyBattle extends Phaser.Scene {
 
   create() {
     if (!this.root.isConnected || this.ended) return
-    for (const key of ['sea', 'schooner', 'opponent']) {
+    for (const key of ['sea', 'schooner-art', 'opponent-art']) {
       if (!this.textures.exists(key)) {
         queueMicrotask(() => {
           if (this.root.isConnected) this.opts.onUnavailable()
@@ -278,6 +304,9 @@ class SkyBattle extends Phaser.Scene {
         return
       }
     }
+    prepareHull(this, 'schooner')
+    prepareHull(this, 'opponent')
+    this.setChartZoom()
     this.clouds = new CloudDeck(this, this.opts.weather, Boolean(this.drill), this.area.width, this.area.height)
     this.paths = this.add.graphics().setDepth(2)
     this.playerView = this.makeShip('schooner', 114)
@@ -316,41 +345,27 @@ class SkyBattle extends Phaser.Scene {
         if (this.drill === 'dodge') this.player.throttle = 2
       }
     })
-    for (const label of [this.opts.shipName ? 'YOU · ' + this.opts.shipName.toUpperCase().replace(/^THE /, '') : 'YOU · WAYFARER', this.drill ? 'WATCH · LARK' : this.opts.opponent.name.toUpperCase()]) {
-      this.chartLabels.push(
-        this.add
-          .text(0, 0, label, {
-            fontFamily: 'Barlow, sans-serif',
-            fontSize: this.labelSize(),
-            fontStyle: 'bold',
-            color: '#fff0c9',
-            backgroundColor: '#182a30',
-            padding: { x: 5, y: 2 },
-          })
-          .setOrigin(0.5)
-          .setDepth(9),
-      )
-    }
-    if (this.drill) {
-      this.drawCoach()
-
-    } else {
-      const hint = this.opts.weather.knots
-        ? 'Guns fire straight out from each rail. Wind carries rounds downwind after firing.'
-        : 'Tap open sky to turn. Your guns fire straight out from the rails.'
-      this.tell(hint, 6)
-    }
+    if (this.drill) this.drawCoach()
+    this.syncMarkers()
     this.syncHUD()
   }
 
-  private labelSize(): string {
-    return `${Math.max(13, Math.min(23, Math.round((11 * SKY.width) / Math.max(1, this.root.querySelector<HTMLElement>('.duel-canvas')!.clientWidth))))}px`
+  private setChartZoom() {
+    this.cameras.main.setOrigin(0, 0).setZoom(this.scale.width / this.area.width, this.scale.height / this.area.height)
+    const context = this.game.context
+    if (context && 'imageSmoothingEnabled' in context) context.imageSmoothingQuality = 'high'
+  }
+
+  private syncMarkers() {
+    const camera = this.cameras.main
+    this.markers.update(this.player, this.foe, this.crew, this.crewMax, this.touching, camera.scrollX, camera.scrollY)
   }
 
   resizeSky(next: FlightArea) {
-    for (const label of this.chartLabels) label.setFontSize(this.labelSize())
+    this.markers.resize()
     const previous = this.area
     this.area = next
+    if (this.cameras?.main) this.setChartZoom()
     if (previous.height === next.height && previous.top === next.top && previous.bottom === next.bottom) return
     const objects: Point[] = [this.player, this.foe, ...this.sparks, ...this.shots]
     if (this.buoy) objects.push(this.buoy)
@@ -483,10 +498,8 @@ class SkyBattle extends Phaser.Scene {
     if (action === 'pause') {
       this.pausedDuel = !this.pausedDuel
       this.buttons.pause.innerHTML = this.pausedDuel ? '<kbd>P</kbd> Resume' : '<kbd>P</kbd> Pause'
-      this.tell(
-        this.pausedDuel ? 'At pause • Press P to resume' : 'Back at the helm',
-        this.pausedDuel ? Infinity : 1.1,
-      )
+      if (this.pausedDuel) this.tell('Battle paused.', Infinity)
+      else this.banner.classList.remove('visible')
     } else if (!this.pausedDuel) {
       if (action === 'faster') this.player.throttle = Math.min(3, this.player.throttle + 1)
       if (action === 'slower') {
@@ -612,22 +625,31 @@ class SkyBattle extends Phaser.Scene {
     }
   }
 
+  private setGauge(key: string, current: number, max: number) {
+    const fill = this.meters[key]
+    fill.style.width = `${100 * Math.max(0, current) / max}%`
+    fill.parentElement!.setAttribute('aria-valuenow', String(current))
+    fill.parentElement!.setAttribute('aria-valuemax', String(max))
+    fill.parentElement!.setAttribute('aria-valuetext', this.readings[key].textContent!.replace('/', ' of '))
+  }
+
   private syncHUD() {
     for (const [id, ship] of [
       ['player', this.player],
       ['enemy', this.foe],
     ] as const) {
       this.readings[id].textContent = `${Math.max(0, Math.ceil(ship.hull))}/${ship.maxHull}`
-      this.meters[id].style.width = `${(100 * Math.max(0, ship.hull)) / ship.maxHull}%`
+      this.setGauge(id, ship.hull, ship.maxHull)
     }
     this.readings.speed.textContent = THROTTLE[this.player.throttle]
     this.readings.range.textContent = `${Math.round(Math.hypot(this.foe.x - this.player.x, this.foe.y - this.player.y))} m`
     for (const id of ['player', 'enemy'] as const) {
       const strength = this.crew[id], max = this.crewMax[id], key = id + 'Crew'
-      this.readings[key].textContent = `${Math.ceil(strength * 10) / 10}/${Number(max.toFixed(2))}`
-      this.meters[key].style.width = `${100 * strength / max}%`
+      this.readings[key].textContent = `${strength > 0 && strength < 0.1 ? '<0.1' : Number(strength.toFixed(1))}/${Number(max.toFixed(1))}`
+      this.setGauge(key, strength, max)
     }
-    this.readings.crew.textContent = this.touching ? 'Rails touching · Crews engaged' : 'Open sky · Crews apart'
+    const boarding = this.touching ? 'Crews fighting alongside' : ''
+    if (this.readings.crew.textContent !== boarding) this.readings.crew.textContent = boarding
     const ramOrder = this.touching ? 'Push off' : this.ramming ? 'Belay' : 'Close in'
     const escapeOrder = this.escaping ? 'Stand & fight' : 'Break away'
     if (this.readings.ramOrder.textContent !== ramOrder) this.readings.ramOrder.textContent = ramOrder
@@ -851,10 +873,10 @@ class SkyBattle extends Phaser.Scene {
     this.syncHUD()
     const message = {
       victory: `${this.opts.opponent.name} wrecked`,
-      boarded: `${this.opts.opponent.name} strikes colors · Hull afloat`,
-      defeat: (this.opts.shipName ?? 'Wayfarer') + ' wrecked', yielded: 'Your crew strikes colors',
+      boarded: `${this.opts.opponent.name} surrendered`,
+      defeat: (this.opts.shipName ?? 'Wayfarer') + ' wrecked', yielded: 'Your crew surrendered',
       withdrawn: 'Both crews withdraw', mutualWreck: 'Both ships are lost',
-      escaped: 'Clear skies · You have broken pursuit',
+      escaped: 'You escaped pursuit',
     }[outcome]
     this.tell(message, Infinity)
     this.buttons.pause.disabled = true
@@ -867,8 +889,7 @@ class SkyBattle extends Phaser.Scene {
     if (resume) { queueMicrotask(complete); return }
     this.events.emit('sky:ships', { player: this.player, enemy: this.foe })
     this.paths.clear()
-    if (!this.player.hull) this.chartLabels[0]?.setVisible(false)
-    if (!this.foe.hull) this.chartLabels[1]?.setVisible(false)
+    this.syncMarkers()
     const sunk = []
     if (!this.player.hull) sunk.push('player')
     if (!this.foe.hull) sunk.push('enemy')
@@ -924,20 +945,7 @@ class SkyBattle extends Phaser.Scene {
         10,
       )
     }
-    for (const [ship, tint] of [
-      [this.player, FAIR_WIND],
-      [this.foe, COPPER],
-    ] as const) {
-      const labelY = ship.y + 42
-      g.fillStyle(0x0a1b22, 0.88).fillRoundedRect(ship.x - 19, labelY - 1, 38, 4, 2)
-      g.fillStyle(tint, 0.95).fillRoundedRect(
-        ship.x - 18,
-        labelY,
-        36 * Math.max(0, ship.hull / ship.maxHull),
-        2,
-        1,
-      )
-    }
+
   }
 
   private effects(dt: number) {
@@ -1050,10 +1058,7 @@ class SkyBattle extends Phaser.Scene {
         if (wasTouching && !this.touching) this.teach('return')
       } else if (this.drill === 'return' && !this.crew.enemy) this.teach('debrief')
       else if (!this.drill) {
-        if (wasTouching !== this.touching) {
-          this.tell(this.touching ? 'Rails touching · Crews engaged. Push off to separate.' : 'Rails clear · Crews disengaged.', 1.8)
-          this.saveIn = 0
-        }
+        if (wasTouching !== this.touching) this.saveIn = 0
         const ending = combatEnding(p, this.foe, this.crew) ?? (atEscapeEdge ? 'escaped' : null)
         if (ending) { this.finish(ending); return }
       }
@@ -1082,9 +1087,7 @@ class SkyBattle extends Phaser.Scene {
     this.events.emit('sky:ships', { player: this.player, enemy: this.foe })
     this.saveIn -= dt
     if (!this.drill && this.saveIn <= 0) this.save()
-    for (const [i, ship] of [this.player, this.foe].entries()) {
-      this.chartLabels[i].setPosition(ship.x, ship.y - 52).setVisible(true)
-    }
+    this.syncMarkers()
     this.updateShipView(this.playerView, this.player)
     this.updateShipView(this.foeView, this.foe)
     this.effects(dt)
