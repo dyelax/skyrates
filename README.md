@@ -1,6 +1,6 @@
 # Skyrates
 
-[Play Skyrates](https://dyelax.github.io/skyrates/)
+[Play Skyrates](https://dyelax.github.io/skyrates/) · [Battle test](https://dyelax.github.io/skyrates/battle-test.html)
 
 ![Exploring the docks at Sunstep Quay in Skyrates](docs/harbor.webp)
 

@@ -51,7 +51,9 @@
   right: clamp(1rem, 4vw, 5rem);
   top: max(1rem, env(safe-area-inset-top));
 }
-.prologue button {
+.prologue button,
+.prologue-tools a {
+  text-decoration: none;
   cursor: pointer;
   color: #fff5df;
   font:
@@ -62,7 +64,8 @@
   border-radius: 3px;
   padding: 0.55rem 0.9rem;
 }
-.prologue button:focus-visible {
+.prologue button:focus-visible,
+.prologue-tools a:focus-visible {
   outline: 2px solid #ffda85;
   outline-offset: 3px;
 }
