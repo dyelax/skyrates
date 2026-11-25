@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { CloudDeck } from './cloud-deck'
 import {
   SKY,
   GUN_ARC,
@@ -148,7 +149,7 @@ class SkyBattle extends Phaser.Scene {
   private foeView!: ShipView
   private area: FlightArea
   private veil!: Phaser.GameObjects.Rectangle
-  private sky!: Phaser.GameObjects.Image
+  private sky!: CloudDeck
   private overlays!: Phaser.GameObjects.Graphics
   private paths!: Phaser.GameObjects.Graphics
   private shots: Projectile[] = []
@@ -223,10 +224,7 @@ class SkyBattle extends Phaser.Scene {
         return
       }
     }
-    this.sky = this.add.image(this.area.width / 2, this.area.height / 2, 'sea').setDepth(0)
-    this.sky
-      .setScale(Math.max(this.area.width / this.sky.width, this.area.height / this.sky.height) * 1.14)
-      .setTint(0xcedfdf)
+    this.sky = new CloudDeck(this, this.area.width, this.area.height)
     this.veil = this.add
       .rectangle(0, 0, this.area.width, this.area.height, 0x0a2133, 0.18)
       .setOrigin(0)
@@ -267,7 +265,7 @@ class SkyBattle extends Phaser.Scene {
     if (this.grapple) objects.push(this.grapple.center, this.grapple.startA, this.grapple.startB)
     const factor = (next.bottom - next.top) / Math.max(1, previous.bottom - previous.top)
     for (const p of objects) p.y = next.top + (p.y - previous.top) * factor
-    if (this.sky) this.sky.setScale(Math.max(next.width / this.sky.width, next.height / this.sky.height) * 1.14)
+    this.sky?.resize(next.width, next.height)
     this.veil?.setSize(next.width, next.height)
   }
 
@@ -778,10 +776,7 @@ class SkyBattle extends Phaser.Scene {
     this.clock += dt
     this.bannerTTL -= dt
     if (this.bannerTTL <= 0) this.banner.classList.remove('visible')
-    this.sky.setPosition(
-      this.area.width / 2 + Math.sin(this.clock * 0.037) * 16,
-      this.area.height / 2 + Math.cos(this.clock * 0.044) * 11,
-    )
+    this.sky.update(dt, this.player, this.foe)
     this.paths.clear()
     if (this.grapple) this.boardingTick(dt)
     else {
