@@ -63,3 +63,7 @@ body { margin: 0; }
   #battle-desk .air-duel :is(.duel-buttons button, .duel-wind button, .duel-pause) { min-height: 44px; }
   #battle-desk .duel-buttons { gap: 4px; }
 }
+@media (pointer: coarse) and (max-width: 360px) {
+  #battle-desk .duel-battery { padding-inline: 1px; }
+  #battle-desk .duel-buttons button { padding-inline: 1px; }
+}
