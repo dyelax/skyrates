@@ -62,12 +62,12 @@ export const COACH: Record<DrillStage, { chapter: string; title: string; text: s
   dodge: {
     chapter: '01 / 03 · Helm',
     title: 'Leave the red firing lane',
-    text: 'The dashed line shows where the cutter has aimed. Press W to sail forward, or order a course to the green buoy. Your wake shows where you’ve been.',
+    text: 'The red line leads straight out from the Watch cutter’s port gun. Press W to sail forward, or order a course to the green buoy to leave its path.',
   },
   fire: {
     chapter: '02 / 03 · Gunnery',
     title: 'Bring your port cannon to bear',
-    text: 'Round clear. Your cannon fires from the left rail. Turn with A / D or use the helm order below. When the fan turns gold, click the cutter or press 1. Watch the reload strip under the gun.',
+    text: 'Your cannon fires straight out from the left rail. Turn with A / D, tap open sky, or choose Line up port gun. When the dotted line crosses the cutter, choose Fire port gun or press 1.',
   },
   board: {
     chapter: '03 / 03 · Close action',
