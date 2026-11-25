@@ -94,6 +94,7 @@ export type BattleResult = 'won' | 'boarded' | 'escaped' | 'lost'
 export type Command =
   | ContactCommand
   | { type: 'acceptMission' | 'presentCommission' | 'deliverCertificate' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' | 'practiceDrill' | 'fillCityOrder' | 'useCityService' }
+  | { type: 'payToll'; id: number; payment: 'cargo' | 'crowns' }
   | { type: 'endDrill'; skip: boolean }
   | { type: 'buy' | 'sell'; good: GoodId; quantity: number }
   | { type: 'sail'; to: PortId }
@@ -378,6 +379,33 @@ function releaseCargo(lot: CargoLot, quantity: number) {
   return cost
 }
 
+// Raiders use the ordinary home-port list price for a crate. Seasonal quotes, ability
+// discounts and a captain’s purchase history cannot change a demand mid-encounter.
+const cargoHome: Record<GoodId, PortId> = {
+  provisions: 'sunstep', glass: 'glasshouse', machinery: 'copperfall', grafts: 'sunstep',
+  prisms: 'glasshouse', governors: 'copperfall', soundings: 'meridian',
+}
+export const EMPTY_HOLD_TOLL = 5
+export function raiderToll(state: GameState): { good: GoodId | null; crowns: number } {
+  let good: GoodId | null = null
+  let crowns = EMPTY_HOLD_TOLL
+  for (const item of GOOD_IDS) {
+    const value = PORTS[cargoHome[item]].prices[item]
+    if (state.cargo[item].quantity && (good === null || value > crowns)) {
+      good = item
+      crowns = value
+    }
+  }
+  return { good, crowns }
+}
+
+/** Actual loss on surrender, including a captain with less than the empty-hold toll. */
+export function seizureLabel(state: GameState): string {
+  const toll = raiderToll(state)
+  return toll.good ? 'one crate of ' + GOODS[toll.good].name.toLowerCase()
+    : Math.min(state.coins, toll.crowns) + ' crowns'
+}
+
 function trade(state: GameState, action: Extract<Command, { good: GoodId }>): boolean {
   const { good, quantity } = action
   if (!GOOD_IDS.includes(good) || !Number.isSafeInteger(quantity) || quantity <= 0) return false
@@ -420,7 +448,7 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
         state.notice = 'A tender hangs under a torn solar sail. Its skipper signals for a tow.'
       } else if (voyage.id % ENCOUNTERS.raiderInterval === 0) {
         voyage.phase = 'raider'
-        state.notice = 'A raider crosses your wake. You have room to give her the slip.'
+        state.notice = 'A raider blocks your passage and signals its toll.'
       } else {
         arrive(state)
       }
@@ -442,11 +470,24 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
       }
       arrive(state, state.notice)
       return true
-    case 'evade':
-      if (voyage.phase !== 'raider') return false
-      record(state, 'Evaded a raider among the cloud banks.')
+    case 'payToll': {
+      if (voyage.phase !== 'raider' || action.id !== voyage.id) return false
+      const toll = raiderToll(state)
+      let payment: string
+      if (action.payment === 'cargo' && toll.good) {
+        releaseCargo(state.cargo[toll.good], 1)
+        payment = 'one crate of ' + GOODS[toll.good].name.toLowerCase()
+      } else if (action.payment === 'crowns' && state.coins >= toll.crowns) {
+        state.coins -= toll.crowns
+        payment = toll.crowns + ' crowns'
+      } else {
+        return false
+      }
+      record(state, 'Paid the raider ' + payment + ' for passage.')
       arrive(state, state.notice)
       return true
+    }
+    case 'evade': // An older client's escape order still requires taking the helm.
     case 'engage':
       if (voyage.phase !== 'raider') return false
       voyage.phase = 'battle'
@@ -458,9 +499,11 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
       state.ship.hull = Math.min(state.ship.maxHull, Math.max(1, Math.round(action.hull)))
       if (action.result === 'lost') {
         state.ship.hull = Math.max(state.ship.hull, Math.ceil(state.ship.maxHull * 0.35))
-        const ransom = Math.floor(state.coins * 0.2)
-        state.coins -= ransom
-        record(state, 'The raider took ' + ransom + ' crowns in ransom and let you limp into port.')
+        const seizure = seizureLabel(state)
+        const toll = raiderToll(state)
+        if (toll.good) releaseCargo(state.cargo[toll.good], 1)
+        else state.coins -= Math.min(state.coins, toll.crowns)
+        record(state, 'Struck colors. The raider seized ' + seizure + ' and let you limp into port.')
       } else if (action.result === 'escaped') {
         record(state, 'Broke contact with the raider and reached friendly skies.')
       } else {

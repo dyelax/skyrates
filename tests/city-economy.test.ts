@@ -23,7 +23,10 @@ function cross(state: GameState, to: PortId) {
   if (result.drill) result = act(result, { type: 'endDrill', skip: true })
   result = act(result, { type: 'continueVoyage' })
   if (result.voyage?.phase === 'tender') result = act(result, { type: 'tender', help: false })
-  if (result.voyage?.phase === 'raider') result = act(result, { type: 'evade' })
+  if (result.voyage?.phase === 'raider') {
+    result = act(result, { type: 'engage' })
+    result = act(result, { type: 'resolveBattle', id: result.voyage!.id, result: 'escaped', hull: result.ship.hull })
+  }
   assert.equal(result.port, to)
   return result
 }

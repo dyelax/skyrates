@@ -4,6 +4,7 @@ import type { WeatherReport } from './weather'
 import { paintedWeather } from './scene-weather'
 import {
   SKY,
+  RAIDER_CANNONS,
   GUN_ARC,
   SHOT_SPEED,
   STILL_AIR,
@@ -47,6 +48,7 @@ export interface BattleOptions {
   startingHull?: number
   quickGunnery?: boolean
   shipName?: string
+  onUnavailable: () => void
   onFinish: (outcome: DuelOutcome, remainingHull: number) => void
 }
 
@@ -238,7 +240,7 @@ class SkyBattle extends Phaser.Scene {
       options.quickGunnery,
       options.drill ? 1 : options.cannons,
     )
-    this.foe = buildShip({ x: 595, y: area.top + flightHeight * 0.51 }, Math.PI * 0.49, 0, 0, undefined, false, 4)
+    this.foe = buildShip({ x: 595, y: area.top + flightHeight * 0.51 }, Math.PI * 0.49, 0, 0, undefined, false, RAIDER_CANNONS)
     this.foe.maxHull = this.foe.hull = 82
     this.foe.throttle = 1
     this.banner = root.querySelector('.duel-banner')!
@@ -270,9 +272,9 @@ class SkyBattle extends Phaser.Scene {
     if (!this.root.isConnected || this.ended) return
     for (const key of ['sea', 'schooner', 'opponent', 'hand']) {
       if (!this.textures.exists(key)) {
-        this.tell('The lookout lost sight of the raider. Break away to resume your voyage.', Infinity)
-        this.bindControls()
-        this.buttons.escape.disabled = false
+        queueMicrotask(() => {
+          if (this.root.isConnected) this.opts.onUnavailable()
+        })
         return
       }
     }
@@ -455,10 +457,7 @@ class SkyBattle extends Phaser.Scene {
       this.opts.drill!.onLeave(true)
       return
     }
-    if (!this.ready) {
-      if (action === 'escape') this.finish('escaped')
-      return
-    }
+    if (!this.ready) return
     if (this.drill && action === 'coach' && !this.pausedDuel) {
       if (this.drill === 'briefing') this.teach('dodge')
       else if (this.drill === 'dodge' && this.buoy) {

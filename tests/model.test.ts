@@ -24,7 +24,10 @@ function land(state: GameState, to: PortId, tow = true): GameState {
   if (next.drill) next = act(next, { type: 'endDrill', skip: true })
   next = act(next, { type: 'continueVoyage' })
   if (next.voyage?.phase === 'tender') next = act(next, { type: 'tender', help: tow })
-  if (next.voyage?.phase === 'raider') next = act(next, { type: 'evade' })
+  if (next.voyage?.phase === 'raider') {
+    next = act(next, { type: 'engage' })
+    next = act(next, { type: 'resolveBattle', id: next.voyage!.id, result: 'escaped', hull: next.ship.hull })
+  }
   assert.equal(next.port, to)
   assert.equal(next.voyage, null)
   return next

@@ -18,6 +18,7 @@ import {
   loadGame,
   PORTS,
   saveGame,
+  seizureLabel,
   type BattleResult,
   type Command,
 } from './model'
@@ -157,6 +158,18 @@ function render() {
   else if (view === 'battle' && (state.voyage || state.drill)) {
     const leg = state.voyage
     main.innerHTML = '<section class="battle-loading" role="status">Taking the helm…</section>'
+    const unavailable = () => {
+      if (token !== renderToken) return
+      battleUnmount?.()
+      battleUnmount = undefined
+      const withdraw = state.drill ? 'Skip free exercise' : 'Strike colors · surrender ' + seizureLabel(state)
+      main.innerHTML = `<section class="battle-loading"><p>The encounter could not load.</p><button class="gold-action" data-retry>Retry encounter</button><button class="mission-action" data-withdraw>${withdraw}</button></section>`
+      main.querySelector('[data-retry]')?.addEventListener('click', render)
+      main.querySelector('[data-withdraw]')?.addEventListener('click', () =>
+        state.drill ? dispatch({ type: 'endDrill', skip: true })
+          : leg && dispatch({ type: 'resolveBattle', id: leg.id, result: 'lost', hull: state.ship.hull }),
+      )
+    }
     void import('./battle')
       .then(({ mountBattle }) => {
         if (token !== renderToken || state.voyage?.id !== leg?.id) return
@@ -168,6 +181,7 @@ function render() {
           escaped: 'escaped',
         }
         battleUnmount = mountBattle(main, {
+          onUnavailable: unavailable,
           crew: state.ship.crew,
           skill: boardingStrength(state) / state.ship.crew,
           gunLevel: state.ship.guns,
@@ -193,19 +207,7 @@ function render() {
             leg && dispatch({ type: 'resolveBattle', id: leg.id, result: results[outcome], hull }),
         })
       })
-      .catch(() => {
-        if (token !== renderToken) return
-        main.innerHTML =
-          '<section class="battle-loading"><p>The encounter could not load.</p><button class="gold-action" data-retry>Retry encounter</button><button class="mission-action" data-withdraw>Withdraw to port</button></section>'
-        main.querySelector('[data-retry]')?.addEventListener('click', render)
-        main
-          .querySelector('[data-withdraw]')
-          ?.addEventListener('click', () =>
-            state.drill
-              ? dispatch({ type: 'endDrill', skip: true })
-              : leg && dispatch({ type: 'resolveBattle', id: leg.id, result: 'escaped', hull: state.ship.hull }),
-          )
-      })
+      .catch(unavailable)
   } else if (isStation(view)) {
     workshop = mountWorkshop(main, view, () => state, dispatch, navigate, recordContact)
   } else renderInterior(main, view as InteriorView, state, dispatch, navigate, recordContact)

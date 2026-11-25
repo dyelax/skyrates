@@ -1,6 +1,6 @@
 import { chartObjectives } from './objectives'
 import { voyageWeather } from './weather'
-import { cargoUsed, PORTS, type GameState } from './model'
+import { cargoUsed, EMPTY_HOLD_TOLL, GOODS, PORTS, raiderToll, seizureLabel, type GameState } from './model'
 import { docketAnswer } from './dialogue-facts'
 
 export function assessPlaytest(text: string, state: GameState, view: string) {
@@ -17,6 +17,11 @@ export function assessPlaytest(text: string, state: GameState, view: string) {
   let reply = ''
   if (asks) {
     reply = docketAnswer('vale', question) ?? ''
+    if (/\b(raider|pirate|toll|highwayman)\b/i.test(question)) {
+      const toll = raiderToll(state)
+      const demand = toll.good ? `one crate of ${GOODS[toll.good].name.toLowerCase()} or ${toll.crowns} crowns` : `${EMPTY_HOLD_TOLL} crowns for an empty hold`
+      reply = `With your present manifest, a raider demands ${demand}. Pay for safe passage, or take the helm and fight or run to an edge. Defeat costs ${seizureLabel(state)}. Papers and bonded mail stay aboard.`
+    }
     if (!reply && /\b(quest|order|objective|commission|next stop)\b/i.test(question))
       reply =
         chartObjectives(state)

@@ -1,4 +1,5 @@
 import { GUN_POSITIONS } from './drill'
+export const RAIDER_CANNONS = GUN_POSITIONS.length
 export const SKY = { width: 940, height: 460 }
 export const GUN_ARC = Math.PI * 0.31
 export const SHOT_SPEED = 310
