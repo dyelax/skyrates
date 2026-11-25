@@ -1,6 +1,6 @@
 import { chartObjectives } from './objectives'
 import { voyageWeather } from './weather'
-import { cargoUsed, EMPTY_HOLD_TOLL, GOODS, PORTS, raiderToll, seizureLabel, type GameState } from './model'
+import { cargoUsed, PORTS, raiderToll, tollSettlementLabel, type GameState } from './model'
 import { docketAnswer } from './dialogue-facts'
 
 export function assessPlaytest(text: string, state: GameState, view: string) {
@@ -19,8 +19,9 @@ export function assessPlaytest(text: string, state: GameState, view: string) {
     reply = docketAnswer('vale', question) ?? ''
     if (/\b(raider|pirate|toll|highwayman)\b/i.test(question)) {
       const toll = raiderToll(state)
-      const demand = toll.good ? `one crate of ${GOODS[toll.good].name.toLowerCase()} or ${toll.crowns} crowns` : `${EMPTY_HOLD_TOLL} crowns for an empty hold`
-      reply = `With your present manifest, a raider demands ${demand}. Pay for safe passage, or take the helm and fight or run to an edge. Defeat costs ${seizureLabel(state)}. Papers and bonded mail stay aboard.`
+      const goodsOffer = toll.settlement.cargo.length ? ' Or hand over ' + tollSettlementLabel(toll.settlement) + '.' : ''
+      const cashOffer = state.coins >= toll.crowns ? 'Pay in cash for passage.' : 'Your purse cannot cover the cash toll.'
+      reply = `Your purse and trade goods are appraised at ${toll.exposedValue} crowns. A ${toll.profile.name.toLowerCase()} demands ${toll.crowns} crowns. ${cashOffer}${goodsOffer} To refuse the demand, take the helm and fight or break away at an edge. On defeat the settlement is ${tollSettlementLabel(toll.settlement)}. Papers and bonded mail stay aboard.`
     }
     if (!reply && /\b(quest|order|objective|commission|next stop)\b/i.test(question))
       reply =

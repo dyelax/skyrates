@@ -1,5 +1,5 @@
 import { artwork } from './artwork'
-import { RAIDER_CANNONS } from './battle-model'
+import { armamentLabel, boardingOdds } from './battle-model'
 import { seasonalPosting } from './seasonal-trade'
 import { openHandbook } from './handbook'
 import { routeWeather, seasonAt, CLIMATES } from './weather'
@@ -23,7 +23,7 @@ import {
   PORT_IDS,
   boardingStrength,
   raiderToll,
-  seizureLabel,
+  tollSettlementLabel,
   cargoUsed,
   freightOffer,
   stockAt,
@@ -290,6 +290,7 @@ function chart(state: GameState, ui: Controls) {
       <h2 id="sk-selected-port">${port.name}</h2>
       <p>${current ? 'Local exchange' : unlocked ? `${days}-day passage` : 'Relight the beacon to reach this port'} · ${GOODS[port.specialty].name}</p>
       <p class="sk-forecast">${forecast.summary} · wind toward ${forecast.bearing}, ${forecast.knots} kn</p>
+      ${!current && unlocked ? routeLookout(state) : ''}
       <details class="sk-fold"><summary>Climate and trade on arrival</summary><p>${CLIMATES[dest].region}. ${seasonAt(state.day + days)} · day ${state.day + days}.</p>${marketOutlook(dest,state.day+days)}</details>
       <details class="sk-fold"><summary>Port trade &amp; services</summary><p>${CITY_ECONOMY[dest].tradeLead}</p><p>${CITY_ECONOMY[dest].institution} requests ${CITY_ECONOMY[dest].order.quantity} × ${GOODS[CITY_ECONOMY[dest].order.good].name}.</p></details>
       <details class="sk-fold"><summary>Recorded prices</summary>${rememberedPrices(state, dest)}</details>
@@ -417,6 +418,15 @@ function authority(state: GameState, ui: Controls) {
     ${freightDesk(state, ui)}`
 }
 
+function routeLookout(state: GameState): string {
+  const { exposedValue, cargoValue, crowns, profile } = raiderToll(state)
+  const manifest = `Carried wealth ${exposedValue} crowns · ${state.coins} in your purse + ${cargoValue} in appraised trade cargo.`
+  if (state.voyageCount === 0 && state.port === 'sunstep') {
+    return `<details class="sk-fold"><summary>Harbor Watch · free first passage</summary><p>Your escort carries chalk rounds. Training costs nothing and your hold is safe.</p><p>${manifest}</p></details>`
+  }
+  return `<details class="sk-fold"><summary>Raider lookout · ${crowns} crowns if hailed</summary><p>${manifest}</p><p>If intercepted, expect a ${profile.id} with ${armamentLabel(profile.cannons)} and ${profile.hull} hull. Its toll on this manifest is ${crowns} crowns.</p></details>`
+}
+
 function voyage(state: GameState, ui: Controls) {
   const leg = state.voyage
   if (!leg)
@@ -425,6 +435,7 @@ function voyage(state: GameState, ui: Controls) {
   let title = 'On passage'
   let line = 'The last mooring line falls away.'
   let copy = 'Your solar sails draw taut. The chart table is lashed down and the lookout is at the rail.'
+  let terms = ''
   let buttons = ui.button('Continue voyage →', () => ui.act({ type: 'continueVoyage' }))
   if (leg.phase === 'tender') {
     title = 'A tender adrift'
@@ -436,17 +447,25 @@ function voyage(state: GameState, ui: Controls) {
       ui.button('Hold your course', () => ui.act({ type: 'tender', help: false }), { secondary: true })
   } else if (leg.phase === 'raider') {
     const toll = raiderToll(state)
-    const item = toll.good ? GOODS[toll.good].name.toLowerCase() : ''
+    const foe = toll.profile
+    const crew = { scout: 'a light boarding crew', cutter: 'trained boarders', corsair: 'a veteran boarding crew' }[foe.id]
+    const odds = Math.round(100 * boardingOdds(state.ship.crew, boardingStrength(state) / state.ship.crew,
+      state.ship, { hull: foe.hull, maxHull: foe.hull }, foe.crew))
+    const canPayCargo = toll.settlement.cargo.length > 0 && toll.exposedValue >= toll.crowns
+    const cargoTerms = tollSettlementLabel(toll.settlement)
+    const canPayCash = state.coins >= toll.crowns
     title = 'A toll on the skyway'
-    line = item ? `“One crate of ${item}, Captain. Or ${toll.crowns} crowns. Then you may pass.”`
-      : `“Empty hold? Passage is ${toll.crowns} crowns, Captain.”`
-    const ownGuns = state.ship.cannons + (state.ship.cannons === 1 ? ' gun' : ' guns')
-    copy = `Lookout reports ${RAIDER_CANNONS} guns across both rails. You have ${ownGuns}, ${state.ship.hull}/${state.ship.maxHull} hull and ${state.coins} crowns. ` +
-      `Pay for safe passage. Refuse the toll and fight or run for an edge. Defeat costs ${seizureLabel(state)}. Papers and bonded mail stay aboard.`
-    buttons = (toll.good ? ui.button('Hand over 1 crate of ' + item, () => ui.act({ type: 'payToll', id: leg.id, payment: 'cargo' })) : '') +
-      ui.button('Pay ' + toll.crowns + ' crowns', () => ui.act({ type: 'payToll', id: leg.id, payment: 'crowns' }), { disabled: state.coins < toll.crowns }) +
-      ui.button('Refuse · take the helm', () => ui.act({ type: 'engage' }), { secondary: !!toll.good || state.coins >= toll.crowns })
-    if (!toll.good && state.coins < toll.crowns) copy += ' You cannot cover the toll.'
+    line = `“${toll.crowns} crowns for passage, Captain.”`
+    copy = `Lookout sights the <strong>${foe.name}</strong> with ${armamentLabel(foe.cannons)}, ${foe.hull} hull and ${crew} (strength ${foe.crew}). Your ${state.ship.crew} hands have a ${odds}% boarding chance at the current hulls. Refuse and you must fight or reach the edge of the skyway.`
+    terms = `<details class="sk-fold"><summary>Toll and surrender terms</summary><p>They count ${state.coins} crowns in your purse and ${toll.cargoValue} in cargo, worth ${toll.exposedValue} together. ${canPayCargo ? 'They accept ' + cargoTerms + '. ' : ''}If defeated, you surrender ${cargoTerms}. Commission papers and bonded mail stay aboard.</p></details>`
+    const crates = toll.settlement.cargo.reduce((sum, lot) => sum + lot.quantity, 0)
+    const cargoButton = cargoTerms.length <= 62 ? 'Hand over ' + cargoTerms : `Pay with ${crates} ${crates === 1 ? 'crate' : 'crates'}` +
+      (toll.settlement.coins ? ` + ${toll.settlement.coins} crowns` : '') +
+      (toll.settlement.change ? ` · receive ${toll.settlement.change} in change` : '')
+    buttons = ui.button('Pay ' + toll.crowns + ' crowns', () => ui.act({ type: 'payToll', id: leg.id, payment: 'crowns' }), { disabled: !canPayCash }) +
+      (canPayCargo ? ui.button(cargoButton, () => ui.act({ type: 'payToll', id: leg.id, payment: 'cargo' }), {secondary: canPayCash}) : '') +
+      ui.button('Refuse · take the helm', () => ui.act({ type: 'engage' }), { secondary: canPayCash || canPayCargo })
+    if (!canPayCargo && !canPayCash) copy += ' Your manifest cannot cover the toll.'
   } else if (leg.phase === 'battle') {
     title = 'Under fire'
     line = 'The gun crews stand ready.'
@@ -462,7 +481,7 @@ function voyage(state: GameState, ui: Controls) {
   return `<div class="sk-voyage"><div class="sk-scene"><img src="${artwork(picture)}" alt="">${paintedWeather(weather)}
     <header><div class="sk-kicker">En route</div><h1>${title}</h1><p class="weather-bearing">${weather.summary} · ${weather.bearing} ${weather.knots} kn</p></header></div>
     <article class="sk-card sk-voyage-brief"><div class="sk-voyage-story"><div class="sk-leg"><span>${PORTS[leg.from].name}</span><i class="sk-path" aria-hidden="true"></i><span>${PORTS[leg.to].name}</span></div>
-    <blockquote class="sk-quote">${line}</blockquote><p>${copy}</p></div><div class="sk-actions">${buttons}</div></article></div>`
+    <blockquote class="sk-quote">${line}</blockquote><p>${copy}</p>${terms}</div><div class="sk-actions">${buttons}</div></article></div>`
 }
 
 export function renderInterior(

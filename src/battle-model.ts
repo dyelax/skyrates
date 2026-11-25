@@ -1,5 +1,13 @@
 import { GUN_POSITIONS } from './drill'
-export const RAIDER_CANNONS = GUN_POSITIONS.length
+
+export interface BattleOpponent {
+  name: string
+  cannons: number
+  hull: number
+  crew: number
+}
+
+export const WATCH_CUTTER: BattleOpponent = { name: 'Lark', cannons: 4, hull: 82, crew: 8.3 }
 export const SKY = { width: 940, height: 460 }
 export const GUN_ARC = Math.PI * 0.31
 export const SHOT_SPEED = 310
@@ -59,6 +67,26 @@ export function closestSide(ship: Vessel, target: Point): Side {
   return wrapAngle(angleBetween(ship, target) - ship.heading) < 0 ? 'port' : 'starboard'
 }
 
+export function armedSide(ship: Vessel, target: Point): Side {
+  const side = closestSide(ship, target)
+  return ship.guns.some((gun) => gun.side === side) ? side : ship.guns[0]?.side ?? side
+}
+
+export function armamentLabel(cannons: number): string {
+  if (cannons === 1) return '1 port gun'
+  if (cannons === 2) return '2 guns, one on each rail'
+  if (cannons === 4) return '4 guns, two on each rail'
+  const stations = GUN_POSITIONS.slice(0, cannons)
+  const port = stations.filter(gun => gun.side === 'port').length
+  return `${stations.length} guns, ${port} port and ${stations.length - port} starboard`
+}
+
+export function buildOpponent(pos: Point, heading: number, profile: BattleOpponent): Vessel {
+  const ship = buildShip(pos, heading, 0, 0, undefined, false, profile.cannons)
+  ship.maxHull = ship.hull = profile.hull
+  return ship
+}
+
 export function buildShip(
   pos: Point,
   heading: number,
@@ -106,6 +134,31 @@ export function moveShip(ship: Vessel, helm: number, dt: number, wind: Point = S
   ship.guns.forEach((gun) => {
     gun.cooldown = Math.max(0, gun.cooldown - dt)
   })
+}
+
+export function steerRaider(
+  enemy: Vessel,
+  player: Point,
+  area: { width: number; height: number; top: number; bottom: number },
+  pursuing: boolean,
+  dt: number,
+  wind: Point,
+): Side {
+  const range = Math.hypot(enemy.x - player.x, enemy.y - player.y)
+  const bearing = angleBetween(enemy, player)
+  const side = armedSide(enemy, player)
+  const rail = side === 'port' ? -1 : 1
+  let desired = bearing - rail * Math.PI / 2
+  if (range > 325 || pursuing) desired = bearing - rail * 0.35
+  if (range < 110) desired = bearing + Math.PI
+  if (enemy.x < 68 || enemy.x > area.width - 68 || enemy.y < area.top + 43 || enemy.y > area.bottom - 43)
+    desired = angleBetween(enemy, { x: area.width / 2, y: area.height / 2 })
+  enemy.throttle = range > 330 || pursuing ? 2 : 1
+  const helm = Math.max(-1, Math.min(1, wrapAngle(desired - enemy.heading) * 1.7))
+  moveShip(enemy, helm, dt, wind)
+  enemy.x = Math.max(30, Math.min(area.width - 30, enemy.x))
+  enemy.y = Math.max(area.top + 20, Math.min(area.bottom - 20, enemy.y))
+  return side
 }
 
 export function localPoint(ship: Vessel, forward: number, lateral: number): Point {
@@ -176,8 +229,14 @@ export function boardingContact(a: Vessel, b: Vessel): boolean {
   })
 }
 
-export function boardingOdds(crew: number, skill: number, player: Vessel, enemy: Vessel): number {
+export function boardingOdds(
+  crew: number,
+  skill: number,
+  player: Pick<Vessel, 'hull' | 'maxHull'>,
+  enemy: Pick<Vessel, 'hull' | 'maxHull'>,
+  defendingStrength = WATCH_CUTTER.crew,
+): number {
   const force = Math.max(0.1, crew * skill) * (0.8 + (0.2 * player.hull) / player.maxHull)
-  const raiders = 8.3 * (0.53 + (0.47 * enemy.hull) / enemy.maxHull)
+  const raiders = defendingStrength * (0.53 + (0.47 * enemy.hull) / enemy.maxHull)
   return Math.max(0.05, Math.min(0.95, 0.5 + ((force - raiders) / (force + raiders)) * 1.3))
 }

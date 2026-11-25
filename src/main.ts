@@ -3,6 +3,7 @@ import { isStation } from './voxel/workroom-plan'
 import { openVoiceSettings } from './npc-voices'
 import { receiveCaptain } from './edition-transfer'
 import { firstWatchNote } from './handbook'
+import { WATCH_CUTTER } from './battle-model'
 import '@fontsource/barlow/latin-400.css'
 import '@fontsource/barlow/latin-500.css'
 import '@fontsource/barlow/latin-600.css'
@@ -17,6 +18,7 @@ import {
   boardingStrength,
   loadGame,
   PORTS,
+  raiderToll,
   saveGame,
   seizureLabel,
   type BattleResult,
@@ -181,6 +183,7 @@ function render() {
           escaped: 'escaped',
         }
         battleUnmount = mountBattle(main, {
+          opponent: state.drill ? WATCH_CUTTER : raiderToll(state).profile,
           onUnavailable: unavailable,
           crew: state.ship.crew,
           skill: boardingStrength(state) / state.ship.crew,

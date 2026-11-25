@@ -3,7 +3,6 @@ import type { WeatherReport } from './weather'
 import { paintedWeather } from './scene-weather'
 import {
   SKY,
-  RAIDER_CANNONS,
   GUN_ARC,
   SHOT_SPEED,
   STILL_AIR,
@@ -11,6 +10,7 @@ import {
   angleBetween,
   boardingContact,
   boardingOdds,
+  buildOpponent,
   buildShip,
   closestSide,
   discharge,
@@ -19,9 +19,10 @@ import {
   localPoint,
   moveShip,
   sideBearing,
+  steerRaider,
   wrapAngle,
 } from './battle-model'
-import type { DuelOutcome, Gun, Point, Shot, Side, Vessel } from './battle-model'
+import type { BattleOpponent, DuelOutcome, Gun, Point, Shot, Side, Vessel } from './battle-model'
 import { battleSound } from './audio'
 import {
   COACH,
@@ -37,6 +38,7 @@ import './battle.css'
 
 export type BattleOutcome = DuelOutcome
 export interface BattleOptions {
+  opponent: BattleOpponent
   crew: number
   skill: number
   gunLevel: number
@@ -74,6 +76,7 @@ interface Grapple {
   startB: Point
   odds: number
   crew: Phaser.GameObjects.Image[]
+  friendlyCount: number
   aHeading: number
   bHeading: number
 }
@@ -82,7 +85,6 @@ const THROTTLE = ['Hove to', 'Ahead slow', 'Cruising', 'Full ahead']
 const FAIR_WIND = 0xa6f3d7,
   GOLD = 0xffcf79,
   COPPER = 0xff9275
-const ENEMY_NAME = 'The Cinder Wasp'
 
 interface FlightArea {
   width: number
@@ -135,7 +137,7 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
     ? ''
     : `<figure class="duel-wind"><div class="duel-anemoscope" aria-hidden="true"><i style="transform:rotate(${windAngle}deg)">➜</i></div><figcaption><strong>${weather.knots} kn · ${weather.bearing}</strong><span>${weather.kind} · ${weather.season}</span></figcaption><button data-action="windage" aria-pressed="false" title="Aim upwind to counter shot drift (V)"><kbd>V</kbd> Wind sight</button></figure>`
   root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause"><kbd>P</kbd> Pause</button></div>
-    <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : ENEMY_NAME, 'enemy')}</div>
+    <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : options.opponent.name, 'enemy')}</div>
     ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div>${options.drill ? '' : paintedWeather(weather)}<div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
     <div class="duel-console">${battery('port', cannons)}${battery('starboard', cannons)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Set an intercept course to board on contact"><kbd>B</kbd> Ram</button><button type="button" data-action="escape"><kbd>R</kbd> Break away</button></div></div></div>
     <div class="duel-foot"><span>${options.drill ? 'Watch exercise · Chalk rounds' : '<kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Click raider to fire · Ram to board'}</span><span data-read="crew"></span></div>`
@@ -237,9 +239,7 @@ class SkyBattle extends Phaser.Scene {
       options.quickGunnery,
       options.drill ? 1 : options.cannons,
     )
-    this.foe = buildShip({ x: 595, y: area.top + flightHeight * 0.51 }, Math.PI * 0.49, 0, 0, undefined, false, RAIDER_CANNONS)
-    this.foe.maxHull = this.foe.hull = 82
-    this.foe.throttle = 1
+    this.foe = buildOpponent({ x: 595, y: area.top + flightHeight * 0.51 }, Math.PI * 0.49, options.opponent)
     this.banner = root.querySelector('.duel-banner')!
     root.querySelectorAll<HTMLElement>('[data-read]').forEach((el) => {
       this.readings[el.dataset.read!] = el
@@ -321,7 +321,7 @@ class SkyBattle extends Phaser.Scene {
         if (this.drill === 'dodge') this.player.throttle = 2
       }
     })
-    for (const label of ['YOU · WAYFARER', this.drill ? 'WATCH · LARK' : 'RAIDER · CINDER WASP']) {
+    for (const label of ['YOU · WAYFARER', this.drill ? 'WATCH · LARK' : this.opts.opponent.name.toUpperCase()]) {
       this.chartLabels.push(
         this.add
           .text(0, 0, label, {
@@ -637,7 +637,7 @@ class SkyBattle extends Phaser.Scene {
     }
     this.readings.speed.textContent = THROTTLE[this.player.throttle]
     this.readings.range.textContent = `${Math.round(Math.hypot(this.foe.x - this.player.x, this.foe.y - this.player.y))} m`
-    const odds = Math.round(100 * boardingOdds(this.opts.crew, this.opts.skill, this.player, this.foe))
+    const odds = Math.round(100 * this.boardingChance())
     this.readings.crew.textContent = `${this.opts.crew} hands · ${odds}% boarding odds`
     const locked = !this.ready || this.pausedDuel || !!this.grapple || this.ended
     this.player.guns.forEach((gun) => {
@@ -694,7 +694,7 @@ class SkyBattle extends Phaser.Scene {
     this.root.querySelector('.drill-coach h1')!.textContent = content.title
     this.root.querySelector('.drill-copy')!.textContent = content.text
     if (this.drill === 'debrief') {
-      const odds = Math.round(100 * boardingOdds(this.opts.crew, this.opts.skill, this.player, this.foe))
+      const odds = Math.round(100 * this.boardingChance())
       this.root.querySelector('.drill-copy')!.textContent =
         `Your ${this.opts.crew} hands crossed the rail. Their experience and both hulls gave you a ${odds}% chance in a live boarding. Fit more guns at a shipyard for a broadside, or break away at the edge of a fight.`
     }
@@ -787,23 +787,7 @@ class SkyBattle extends Phaser.Scene {
     const enemy = this.foe,
       player = this.player
     const range = Math.hypot(enemy.x - player.x, enemy.y - player.y)
-    const bearing = angleBetween(enemy, player)
-    const side = closestSide(enemy, player)
-    let desired = bearing - (side === 'port' ? -Math.PI / 2 : Math.PI / 2)
-    if (range > 325 || this.escaping) desired = bearing - (side === 'port' ? -0.35 : 0.35)
-    if (range < 110) desired = bearing + Math.PI
-    if (
-      enemy.x < 68 ||
-      enemy.y < this.area.top + 43 ||
-      enemy.x > this.area.width - 68 ||
-      enemy.y > this.area.bottom - 43
-    ) {
-      desired = angleBetween(enemy, { x: this.area.width / 2, y: this.area.height / 2 })
-    }
-    enemy.throttle = range > 330 || this.escaping ? 2 : 1
-    moveShip(enemy, clamp(wrapAngle(desired - enemy.heading) * 1.7, -1, 1), dt, this.wind)
-    enemy.x = clamp(enemy.x, 30, this.area.width - 30)
-    enemy.y = clamp(enemy.y, this.area.top + 20, this.area.bottom - 20)
+    const side = steerRaider(enemy, player, this.area, this.escaping, dt, this.wind)
     this.aiDelay -= dt
     if (this.aiDelay > 0 || range > 520) return
     const gun = enemy.guns.find((g) => g.side === side && !g.cooldown && inArc(enemy, g.side, player))
@@ -814,14 +798,19 @@ class SkyBattle extends Phaser.Scene {
     }
   }
 
+  private boardingChance(): number {
+    return boardingOdds(this.opts.crew, this.opts.skill, this.player, this.foe, this.opts.opponent.crew)
+  }
+
   private beginBoarding(elapsed = 0) {
     const a = this.player,
       b = this.foe
     const center = { x: (a.x + b.x) * 0.5, y: (a.y + b.y) * 0.5 }
-    const odds = boardingOdds(this.opts.crew, this.opts.skill, a, b)
+    const odds = this.boardingChance()
     const crew: Phaser.GameObjects.Image[] = []
     const visibleCrew = Math.min(10, Math.max(1, this.opts.crew))
-    for (let i = 0; i < visibleCrew + 4; i++) {
+    const visibleDefenders = this.drill ? 4 : Math.min(10, Math.round(this.opts.opponent.crew))
+    for (let i = 0; i < visibleCrew + visibleDefenders; i++) {
       const hand = this.add
         .image(i < visibleCrew ? a.x : b.x, i < visibleCrew ? a.y : b.y, 'hand')
         .setDisplaySize(9.5, 9.5)
@@ -841,6 +830,7 @@ class SkyBattle extends Phaser.Scene {
       bHeading: b.heading,
       odds,
       crew,
+      friendlyCount: visibleCrew,
     }
     this.shots.length = 0
     this.course = undefined
@@ -876,7 +866,7 @@ class SkyBattle extends Phaser.Scene {
         to = localPoint(b, off, 7 * sign)
       this.paths.lineBetween(from.x, from.y, to.x, to.y)
     }
-    const n = g.crew.length - 4
+    const n = g.friendlyCount
     g.crew.forEach((hand, i) => {
       const friendly = i < n,
         which = friendly ? i : i - n
@@ -915,8 +905,8 @@ class SkyBattle extends Phaser.Scene {
     this.listeners.abort()
     this.syncHUD()
     const message = {
-      victory: 'Raider disabled • The skyway is clear',
-      boarded: 'Prize taken • The raiders strike their colors',
+      victory: `${this.opts.opponent.name} disabled • The skyway is clear`,
+      boarded: `Prize taken • ${this.opts.opponent.name} strikes colors`,
       defeat: 'Colors struck • Your crew surrenders',
       escaped: 'Clear skies • You have broken pursuit',
     }[outcome]

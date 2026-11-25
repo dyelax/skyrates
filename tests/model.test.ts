@@ -48,6 +48,25 @@ function reload(state: GameState): GameState {
   return loadGame({ getItem: (key) => database.get(key) ?? null })
 }
 
+test('a merchant can pay the first raider and fund the beacon with two trade legs and the opening bonded letter', () => {
+  let state = act(initialState(), { type: 'acceptMission' })
+  state = act(state, { type: 'takeFreight' })
+  state = shippingRun(state, 'glasshouse', 'provisions')
+  state = act(state, { type: 'presentCommission' })
+  state = shippingRun(state, 'copperfall', 'glass')
+  state = act(state, { type: 'sail', to: 'glasshouse' })
+  state = act(state, { type: 'continueVoyage' })
+  assert.equal(state.voyage?.phase, 'raider')
+  state = act(state, { type: 'payToll', id: state.voyage!.id, payment: 'crowns' })
+  assert.equal(state.day, 4)
+  state = act(state, { type: 'payInvoice' })
+  assert.equal(state.certificate, 'aboard')
+  state = land(state, 'meridian')
+  state = act(state, { type: 'deliverCertificate' })
+  assert.equal(state.certificate, 'paid')
+  assert.equal(state.coins, 310)
+})
+
 test('the beacon invoice can be earned through different circuits, in either opening direction', () => {
   for (const work of [
     [
