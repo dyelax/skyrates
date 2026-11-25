@@ -31,9 +31,22 @@ The arrow on the wind gauge points downwind. Watch your heading as the wind carr
 
 Each cannon refit adds a gun until all four stations are filled. A side with two fitted guns gains a broadside order. Each cannon reloads separately. Turning brings a fresh battery to bear. Contact brings the crews together. Crew size, veterans, leadership, and the damage to each hull affect your chance of taking the other ship.
 
-Open the lookout on a destination’s sky chart to see what your manifest might draw. Raiders count your purse and appraise each trade crate at its home port’s list price. Below 140 crowns, a scout carries one port gun. From 140 crowns, a cutter carries one gun on each rail. From 320 crowns, a corsair carries two on each rail and fields veteran boarders. The first Harbor Watch exercise is free and carries no toll.
+Open the destination’s **Raider lookout** before sailing. It appraises your purse and commercial crates at their home-port list prices. It shows the possible toll, the usual demand and the most likely enemy. A richer manifest attracts more dangerous ships on average. Your first passage and the Harbor Watch exercise are free.
 
-When a raider hails you, it demands 5% of your carried wealth, rounded up, with a five-crown minimum. Pay in crowns or hand over the listed crates. The raider returns change on excess cargo value and asks for the balance in crowns when the crates fall short. Refuse and you take the helm. Reaching the edge keeps your manifest intact, and victory pays prize money. Defeat costs the quoted cargo settlement, limited to what you carry. Commission papers and bonded mail stay aboard.
+When hailed, you see the actual ship, its armament, your boarding odds and the exact toll. Pay from your purse or tender the listed crates. Whole crates earn change if their appraisal exceeds the demand, and you cover any shortfall in crowns. Refuse the demand to take the helm. You can fight or escape at the edge. Defeat costs the posted settlement. Papers and bonded mail stay aboard.
+
+The levy and ship weights are authored in `src/raiders.ts`. Each whole rate within a row is equally likely.
+
+| Share of hails | Demand as a share of the manifest | Chance the raider brings a ship one class heavier |
+| ---: | ---: | ---: |
+| 65% | 5–12% | 0% |
+| 25% | 13–22% | 10% |
+| 8% | 23–35% | 30% |
+| 2% | 36–50% | 65% |
+
+Below 140 crowns, starting scout/cutter/corsair odds are 75/23/2%. At 140 crowns they become 44/47/9%, and at 320 crowns they become 32/45/23%. Promotion stops at corsair. A scout carries one gun, a cutter two, and a corsair four. Payment rounds to the nearest whole crown between 5% rounded up and half the manifest rounded down. A manifest worth zero or one crown passes free.
+
+Each captain has a saved random seed. Casting off locks the rate, demand and ship for a pirate voyage. Reloading or choosing another destination for the same voyage number keeps the draw. Changes to the manifest can change the cost and shift ship odds. Earlier saves already facing a raider keep their quoted enemy and price, subject to the half-manifest cap.
 
 ## Local edition
 

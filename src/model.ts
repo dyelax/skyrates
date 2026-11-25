@@ -1,4 +1,4 @@
-import { raiderToll, tollSettlementLabel, type TollSettlement } from './raiders'
+import { appraise, legacyPirateSeed, legacyPirateTerms, raiderToll, rollPirate, tollSettlementLabel, validPirateTerms, type PirateTerms, type TollSettlement } from './raiders'
 export * from './raiders'
 import { seasonalAdjustment } from './seasonal-trade'
 import { DRILL_STAGES, nextStage, type DrillStage } from './drill'
@@ -67,9 +67,11 @@ export interface Voyage {
   from: PortId
   to: PortId
   phase: 'underway' | 'tender' | 'raider' | 'battle'
+  pirate?: PirateTerms
 }
 export interface GameState {
   version: 1
+  pirateSeed: number
   port: PortId
   day: number
   coins: number
@@ -120,9 +122,10 @@ export interface UpgradeOffer {
 export const SAVE_KEY = 'skyrates.save.v1'
 const charterLevel = PORTS[BEACON_COMMISSION.opens].requiredLevel
 
-export function initialState(): GameState {
+export function initialState(pirateSeed = globalThis.crypto.getRandomValues(new Uint32Array(1))[0]): GameState {
   const state: GameState = {
     version: 1,
+    pirateSeed,
     port: BEACON_COMMISSION.home,
     day: 1,
     coins: BEACON_COMMISSION.startingCoins,
@@ -450,24 +453,30 @@ function trade(state: GameState, action: Extract<Command, { good: GoodId }>): bo
   return true
 }
 
+function passageEvent(id: number, tender: GameState['tender']): 'safe' | 'tender' | 'raider' {
+  if (id <= ENCOUNTERS.safeOpeningVoyages) return 'safe'
+  if (tender === 'unseen' && id >= ENCOUNTERS.tenderFromVoyage) return 'tender'
+  return id % ENCOUNTERS.raiderInterval === 0 ? 'raider' : 'safe'
+}
+
 function applyVoyageCommand(state: GameState, action: Command): boolean {
   const voyage = state.voyage
   if (!voyage) return false
   switch (action.type) {
-    case 'continueVoyage':
+    case 'continueVoyage': {
       if (voyage.phase !== 'underway') return false
-      if (voyage.id <= ENCOUNTERS.safeOpeningVoyages) {
+      const event = passageEvent(voyage.id, state.tender)
+      if (event === 'safe') {
         arrive(state)
-      } else if (state.tender === 'unseen' && voyage.id >= ENCOUNTERS.tenderFromVoyage) {
+      } else if (event === 'tender') {
         voyage.phase = 'tender'
         state.notice = 'A tender hangs under a torn solar sail. Its skipper signals for a tow.'
-      } else if (voyage.id % ENCOUNTERS.raiderInterval === 0) {
+      } else {
         voyage.phase = 'raider'
         state.notice = 'A raider blocks your passage and signals its toll.'
-      } else {
-        arrive(state)
       }
       return true
+    }
     case 'tender':
       if (voyage.phase !== 'tender') return false
       if (action.help) {
@@ -498,7 +507,7 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
       } else {
         return false
       }
-      record(state, 'Paid the raider ' + payment + ' for passage.')
+      record(state, toll.crowns ? 'Paid the raider ' + payment + ' for passage.' : 'The raider waved us through without a toll.')
       arrive(state, state.notice)
       return true
     }
@@ -616,6 +625,9 @@ function applyDockCommand(state: GameState, action: Command): boolean {
       state.day += routeDays(state.port, action.to)
       if (state.voyageCount === 1 && state.port === 'sunstep') state.drill = 'briefing'
       state.voyage = { id: state.voyageCount, from: state.port, to: action.to, phase: 'underway' }
+      if (passageEvent(state.voyageCount, state.tender) === 'raider') {
+        state.voyage.pirate = rollPirate(state.pirateSeed, state.voyageCount, appraise(state).exposedValue)
+      }
       state.notice = 'Underway for ' + PORTS[action.to].name + '.'
       return true
     case 'takeFreight': {
@@ -782,6 +794,7 @@ function validSave(value: unknown): value is GameState {
   if (
     !object(value) ||
     value.version !== 1 ||
+    !integer(value.pirateSeed) || value.pirateSeed > 0xffffffff ||
     !isPort(value.port) ||
     !(value.drill === null || DRILL_STAGES.includes(value.drill as DrillStage)) ||
     (value.drill !== null &&
@@ -869,6 +882,7 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
       const value: unknown = JSON.parse(serialized)
       if (object(value) && value.version === 1) {
         if (value.tradeProfitRemainder === undefined) value.tradeProfitRemainder = 0
+        if (value.pirateSeed === undefined) value.pirateSeed = legacyPirateSeed(serialized)
         if (value.firstWatch === undefined) value.firstWatch = 'briefed'
         if (value.pendingNotices === undefined) value.pendingNotices = []
         if (value.certificate === undefined) value.certificate = value.mission === 'lit' ? 'aboard' : 'none'
@@ -886,6 +900,18 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
       const legacyContacts = object(value) && value.version === 1 && value.contacts === undefined
       if (legacyContacts) value.contacts = {}
       if (validSave(value)) {
+        const leg = value.voyage
+        if (leg) {
+          const wealth = appraise(value).exposedValue
+          if (leg.pirate !== undefined) {
+            if (!validPirateTerms(leg.pirate, wealth)) return initialState()
+          } else if (leg.phase === 'raider' || leg.phase === 'battle') {
+            // A returning captain may have already seen the previous release's quote.
+            leg.pirate = legacyPirateTerms(wealth)
+          } else if (leg.phase === 'underway' && passageEvent(leg.id, value.tender) === 'raider') {
+            leg.pirate = rollPirate(value.pirateSeed, leg.id, wealth)
+          }
+        }
         if (legacyContacts) for (const port of value.exchange.orders) witnessCityOrder(value, port)
         return value
       }
