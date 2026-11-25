@@ -18,6 +18,7 @@ import {
 } from './model'
 import { renderInterior, type InteriorView } from './interiors'
 import { mountHarbor } from './harbor'
+import { openPrologue } from './prologue'
 import { beginAmbience, bell } from './audio'
 
 type View = InteriorView | 'harbor' | 'battle'
@@ -170,3 +171,12 @@ document.addEventListener('pointerdown', beginAmbience, { once: true })
 render()
 
 drawNotice()
+
+if (state.firstWatch === 'new' && !state.voyage && state.day === 1) {
+  openPrologue(() => {
+    state = { ...state, firstWatch: 'arrived' }
+    stored = saveGame(state)
+    render()
+    main.focus({ preventScroll: true })
+  })
+}
