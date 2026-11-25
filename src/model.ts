@@ -1,9 +1,13 @@
-import { appraise, legacyPirateSeed, legacyPirateTerms, raiderToll, rollPirate, tollSettlementLabel, validPirateTerms, type PirateTerms, type TollSettlement } from './raiders'
+import { validBattleSnapshot, type BattleEnding, type BattleSnapshot } from './battle-state'
+import { acceptsCommand, newRegister, officerOffer, prizeManifest, COMMANDER_NAMES, validPrizeTerms, validRegister,
+  canLearnPerk, hasCaptainPerk, qualifiedMate, creditMission, CAPTAIN_PERKS, CAPTAIN_XP_PER_LEVEL, LAST_CAPTAIN_LEVEL, type CaptainPerk, type ServingHand, CREW_PROFILES,
+  type CommandRegister, type PrizeCommand, type PrizeTerms } from './prize-command'
+export * from './prize-command'
+import { RAIDER_PROFILES, appraise, legacyPirateSeed, legacyPirateTerms, raiderToll, rollPirate, tollSettlementLabel, validPirateTerms, type PirateTerms, type TollSettlement } from './raiders'
 export * from './raiders'
 import { seasonalAdjustment } from './seasonal-trade'
 import { DRILL_STAGES, nextStage, type DrillStage } from './drill'
 import {
-  ABILITIES,
   ABILITY_IDS,
   BEACON_COMMISSION,
   BONDED_MAIL,
@@ -71,7 +75,9 @@ export interface Voyage {
   id: number
   from: PortId
   to: PortId
-  phase: 'underway' | 'tender' | 'raider' | 'battle'
+  phase: 'underway' | 'tender' | 'raider' | 'battle' | 'prize'
+  battle?: BattleSnapshot
+  prize?: PrizeTerms
   pirate?: PirateTerms
 }
 export interface GameState {
@@ -82,6 +88,7 @@ export interface GameState {
   coins: number
   cargo: Record<GoodId, CargoLot>
   ship: Ship
+  command: CommandRegister
   level: number
   xp: number
   tradeProfitRemainder: number
@@ -106,10 +113,14 @@ export interface GameState {
   pendingNotices: string[]
 }
 
-export type BattleResult = 'won' | 'boarded' | 'escaped' | 'lost'
+export type BattleResult = 'won' | 'boarded' | 'escaped' | 'lost' | 'enemyWreck' | 'ownWreck' | 'mutualWreck' | 'withdrawn' | 'yielded' | 'surrendered'
+export const CAMPAIGN_RESULTS: Record<BattleEnding, BattleResult> = {
+  victory:'enemyWreck', defeat:'ownWreck', escaped:'escaped', boarded:'surrendered', yielded:'yielded', withdrawn:'withdrawn', mutualWreck:'mutualWreck',
+}
 export type Command =
   | ContactCommand
   | BuyerCommand
+  | PrizeCommand
   | { type: 'chooseHarvest'; day: number; decision: 'buy' | 'pass' }
   | { type: 'acceptMission' | 'presentCommission' | 'deliverCertificate' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' | 'practiceDrill' | 'fillCityOrder' | 'useCityService' }
   | { type: 'payToll'; id: number; payment: 'cargo' | 'crowns' }
@@ -117,9 +128,9 @@ export type Command =
   | { type: 'buy' | 'sell'; good: GoodId; quantity: number }
   | { type: 'sail'; to: PortId }
   | { type: 'tender'; help: boolean }
-  | { type: 'resolveBattle'; id: number; result: BattleResult; hull: number }
+  | { type: 'resolveBattle'; id: number; result: BattleResult; hull: number; enemyHull?: number }
   | { type: 'upgrade'; upgrade: UpgradeId }
-  | { type: 'chooseAbility'; ability: AbilityId }
+  | { type: 'chooseAbility'; ability: CaptainPerk }
 export type GameCommand = Command
 
 export interface UpgradeOffer {
@@ -147,6 +158,7 @@ export function initialState(pirateSeed = globalThis.crypto.getRandomValues(new 
       governors: { quantity: 0, cost: 0 },
       soundings: { quantity: 0, cost: 0 },
     },
+    command: newRegister(),
     ship: { hold: 12, hull: 100, maxHull: 100, guns: 0, cannons: 1, crew: 6, veterans: 1 },
     level: 1,
     xp: 0,
@@ -193,7 +205,7 @@ export function priceAt(state: GameState, port: PortId, good: GoodId): Quote {
   const price = Math.max(3, PORTS[port].prices[good] + cycle - 1 + seasonalAdjustment(port, good, state.day))
   const wholesale = Math.floor(price * 0.9)
   const sell = Math.max(1, Math.min(price - 2, wholesale - 1))
-  const buy = state.ability === 'broker' ? wholesale : price
+  const buy = hasCaptainPerk(state, 'broker') ? wholesale : price
   return { buy, sell }
 }
 
@@ -237,7 +249,7 @@ export function cityService(state: GameState) {
 }
 
 export function boardingStrength(state: GameState): number {
-  return (state.ship.crew + 1.5 * state.ship.veterans) * (state.ability === 'leader' ? 1.25 : 1)
+  return (state.ship.crew + 1.5 * state.ship.veterans) * (hasCaptainPerk(state, 'leader') ? 1.25 : 1)
 }
 
 export function prestigeTitle(state: GameState): string {
@@ -357,7 +369,14 @@ function record(state: GameState, text: string) {
 
 function experience(state: GameState, amount: number) {
   // The outer chart is a charter privilege earned by restoring the beacon.
-  state.xp = Math.min(state.level === 1 ? 90 : 199, state.xp + amount)
+  state.xp = state.level === 1 ? Math.min(90, state.xp + amount) : state.xp + amount
+  if (state.level > 1) {
+    const level = Math.min(LAST_CAPTAIN_LEVEL, 1 + Math.floor(state.xp / CAPTAIN_XP_PER_LEVEL))
+    if (level > state.level) {
+      state.pendingNotices.push(`Reached captain level ${level}. Spend your earned perk points in the captain’s log.`)
+      state.level = level
+    }
+  }
 }
 
 export const TRADE_PROFIT_PER_XP = 10
@@ -382,6 +401,7 @@ function arrive(state: GameState, encounterOutcome = '') {
     const job = state.freight
     state.coins += job.pay
     state.freight = null
+    creditMission(state)
     experience(state, job.special ? TENDER_DEED.contract.xp : BONDED_MAIL.xp)
     record(
       state,
@@ -464,7 +484,7 @@ function trade(state: GameState, action: Extract<Command, { good: GoodId }>): bo
   return true
 }
 
-function passageEvent(id: number, tender: GameState['tender']): 'safe' | 'tender' | 'raider' {
+export function passageEvent(id: number, tender: GameState['tender']): 'safe' | 'tender' | 'raider' {
   if (id <= ENCOUNTERS.safeOpeningVoyages) return 'safe'
   if (tender === 'unseen' && id >= ENCOUNTERS.tenderFromVoyage) return 'tender'
   return id % ENCOUNTERS.raiderInterval === 0 ? 'raider' : 'safe'
@@ -492,6 +512,7 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
       if (voyage.phase !== 'tender') return false
       if (action.help) {
         state.tender = 'helped'
+        creditMission(state)
         state.day += TENDER_DEED.towDays
         state.notoriety += TENDER_DEED.notoriety
         experience(state, TENDER_DEED.xp)
@@ -528,36 +549,135 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
       voyage.phase = 'battle'
       state.notice = 'Battle stations. The raider is closing.'
       return true
-    case 'resolveBattle': {
-      if (voyage.phase !== 'battle' || action.id !== voyage.id || !Number.isFinite(action.hull)) return false
-      if (!['lost', 'won', 'boarded', 'escaped'].includes(action.result)) return false
-      state.ship.hull = Math.min(state.ship.maxHull, Math.max(1, Math.round(action.hull)))
-      if (action.result === 'lost') {
-        state.ship.hull = Math.max(state.ship.hull, Math.ceil(state.ship.maxHull * 0.35))
-        const { settlement } = raiderToll(state)
-        settleToll(state, settlement)
-        record(state, 'Struck colors. Settled the raider’s claim with ' + tollSettlementLabel(settlement) + '.')
-      } else if (action.result === 'escaped') {
-        record(state, 'Broke contact with the raider and reached friendly skies.')
-      } else {
-        const prize = action.result === 'boarded' ? 40 : 25
-        state.coins += prize
-        state.notoriety += 1
-        experience(state, 12)
-        record(
-          state,
-          (action.result === 'boarded' ? 'The crew took the raider by boarding' : 'Drove off the raider') +
-            ' and claimed ' +
-            prize +
-            ' crowns.',
-        )
-      }
-      arrive(state, state.notice)
-      return true
-    }
+    case 'offerCommand':
+    case 'commissionPrize':
+    case 'releasePrize':
+      return settlePrize(state, action)
+    case 'resolveBattle':
+      return finishBattle(state, action)
     default:
       return false
   }
+}
+
+function validCombatCheckpoint(value: unknown): value is BattleSnapshot {
+  if (!validBattleSnapshot(value)) return false
+  const {terminal, player, enemy, playerCrew, enemyCrew} = value
+  if (!terminal) return true
+  if (player.hull === 0 && enemy.hull === 0) return terminal === 'mutualWreck'
+  if (player.hull === 0) return terminal === 'defeat'
+  if (enemy.hull === 0) return terminal === 'victory'
+  if (playerCrew === 0 && enemyCrew === 0) return terminal === 'withdrawn'
+  if (playerCrew === 0) return terminal === 'yielded'
+  if (enemyCrew === 0) return terminal === 'boarded'
+  return terminal === 'escaped'
+}
+
+export function checkpointBattle(state: GameState, id: number, snapshot: BattleSnapshot): GameState {
+  const voyage = state.voyage
+  if (!voyage || voyage.id !== id || voyage.phase !== 'battle' || voyage.battle?.terminal || !validCombatCheckpoint(snapshot)) return state
+  return { ...state, voyage: { ...voyage, battle: structuredClone(snapshot) } }
+}
+
+function finishBattle(state: GameState, action: Extract<Command,{type:'resolveBattle'}>): boolean {
+  const leg = state.voyage
+  if (!leg || leg.phase !== 'battle' || leg.id !== action.id || !Number.isFinite(action.hull)) return false
+  const terminal = leg.battle?.terminal
+  let outcome = action.result
+  if (terminal && CAMPAIGN_RESULTS[terminal] !== outcome) return false
+  // Legacy clients reported only victory or a successful boarding action.
+  if (outcome === 'won') outcome = 'enemyWreck'
+  if (outcome === 'boarded') outcome = 'surrendered'
+  const profile = raiderToll(state).profile
+  const ourHull = terminal ? leg.battle!.player.hull : action.hull
+  const theirHull = terminal ? leg.battle!.enemy.hull : action.enemyHull ?? profile.hull
+  if (!Number.isFinite(theirHull)) return false
+  state.ship.hull = Math.min(state.ship.maxHull, Math.max(1, Math.ceil(ourHull)))
+  if (outcome === 'surrendered') {
+    if (ourHull <= 0 || theirHull <= 0 || theirHull > profile.hull) return false
+    leg.phase = 'prize'
+    leg.prize = { hull: theirHull, offer: 'unasked' }
+    delete leg.battle
+    state.notoriety++
+    experience(state,12)
+    record(state, `The ${profile.name.toLowerCase()} struck its colors. Both ships are afloat. The skipper awaits your terms.`)
+    return true
+  }
+  switch (outcome) {
+    case 'enemyWreck':
+      state.notoriety++
+      state.coins += 25
+      experience(state,12)
+      record(state, 'The raider sank. Claimed the 25-crown defense award at the next berth.')
+      break
+    case 'lost':
+    case 'yielded':
+    case 'ownWreck': {
+      const { settlement } = raiderToll(state)
+      settleToll(state, settlement)
+      if (outcome !== 'yielded') state.ship.hull = Math.max(state.ship.hull, Math.ceil(state.ship.maxHull * 0.35))
+      const ending = outcome === 'ownWreck' ? 'The Wayfarer fell. A salvage tender brought the crew and shattered keel to a repair berth.' : 'Struck colors with the crews aboard.'
+      record(state, ending + ' Settled the raider’s claim with ' + tollSettlementLabel(settlement) + '.')
+      break
+    }
+    case 'mutualWreck':
+      state.ship.hull = Math.ceil(state.ship.maxHull * 0.35)
+      record(state,'Both ships went down. A harbor tender recovered the Wayfarer’s crew and keel for emergency repairs.')
+      break
+    case 'withdrawn':
+      record(state,'Both exhausted crews withdrew. The Wayfarer continued with her cargo and the damage she sustained.')
+      break
+    case 'escaped':
+      record(state,'Broke contact with the raider and reached friendly skies.')
+      break
+    default:
+      return false
+  }
+  arrive(state,state.notice)
+  return true
+}
+
+function settlePrize(state: GameState, action: Extract<PrizeCommand,{id:number}>): boolean {
+  const leg = state.voyage
+  if (!leg || leg.phase !== 'prize' || leg.id !== action.id || !leg.prize || !leg.pirate) return false
+  const prize = leg.prize
+  if (action.type === 'offerCommand') {
+    if (!hasCaptainPerk(state,'articles') || prize.offer !== 'unasked') return false
+    prize.offer = acceptsCommand(state,leg.id) ? 'accepted' : 'refused'
+    record(state, prize.offer === 'accepted' ? 'The skipper signed the articles. You can commission the prize under their command.' :
+      'The skipper declined the articles. You may appoint your own qualified officer or release the ship.')
+    return true
+  }
+  const cargo = prizeManifest(state,leg.pirate.opponent,leg.id)
+  if (action.type === 'commissionPrize') {
+    let captain: ServingHand | undefined
+    switch (action.commander) {
+      case 'hired':
+        if (!state.command.hired) return false
+        state.command.hired = false
+        break
+      case 'mate': {
+        const mate = qualifiedMate(state)
+        if (!mate) return false
+        captain = {...mate,role:'captain',coached:false}
+        state.command.aboard = state.command.aboard.filter(hand => hand.id !== mate.id)
+        break
+      }
+      case 'skipper':
+        if (prize.offer !== 'accepted') return false
+        break
+      default: return false
+    }
+    state.command.prizes.push({ id:leg.id, class:leg.pirate.opponent, hull:prize.hull, commander:action.commander, ...(captain ? {captain} : {}), port:leg.to, cargo })
+    record(state, `${captain ? CREW_PROFILES[captain.id].name : COMMANDER_NAMES[action.commander]} took command of the captured ${leg.pirate.opponent}. Its hull and manifest are registered at the ${PORTS[leg.to].name} shipyard.`)
+  } else if (action.type === 'releasePrize') {
+    if (!Number.isSafeInteger(action.crates) || action.crates < 0 || action.crates > cargo.quantity || action.crates > state.ship.hold - cargoUsed(state)) return false
+    if (action.crates) addCargo(state.cargo[cargo.good],action.crates,0)
+    record(state, action.crates ? `Took ${action.crates} crates of ${GOODS[cargo.good].name.toLowerCase()} under the surrender terms and released the ship with the rest of its manifest.` :
+      'Granted safe passage and released the surrendered ship with its whole manifest.')
+  } else return false
+  arrive(state,state.notice)
+  return true
 }
 
 export function pickupQuantity(state: GameState, id: string): number {
@@ -605,6 +725,7 @@ function applyBuyerCommand(state: GameState, action: BuyerCommand): boolean {
   let gardenReceipt = ''
   if (!remaining) {
     order.status = 'filled'
+    creditMission(state)
     if (!state.garden && (order.id === 'fen-first-panes' || /^fen-garden-\d+-repair$/.test(order.id))) {
       state.garden = { repairedDay: state.day, jobs: [], lastLot: null }
       gardenReceipt = ' Four solar panes seal the greenhouse roof. Fen has set aside the first picking of winter pears for you. Visit the Winter Garden counter in Copperfall Yard.'
@@ -617,6 +738,29 @@ function applyBuyerCommand(state: GameState, action: BuyerCommand): boolean {
 
 function applyDockCommand(state: GameState, action: Command): boolean {
   switch (action.type) {
+    case 'prepareCommand': {
+      if (state.port !== 'copperfall' || !['hire','coach','appoint','standDown'].includes(action.course)) return false
+      const offer = officerOffer(state,action.course,action.sailor)
+      if (!offer.eligible || state.coins < offer.cost) return false
+      state.coins -= offer.cost
+      if (action.course === 'hire') state.command.hired = true
+      const hand = state.command.aboard.find(member => member.id === action.sailor)
+      if (hand && action.course === 'coach') hand.coached = true
+      if (hand && action.course === 'appoint') hand.role = 'mate'
+      if (hand && action.course === 'standDown') hand.role = 'deckhand'
+      record(state, offer.title + (offer.cost ? ` · ${offer.cost} crowns paid at the shipyard.` : '. The Wayfarer’s muster is updated.'))
+      return true
+    }
+    case 'unloadPrize': {
+      const ship = state.command.prizes.find(p => p.id === action.id && p.port === state.port)
+      if (!ship || action.remaining !== ship.cargo.quantity) return false
+      const n = Math.min(ship.cargo.quantity, state.ship.hold - cargoUsed(state))
+      if (n < 1) return false
+      addCargo(state.cargo[ship.cargo.good],n,0)
+      ship.cargo.quantity -= n
+      record(state, `Transferred ${n} crates of ${GOODS[ship.cargo.good].name.toLowerCase()} from the prize to the Wayfarer.`)
+      return true
+    }
     case 'acceptBuyerOrder':
     case 'cancelBuyerOrder':
     case 'pickupBuyerOrder':
@@ -649,6 +793,7 @@ function applyDockCommand(state: GameState, action: Command): boolean {
       state.exchange.orders.push(state.port)
       witnessCityOrder(state, state.port)
       state.coins += order.pay
+      creditMission(state)
       experience(state, 6)
       const gardenReceipt = state.port === 'copperfall' ? gardenWorkReceipt(state, `garden-civic-${exchangeCycle(state.day)}`, order.name) : ''
       record(state, `Filled “${order.name}” for ${order.pay} crowns. Cargo cost ${cost} crowns. The receipt bears the seal of the ${CITY_ECONOMY[state.port].institution}.` + gardenReceipt)
@@ -694,6 +839,7 @@ function applyDockCommand(state: GameState, action: Command): boolean {
         return false
       state.coins -= INVOICE_COST
       state.mission = 'lit'
+      creditMission(state)
       state.buyers.seed = Math.floor(Math.random() * 65536)
       state.certificate = 'aboard'
       state.level = charterLevel
@@ -769,10 +915,14 @@ function applyDockCommand(state: GameState, action: Command): boolean {
       return true
     }
     case 'chooseAbility':
-      if (state.level < charterLevel || state.ability || !ABILITY_IDS.includes(action.ability)) return false
-      state.ability = action.ability
+      if (!canLearnPerk(state,action.ability)) return false
+      if (state.ability) state.command.perks.push(action.ability)
+      else {
+        if (!ABILITY_IDS.includes(action.ability as AbilityId)) return false
+        state.ability = action.ability as AbilityId
+      }
       rememberMarket(state)
-      record(state, 'Learned ' + ABILITIES[action.ability].name + '.')
+      record(state, 'Learned ' + CAPTAIN_PERKS[action.ability].name + '.')
       return true
     default:
       return false
@@ -855,7 +1005,11 @@ function validVoyage(value: unknown, currentPort: unknown, voyageCount: unknown)
       isPort(value.to) &&
       value.from !== value.to &&
       typeof value.phase === 'string' &&
-      ['underway', 'tender', 'raider', 'battle'].includes(value.phase))
+      ['underway', 'tender', 'raider', 'battle', 'prize'].includes(value.phase) &&
+      (value.battle === undefined || (value.phase === 'battle' && validCombatCheckpoint(value.battle))) &&
+      (value.phase === 'prize'
+        ? object(value.pirate) && validPrizeTerms(value.prize, RAIDER_PROFILES.find(p => p.id === (value.pirate as PirateTerms).opponent))
+        : value.prize === undefined))
   )
 }
 
@@ -908,7 +1062,8 @@ function validSave(value: unknown): value is GameState {
     value.tradeProfitRemainder >= TRADE_PROFIT_PER_XP ||
     !integer(value.notoriety) ||
     !integer(value.voyageCount) ||
-    (value.level !== 1 && value.level !== charterLevel) ||
+    (!integer(value.level,1) || value.level > LAST_CAPTAIN_LEVEL ||
+      value.level > charterLevel && value.xp < (value.level - 1) * CAPTAIN_XP_PER_LEVEL) ||
     !(value.ability === null || ABILITY_IDS.includes(value.ability as AbilityId)) ||
     !['new', 'arrived', 'briefed'].includes(String(value.firstWatch)) ||
     typeof value.mission !== 'string' ||
@@ -925,7 +1080,7 @@ function validSave(value: unknown): value is GameState {
     return false
   // A restored chapter must still have a path to its remaining actions and rewards.
   if (
-    (value.level === charterLevel) !== (value.mission === 'lit') ||
+    (value.level >= charterLevel) !== (value.mission === 'lit') ||
     (value.level === 1 &&
       (value.ability !== null ||
         value.level < PORTS[value.port].requiredLevel ||
@@ -955,6 +1110,8 @@ function validSave(value: unknown): value is GameState {
     quantity += lot.quantity
   }
   return (
+    validRegister(value.command, value.voyageCount, value.ability as AbilityId | null, value.level) &&
+    !(object(value.voyage) && value.command.prizes.some(ship => ship.id === value.voyageCount)) &&
     validGarden(value.garden, value.day) &&
     validBuyerLedger(value.buyers, cargo as Record<GoodId, CargoLot>, value.day) &&
     quantity <= value.ship.hold &&
@@ -981,6 +1138,7 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
       if (object(value) && value.version === 1) {
         if (value.tradeProfitRemainder === undefined) value.tradeProfitRemainder = 0
         if (value.pirateSeed === undefined) value.pirateSeed = legacyPirateSeed(serialized)
+        if (value.command === undefined) value.command = newRegister()
         if (value.buyers === undefined) value.buyers = { seed: 0, orders: [] }
         if (value.garden === undefined) {
           const repaired = object(value.buyers) && Array.isArray(value.buyers.orders) &&

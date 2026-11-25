@@ -122,8 +122,9 @@ test('refusal requires live combat; winning or escaping keeps the cargo and pays
   assert.deepEqual(raiderToll(battle), raiderToll(s))
   assert.equal(act(s, { type: 'evade' }).voyage?.phase, 'battle')
   assert.equal(pay(battle, 'cargo'), battle)
-  for (const [result, bounty] of [['escaped',0],['won',25],['boarded',40]] as const) {
+  for (const [result, bounty] of [['escaped',0],['won',25],['boarded',0]] as const) {
     const arrived = act(battle, { type: 'resolveBattle', id: 3, result, hull: 57 })
+    if (result === 'boarded') assert.equal(arrived.voyage?.phase, 'prize')
     assert.deepEqual(arrived.cargo, s.cargo)
     assert.equal(arrived.ship.hull, 57)
     assert.equal(arrived.coins, 245 + bounty)
