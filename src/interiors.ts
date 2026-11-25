@@ -169,11 +169,12 @@ function shipyard(state: GameState, ui: Controls) {
     <details class="sk-fold sk-ledger-fold"><summary>Ship’s register</summary>${details([
       ['Hull integrity', `${state.ship.hull} / ${state.ship.maxHull}`],
       ['Hold capacity', `${state.ship.hold} units`],
+      ['Cannons fitted', state.ship.cannons],
       ['Gunnery rating', state.ship.guns],
       ['Crew aboard', state.ship.crew],
       ['Veterans', state.ship.veterans],
       ['Boarding strength', boardingStrength(state)],
-    ])}<p class="sk-info">Ram another airship and your crew will board. Experienced hands carry more of the fight.</p></details></div>`
+    ])}<p class="sk-info">Ram another airship and your crew will board. Experienced hands carry more of the fight.</p></details><div class="sk-actions">${ui.button('Practice helm and gunnery', () => ui.act({type:'practiceDrill'}), {secondary:true})}</div></div>`
   )
 }
 

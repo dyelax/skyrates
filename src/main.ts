@@ -6,7 +6,16 @@ import '@fontsource/cormorant-garamond/latin-500.css'
 import '@fontsource/cormorant-garamond/latin-600.css'
 import '@fontsource/cormorant-garamond/latin-600-italic.css'
 import './style.css'
-import { act, boardingStrength, loadGame, PORTS, saveGame, type BattleResult, type Command } from './model'
+import {
+  act,
+  advanceDrill,
+  boardingStrength,
+  loadGame,
+  PORTS,
+  saveGame,
+  type BattleResult,
+  type Command,
+} from './model'
 import { renderInterior, type InteriorView } from './interiors'
 import { mountHarbor } from './harbor'
 import { beginAmbience, bell } from './audio'
@@ -20,7 +29,13 @@ let harborUnmount: (() => void) | undefined
 
 let state = loadGame()
 let stored = saveGame(state)
-let view: View = state.voyage ? (state.voyage.phase === 'battle' ? 'battle' : 'voyage') : 'harbor'
+let view: View = state.drill
+  ? 'battle'
+  : state.voyage
+    ? state.voyage.phase === 'battle'
+      ? 'battle'
+      : 'voyage'
+    : 'harbor'
 let battleUnmount: (() => void) | undefined
 let renderToken = 0
 function drawNotice() {
@@ -29,7 +44,8 @@ function drawNotice() {
   toast.classList.toggle('visible', !!message)
   toast.querySelector('span')!.textContent = message || ''
   const remaining = state.pendingNotices.length - 1
-  toast.querySelector('button')!.textContent = remaining > 0 ? 'Acknowledge · ' + remaining + ' more' : 'Acknowledge'
+  toast.querySelector('button')!.textContent =
+    remaining > 0 ? 'Acknowledge · ' + remaining + ' more' : 'Acknowledge'
 }
 
 toast.querySelector('button')!.addEventListener('click', () => {
@@ -55,8 +71,10 @@ function dispatch(command: Command) {
   state = next
   stored = saveGame(state)
   const arrival = !!prev.voyage && !state.voyage
-  if (state.voyage) view = state.voyage.phase === 'battle' ? 'battle' : 'voyage'
+  if (state.drill) view = 'battle'
+  else if (state.voyage) view = state.voyage.phase === 'battle' ? 'battle' : 'voyage'
   else if (arrival) view = 'harbor'
+  else if (command.type === 'endDrill') view = 'shipyard'
   bell(
     command.type === 'payInvoice'
       ? 'mission'
@@ -93,12 +111,12 @@ function render() {
           voyage: 'On passage',
         }[view]) + ' · Skyrates'
   if (view === 'harbor') harborUnmount = mountHarbor(main, state, navigate)
-  else if (view === 'battle' && state.voyage) {
+  else if (view === 'battle' && (state.voyage || state.drill)) {
     const leg = state.voyage
     main.innerHTML = '<section class="battle-loading" role="status">Taking the helm…</section>'
     void import('./battle')
       .then(({ mountBattle }) => {
-        if (token !== renderToken || state.voyage?.id !== leg.id) return
+        if (token !== renderToken || state.voyage?.id !== leg?.id) return
         main.replaceChildren()
         const results: Record<string, BattleResult> = {
           victory: 'won',
@@ -110,12 +128,25 @@ function render() {
           crew: state.ship.crew,
           skill: boardingStrength(state) / state.ship.crew,
           gunLevel: state.ship.guns,
+          cannons: state.ship.cannons,
+          drill: state.drill
+            ? {
+                stage: state.drill,
+                onCheckpoint: (stage) => {
+                  const next = advanceDrill(state, stage)
+                  if (next === state) return
+                  state = next
+                  stored = saveGame(state)
+                },
+                onLeave: (skip) => dispatch({ type: 'endDrill', skip }),
+              }
+            : undefined,
           hullLevel: (state.ship.maxHull - 100) / 25,
           quickGunnery: state.ability === 'gunner',
           startingHull: state.ship.hull,
           shipName: 'The Wayfarer',
           onFinish: (outcome, hull) =>
-            dispatch({ type: 'resolveBattle', id: leg.id, result: results[outcome], hull }),
+            leg && dispatch({ type: 'resolveBattle', id: leg.id, result: results[outcome], hull }),
         })
       })
       .catch(() => {
@@ -126,7 +157,9 @@ function render() {
         main
           .querySelector('[data-withdraw]')
           ?.addEventListener('click', () =>
-            dispatch({ type: 'resolveBattle', id: leg.id, result: 'escaped', hull: state.ship.hull }),
+            state.drill
+              ? dispatch({ type: 'endDrill', skip: true })
+              : leg && dispatch({ type: 'resolveBattle', id: leg.id, result: 'escaped', hull: state.ship.hull }),
           )
       })
   } else renderInterior(main, view as InteriorView, state, dispatch, navigate)
