@@ -79,6 +79,7 @@ export const ABILITIES: Record<AbilityId, { name: string; description: string }>
 }
 
 export const BEACON_COMMISSION = {
+  premium: 60,
   home: 'sunstep',
   keeperPort: 'glasshouse',
   opens: 'meridian',

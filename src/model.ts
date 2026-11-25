@@ -62,6 +62,7 @@ export interface GameState {
   notoriety: number
   ability: AbilityId | null
   mission: 'offered' | 'accepted' | 'invoice' | 'lit'
+  certificate: 'none' | 'aboard' | 'paid'
   tender: 'unseen' | 'helped' | 'passed'
   specialFreightTaken: boolean
   voyageCount: number
@@ -75,7 +76,7 @@ export interface GameState {
 
 export type BattleResult = 'won' | 'boarded' | 'escaped' | 'lost'
 export type Command =
-  | { type: 'acceptMission' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' }
+  | { type: 'acceptMission' | 'presentCommission' | 'deliverCertificate' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' }
   | { type: 'buy' | 'sell'; good: GoodId; quantity: number }
   | { type: 'sail'; to: PortId }
   | { type: 'tender'; help: boolean }
@@ -110,6 +111,7 @@ export function initialState(): GameState {
     notoriety: 0,
     ability: null,
     mission: 'offered',
+    certificate: 'none',
     tender: 'unseen',
     specialFreightTaken: false,
     voyageCount: 0,
@@ -174,11 +176,12 @@ export function greeting(state: GameState): string {
       if (state.mission === 'lit')
         return '“I saw it from the quay last night. First light on the outer route in six weeks.” Vale makes room for you at the chart table.'
       if (state.mission === 'offered')
-        return '“The Skyway Beacon has gone dark. Take this commission to Keeper Iona at Glasshouse Reach. We need that light back.”'
+        return '“You carried those letters up my steps in all weathers. Now there are six bags under my desk. The beacon toll fund is frozen until an outer pilot witnesses the light. Will you carry the risk with us?”'
       if (state.notoriety > 0)
         return 'Vale puts down her manifest. “The pilots have been talking about you. How fares the beacon?”'
       return '“A light for every ship past the horizon,” Vale says. “You’ll find the keeper above the glassworks.”'
     case 'glasshouse':
+      if (state.mission === 'accepted') return 'Iona dries her hands on her apron. “That looks like Vale’s seal. Shall we see what she’s sent me?”'
       if (state.mission === 'invoice')
         return `Iona sets a brass-bound crate on the counter. “Lens is cut. Fitting is included. That’ll be ${INVOICE_COST} crowns.” A dockworker mentions Copperfall is buying glass for its greenhouses.`
       if (state.mission === 'lit')
@@ -289,11 +292,7 @@ function arrive(state: GameState, encounterOutcome = '') {
     )
   }
   if (state.port === BEACON_COMMISSION.keeperPort && state.mission === 'accepted') {
-    state.mission = 'invoice'
-    record(
-      state,
-      `Keeper Iona presents a ${INVOICE_COST}-crown invoice for the beacon lens. Copperfall is buying solar glass for its new greenhouses.`,
-    )
+    record(state, 'Moored below the glassworks. Iona receives dispatches at the lamp office above the furnaces.')
   }
   const contract = TENDER_DEED.contract
   if (state.port === contract.from && state.tender === 'helped' && !state.specialFreightTaken) {
@@ -422,17 +421,29 @@ function applyDockCommand(state: GameState, action: Command): boolean {
         'Accepted Vale’s commission. Visit Keeper Iona at Glasshouse Reach to relight the Skyway Beacon.',
       )
       return true
+    case 'presentCommission':
+      if (state.port !== BEACON_COMMISSION.keeperPort || state.mission !== 'accepted') return false
+      state.mission = 'invoice'
+      record(state, `Iona opens Vale’s dispatch. The lens costs ${INVOICE_COST} crowns. The Compact repays it with a ${BEACON_COMMISSION.premium}-crown premium at Meridian.`)
+      return true
+    case 'deliverCertificate':
+      if (state.port !== BEACON_COMMISSION.opens || state.certificate !== 'aboard') return false
+      state.certificate = 'paid'
+      state.coins += INVOICE_COST + BEACON_COMMISSION.premium
+      record(state, `Pilot Sen countersigned the light. Received ${INVOICE_COST + BEACON_COMMISSION.premium} crowns from the beacon toll fund.`)
+      return true
     case 'payInvoice':
       if (state.port !== BEACON_COMMISSION.keeperPort || state.mission !== 'invoice' || state.coins < INVOICE_COST)
         return false
       state.coins -= INVOICE_COST
       state.mission = 'lit'
+      state.certificate = 'aboard'
       state.level = charterLevel
       state.xp += BEACON_COMMISSION.xp
       state.notoriety += BEACON_COMMISSION.notoriety
       record(
         state,
-        `Paid the lens invoice. The Skyway Beacon shines again. Reached level ${state.level}, gained a captain ability, and unlocked ${PORTS[BEACON_COMMISSION.opens].name}.`,
+        `Paid the lens invoice. The Skyway Beacon shines again. Reached level ${state.level}, gained a captain ability, and opened ${PORTS[BEACON_COMMISSION.opens].name}. Bring Iona’s certificate to Pilot Sen for repayment.`,
       )
       return true
     case 'sail':
@@ -584,6 +595,7 @@ function validSave(value: unknown): value is GameState {
     !(value.ability === null || ABILITY_IDS.includes(value.ability as AbilityId)) ||
     typeof value.mission !== 'string' ||
     !['offered', 'accepted', 'invoice', 'lit'].includes(value.mission) ||
+    !(value.mission === 'lit' ? value.certificate === 'aboard' || value.certificate === 'paid' : value.certificate === 'none') ||
     typeof value.tender !== 'string' ||
     !['unseen', 'helped', 'passed'].includes(value.tender) ||
     typeof value.specialFreightTaken !== 'boolean' ||
@@ -639,6 +651,7 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
     if (serialized) {
       const value: unknown = JSON.parse(serialized)
       if (object(value) && value.version === 1 && value.pendingNotices === undefined) value.pendingNotices = []
+      if (object(value) && value.version === 1 && value.certificate === undefined) value.certificate = value.mission === 'lit' ? 'aboard' : 'none'
       if (validSave(value)) return value
     }
   } catch {
