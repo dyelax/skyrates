@@ -13,7 +13,7 @@ import { beginAmbience, bell } from './audio'
 
 type View = InteriorView | 'harbor' | 'battle'
 const root = document.querySelector<HTMLElement>('#app')!
-root.innerHTML = `<a class="skip" href="#main">Skip to game</a><main id="main" tabindex="-1"></main><div id="toast" role="status" aria-live="polite"></div>`
+root.innerHTML = `<a class="skip" href="#main">Skip to game</a><main id="main" tabindex="-1"></main><aside id="toast" hidden><span role="status" aria-live="polite" aria-atomic="true"></span><button type="button">Acknowledge</button></aside>`
 const main = root.querySelector<HTMLElement>('#main')!
 const toast = root.querySelector<HTMLElement>('#toast')!
 let harborUnmount: (() => void) | undefined
@@ -23,20 +23,26 @@ let stored = saveGame(state)
 let view: View = state.voyage ? (state.voyage.phase === 'battle' ? 'battle' : 'voyage') : 'harbor'
 let battleUnmount: (() => void) | undefined
 let renderToken = 0
-let toastTimer: number | undefined
-
-function notify(message: string) {
-  window.clearTimeout(toastTimer)
-  toast.textContent = message
+function drawNotice() {
+  const [message] = state.pendingNotices
+  toast.hidden = !message
   toast.classList.toggle('visible', !!message)
-  if (message) toastTimer = window.setTimeout(() => toast.classList.remove('visible'), 5500)
+  toast.querySelector('span')!.textContent = message || ''
+  const remaining = state.pendingNotices.length - 1
+  toast.querySelector('button')!.textContent = remaining > 0 ? 'Acknowledge · ' + remaining + ' more' : 'Acknowledge'
 }
+
+toast.querySelector('button')!.addEventListener('click', () => {
+  state = { ...state, pendingNotices: state.pendingNotices.slice(1) }
+  stored = saveGame(state)
+  drawNotice()
+  if (toast.hidden) main.focus({ preventScroll: true })
+})
 
 function navigate(next: View) {
   if (state.voyage && next !== 'battle' && next !== 'voyage') return
   bell('select')
   view = next
-  notify('')
   render()
   window.scrollTo({ top: 0, behavior: 'instant' })
   main.focus({ preventScroll: true })
@@ -63,7 +69,7 @@ function dispatch(command: Command) {
   render()
   if (arrival || command.type === 'sail' || command.type === 'engage' || command.type === 'payInvoice')
     window.scrollTo({ top: 0, behavior: 'instant' })
-  notify(state.notice)
+  drawNotice()
 }
 
 function render() {
@@ -128,3 +134,5 @@ function render() {
 
 document.addEventListener('pointerdown', beginAmbience, { once: true })
 render()
+
+drawNotice()

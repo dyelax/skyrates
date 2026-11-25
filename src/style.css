@@ -732,3 +732,8 @@ button {
     scroll-behavior: auto !important;
   }
 }
+#toast.visible { display:flex; align-items:center; gap:12px; pointer-events:auto; text-align:left; }
+#toast[hidden] { display:none; }
+#toast button { flex:none; font:600 12px var(--font-sans); color:#ffe1a2; background:#2b3b39; border:1px solid #ac956d; border-radius:3px; padding:7px 9px; }
+body:has(main[data-screen="battle"]) #toast { bottom: auto; top:72px; }
+@media(max-width:560px){#toast.visible{font-size:12px;gap:6px;max-width:94vw}#toast button{max-width:90px}}
