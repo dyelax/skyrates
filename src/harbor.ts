@@ -139,7 +139,7 @@ export function mountHarbor(
       <p>${icon(lit ? 'sunset' : 'sun')}<span>Day ${String(state.day).padStart(2, '0')}</span><i></i>${lit ? 'Night watch · ' : ''}${weather.season} · ${weather.summary}</p></header>
     <div class="pocket"><span class="coin-readout" title="Available crowns">${icon('coins')} <b>${state.coins.toLocaleString('en-US')}</b><span>crowns</span></span><button class="scene-tool" type="button" data-tool="settings" aria-label="Game options" title="Game options">${icon('settings-2')}</button></div>
     <div class="field-tools"><button class="chart-tool" type="button" data-go="chart" aria-label="Sky chart"><img src="compass.svg" alt=""><span>Sky chart</span></button>
-      <button class="scene-tool journal-tool" type="button" data-go="log" aria-label="Captain’s log" title="Captain’s log">${icon('book-open')}</button></div>
+      <button class="scene-tool journal-tool" type="button" data-go="log" aria-label="Captain’s log" title="Captain’s log">${icon('book-open')}</button><a class="chart-tool battle-test-link" href="battle-test.html">Battle test</a></div>
     <button class="discover" type="button" data-tool="labels" aria-pressed="false" title="Toggle place names (H)">${icon('scan-eye')}<span>Show places</span><kbd>H</kbd></button>
     <div class="pan-hints"><button type="button" aria-label="Pan left" data-pan="-1">‹</button><button type="button" aria-label="Pan right" data-pan="1">›</button></div>
     <div class="quay-overlay" hidden></div></section>`

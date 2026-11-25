@@ -33,7 +33,7 @@ export function openPrologue(onFinish?: () => void) {
   dialog.className = 'prologue'
   dialog.setAttribute('aria-label', 'The first watch · opening story')
   dialog.innerHTML =
-    '<div class="prologue-frames" aria-hidden="true"></div><div class="prologue-letterbox"></div><div class="prologue-tools"><button data-sound></button><button data-skip>Skip intro</button></div><div class="prologue-copy" aria-live="polite"><small></small><h1></h1><p></p><cite></cite></div><div class="prologue-foot"><div class="prologue-reel" aria-hidden="true"><i></i><i></i><i></i></div><button data-next></button></div>'
+    '<div class="prologue-frames" aria-hidden="true"></div><div class="prologue-letterbox"></div><div class="prologue-tools"><a href="battle-test.html">Battle test</a><button data-sound></button><button data-skip>Skip intro</button></div><div class="prologue-copy" aria-live="polite"><small></small><h1></h1><p></p><cite></cite></div><div class="prologue-foot"><div class="prologue-reel" aria-hidden="true"><i></i><i></i><i></i></div><button data-next></button></div>'
   const frames = dialog.querySelector<HTMLElement>('.prologue-frames')!
   const plates = shots.map((s) => {
     const img = document.createElement('img')

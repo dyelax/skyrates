@@ -717,3 +717,12 @@ button {
 .quay :is(.field-tools, .discover, .walk-help) { margin-bottom: var(--notice-space, 0px); }
 .quay .quay-overlay { bottom: var(--notice-space, 0px); }
 @media(max-width:560px){#toast.visible{font-size:12px;gap:6px;max-width:94vw}#toast button{max-width:90px}}
+
+.quay .battle-test-link {
+  padding: 7px 12px;
+  text-decoration: none;
+}
+@media (max-width: 380px) {
+  .quay .battle-test-link { padding-inline: 8px; }
+  .quay .discover span { display: none; }
+}

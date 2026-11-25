@@ -2,10 +2,16 @@ const KEY = 'skyrates.sound'
 let context: AudioContext | null = null
 let wind: AudioBufferSourceNode | null = null
 let enabled = false
-try {
-  enabled = localStorage.getItem(KEY) === 'on'
-} catch {
-  /* Storage is optional. */
+export function loadSoundPreference() {
+  try {
+    enabled = localStorage.getItem(KEY) === 'on'
+  } catch {
+    /* Storage is optional. */
+  }
+}
+
+export function setSessionSound(on: boolean) {
+  enabled = on
 }
 
 export function soundEnabled() {

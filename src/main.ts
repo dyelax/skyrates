@@ -32,7 +32,9 @@ import { mountHarbor } from './harbor'
 import { mountPlaytestChat } from './playtest-chat'
 import { openPrologue } from './prologue'
 import { voyageWeather } from './weather'
-import { beginAmbience, bell } from './audio'
+import { beginAmbience, bell, loadSoundPreference } from './audio'
+
+loadSoundPreference()
 
 type View = InteriorView | 'harbor' | 'battle'
 const root = document.querySelector<HTMLElement>('#app')!

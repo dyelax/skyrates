@@ -51,10 +51,12 @@ export interface BattleOptions {
   startingHull?: number
   quickGunnery?: boolean
   shipName?: string
+  onExit?: () => void
+  combatRandom?: () => number
   onUnavailable: () => void
   savedBattle?: BattleSnapshot
   onSave?: (snapshot: BattleSnapshot) => void
-  onFinish: (outcome: BattleEnding, remainingHull: number, enemyHull: number) => void
+  onFinish: (outcome: BattleEnding, remainingHull: number, enemyHull: number, crew: Readonly<CrewPair>) => void
 }
 
 type Projectile = Shot & { enemy: boolean }
@@ -128,7 +130,7 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
   const windAngle = (Math.atan2(weather.wind.y, weather.wind.x) * 180) / Math.PI
   const windStation = options.drill
     ? ''
-    : `<figure class="duel-wind"><div class="duel-anemoscope" aria-hidden="true"><i style="transform:rotate(${windAngle}deg)">➜</i></div><figcaption><strong>${weather.knots} kn · ${weather.bearing}</strong><span>${weather.kind} · ${weather.season}</span></figcaption><button data-action="windage" aria-pressed="false" title="Aim upwind to counter shot drift (V)"><kbd>V</kbd> Wind sight</button></figure>`
+    : `<figure class="duel-wind"><div class="duel-anemoscope" aria-hidden="true"><i style="transform:rotate(${windAngle}deg)">➜</i></div><figcaption><strong>${weather.knots} kn · ${weather.bearing}</strong><span>${weather.kind} · ${weather.season}</span></figcaption><button data-action="windage" aria-pressed="false" title="Aim upwind to counter shot drift (V)"><kbd>V</kbd> Wind sight</button>${options.onExit ? '<button type="button" data-exit-test>Leave test</button>' : ''}</figure>`
   root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause"><kbd>P</kbd> Pause</button></div>
     <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : options.opponent.name, 'enemy')}</div>
     ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div>${options.drill ? '' : paintedWeather(weather)}<div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
@@ -142,6 +144,7 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
   }
   if (options.shipName && !options.drill)
     root.querySelector('.duel-ship-name')!.textContent = options.shipName
+  if (options.onExit) root.querySelector('[data-exit-test]')?.addEventListener('click', options.onExit)
   host.replaceChildren(root)
   const container = root.querySelector<HTMLElement>('.duel-canvas')!
   const area = measureSky(root)
@@ -323,7 +326,7 @@ class SkyBattle extends Phaser.Scene {
         if (this.drill === 'dodge') this.player.throttle = 2
       }
     })
-    for (const label of ['YOU · WAYFARER', this.drill ? 'WATCH · LARK' : this.opts.opponent.name.toUpperCase()]) {
+    for (const label of [this.opts.shipName ? 'YOU · ' + this.opts.shipName.toUpperCase().replace(/^THE /, '') : 'YOU · WAYFARER', this.drill ? 'WATCH · LARK' : this.opts.opponent.name.toUpperCase()]) {
       this.chartLabels.push(
         this.add
           .text(0, 0, label, {
@@ -341,7 +344,12 @@ class SkyBattle extends Phaser.Scene {
     if (this.drill) {
       this.drawCoach()
 
-    } else this.tell('Wind carries both ships and shots. Set the wind sight (V) for a long shot.', 6)
+    } else {
+      const hint = this.opts.weather.knots
+        ? 'Wind carries both ships and shots. Set the wind sight (V) for a long shot.'
+        : 'Calm skies. Tap open sky to steer, or close in to bring your crews alongside.'
+      this.tell(hint, 6)
+    }
     this.syncHUD()
   }
 
@@ -610,7 +618,7 @@ class SkyBattle extends Phaser.Scene {
       gun,
       target,
       tier,
-      enemy ? Phaser.Math.FloatBetween(-0.065, 0.065) : 0,
+      enemy ? ((this.opts.combatRandom ?? Math.random)() - 0.5) * 0.13 : 0,
       enemy || this.sightSet ? this.wind : STILL_AIR,
     )
     if (!shot) return false
@@ -825,7 +833,7 @@ class SkyBattle extends Phaser.Scene {
     if (gun) {
       const t = (range / SHOT_SPEED) * 0.72
       this.shoot(enemy, gun, { x: player.x + player.vx * t, y: player.y + player.vy * t }, 0, true)
-      this.aiDelay = 1.6 + Math.random() * 0.5
+      this.aiDelay = 1.6 + (this.opts.combatRandom ?? Math.random)() * 0.5
     }
   }
 
@@ -872,7 +880,7 @@ class SkyBattle extends Phaser.Scene {
     const message = {
       victory: `${this.opts.opponent.name} wrecked`,
       boarded: `${this.opts.opponent.name} strikes colors · Hull afloat`,
-      defeat: 'Wayfarer wrecked', yielded: 'Your crew strikes colors',
+      defeat: (this.opts.shipName ?? 'Wayfarer') + ' wrecked', yielded: 'Your crew strikes colors',
       withdrawn: 'Both crews withdraw', mutualWreck: 'Both ships are lost',
       escaped: 'Clear skies · You have broken pursuit',
     }[outcome]
@@ -882,7 +890,7 @@ class SkyBattle extends Phaser.Scene {
     const complete = () => {
       if (settled || !this.root.isConnected) return
       settled = true
-      this.opts.onFinish(outcome, this.player.hull, this.foe.hull)
+      this.opts.onFinish(outcome, this.player.hull, this.foe.hull, { ...this.crew })
     }
     if (resume) { queueMicrotask(complete); return }
     this.events.emit('sky:ships', { player: this.player, enemy: this.foe })
