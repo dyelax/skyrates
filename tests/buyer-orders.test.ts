@@ -53,6 +53,7 @@ test('Fen signs from the chart, pays four panes at 26 through day four and remem
   const initialCoins = s.coins, initialXP = s.xp
   s = handIn(s)
   assert.equal(s.coins, initialCoins + 104)
+  assert.deepEqual(s.command.aboard.map(hand => hand.deckXP),[2,2], 'the rescue and completed order each trained every hand once')
   assert.equal(s.xp, initialXP + 5)
   assert.equal(s.tradeProfitRemainder, 6)
   assert.equal(s.cargo.glass.quantity, 1)
@@ -72,6 +73,7 @@ test('partial delivery, deadline and release keep the precise receipt and allow 
   s = cross(s, 'copperfall')
   s = reload(handIn(s))
   assert.equal(buyerOrders(s)[0].delivered, 2)
+  assert.deepEqual(s.command.aboard.map(hand => hand.deckXP),[0,0], 'a partial receipt does not complete the ship’s job')
   assert.match(chartObjectives(s).find(job => job.buyerId)?.detail ?? '', /2 solar glass panes still due/)
   assert.equal(act(s, { type:'deliverBuyerOrder', id:FEN_PANES.id, delivered:0 }), s)
   const released = act(s, { type: 'cancelBuyerOrder', id: FEN_PANES.id })

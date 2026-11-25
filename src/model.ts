@@ -1,5 +1,6 @@
 import { validBattleSnapshot, type BattleEnding, type BattleSnapshot } from './battle-state'
 import { acceptsCommand, newRegister, officerOffer, prizeManifest, COMMANDER_NAMES, validPrizeTerms, validRegister,
+  canLearnPerk, hasCaptainPerk, qualifiedMate, creditMission, CAPTAIN_PERKS, CAPTAIN_XP_PER_LEVEL, LAST_CAPTAIN_LEVEL, type CaptainPerk, type ServingHand, CREW_PROFILES,
   type CommandRegister, type PrizeCommand, type PrizeTerms } from './prize-command'
 export * from './prize-command'
 import { RAIDER_PROFILES, appraise, legacyPirateSeed, legacyPirateTerms, raiderToll, rollPirate, tollSettlementLabel, validPirateTerms, type PirateTerms, type TollSettlement } from './raiders'
@@ -7,7 +8,6 @@ export * from './raiders'
 import { seasonalAdjustment } from './seasonal-trade'
 import { DRILL_STAGES, nextStage, type DrillStage } from './drill'
 import {
-  ABILITIES,
   ABILITY_IDS,
   BEACON_COMMISSION,
   BONDED_MAIL,
@@ -130,7 +130,7 @@ export type Command =
   | { type: 'tender'; help: boolean }
   | { type: 'resolveBattle'; id: number; result: BattleResult; hull: number; enemyHull?: number }
   | { type: 'upgrade'; upgrade: UpgradeId }
-  | { type: 'chooseAbility'; ability: AbilityId }
+  | { type: 'chooseAbility'; ability: CaptainPerk }
 export type GameCommand = Command
 
 export interface UpgradeOffer {
@@ -205,7 +205,7 @@ export function priceAt(state: GameState, port: PortId, good: GoodId): Quote {
   const price = Math.max(3, PORTS[port].prices[good] + cycle - 1 + seasonalAdjustment(port, good, state.day))
   const wholesale = Math.floor(price * 0.9)
   const sell = Math.max(1, Math.min(price - 2, wholesale - 1))
-  const buy = state.ability === 'broker' ? wholesale : price
+  const buy = hasCaptainPerk(state, 'broker') ? wholesale : price
   return { buy, sell }
 }
 
@@ -249,7 +249,7 @@ export function cityService(state: GameState) {
 }
 
 export function boardingStrength(state: GameState): number {
-  return (state.ship.crew + 1.5 * state.ship.veterans) * (state.ability === 'leader' ? 1.25 : 1)
+  return (state.ship.crew + 1.5 * state.ship.veterans) * (hasCaptainPerk(state, 'leader') ? 1.25 : 1)
 }
 
 export function prestigeTitle(state: GameState): string {
@@ -369,7 +369,14 @@ function record(state: GameState, text: string) {
 
 function experience(state: GameState, amount: number) {
   // The outer chart is a charter privilege earned by restoring the beacon.
-  state.xp = Math.min(state.level === 1 ? 90 : 199, state.xp + amount)
+  state.xp = state.level === 1 ? Math.min(90, state.xp + amount) : state.xp + amount
+  if (state.level > 1) {
+    const level = Math.min(LAST_CAPTAIN_LEVEL, 1 + Math.floor(state.xp / CAPTAIN_XP_PER_LEVEL))
+    if (level > state.level) {
+      state.pendingNotices.push(`Reached captain level ${level}. Spend your earned perk points in the captain’s log.`)
+      state.level = level
+    }
+  }
 }
 
 export const TRADE_PROFIT_PER_XP = 10
@@ -394,6 +401,7 @@ function arrive(state: GameState, encounterOutcome = '') {
     const job = state.freight
     state.coins += job.pay
     state.freight = null
+    creditMission(state)
     experience(state, job.special ? TENDER_DEED.contract.xp : BONDED_MAIL.xp)
     record(
       state,
@@ -476,7 +484,7 @@ function trade(state: GameState, action: Extract<Command, { good: GoodId }>): bo
   return true
 }
 
-function passageEvent(id: number, tender: GameState['tender']): 'safe' | 'tender' | 'raider' {
+export function passageEvent(id: number, tender: GameState['tender']): 'safe' | 'tender' | 'raider' {
   if (id <= ENCOUNTERS.safeOpeningVoyages) return 'safe'
   if (tender === 'unseen' && id >= ENCOUNTERS.tenderFromVoyage) return 'tender'
   return id % ENCOUNTERS.raiderInterval === 0 ? 'raider' : 'safe'
@@ -504,6 +512,7 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
       if (voyage.phase !== 'tender') return false
       if (action.help) {
         state.tender = 'helped'
+        creditMission(state)
         state.day += TENDER_DEED.towDays
         state.notoriety += TENDER_DEED.notoriety
         experience(state, TENDER_DEED.xp)
@@ -633,7 +642,7 @@ function settlePrize(state: GameState, action: Extract<PrizeCommand,{id:number}>
   if (!leg || leg.phase !== 'prize' || leg.id !== action.id || !leg.prize || !leg.pirate) return false
   const prize = leg.prize
   if (action.type === 'offerCommand') {
-    if (!state.command.terms || prize.offer !== 'unasked') return false
+    if (!hasCaptainPerk(state,'articles') || prize.offer !== 'unasked') return false
     prize.offer = acceptsCommand(state,leg.id) ? 'accepted' : 'refused'
     record(state, prize.offer === 'accepted' ? 'The skipper signed the articles. You can commission the prize under their command.' :
       'The skipper declined the articles. You may appoint your own qualified officer or release the ship.')
@@ -641,23 +650,26 @@ function settlePrize(state: GameState, action: Extract<PrizeCommand,{id:number}>
   }
   const cargo = prizeManifest(state,leg.pirate.opponent,leg.id)
   if (action.type === 'commissionPrize') {
+    let captain: ServingHand | undefined
     switch (action.commander) {
       case 'hired':
         if (!state.command.hired) return false
         state.command.hired = false
         break
-      case 'mate':
-        if (!state.command.mateTrained) return false
-        state.command.mateTrained = false
-        state.command.mateSincePassage = leg.id
+      case 'mate': {
+        const mate = qualifiedMate(state)
+        if (!mate) return false
+        captain = {...mate,role:'captain',coached:false}
+        state.command.aboard = state.command.aboard.filter(hand => hand.id !== mate.id)
         break
+      }
       case 'skipper':
         if (prize.offer !== 'accepted') return false
         break
       default: return false
     }
-    state.command.prizes.push({ id:leg.id, class:leg.pirate.opponent, hull:prize.hull, commander:action.commander, port:leg.to, cargo })
-    record(state, `${COMMANDER_NAMES[action.commander]} took command of the captured ${leg.pirate.opponent}. Its hull and manifest are registered at the ${PORTS[leg.to].name} shipyard.`)
+    state.command.prizes.push({ id:leg.id, class:leg.pirate.opponent, hull:prize.hull, commander:action.commander, ...(captain ? {captain} : {}), port:leg.to, cargo })
+    record(state, `${captain ? CREW_PROFILES[captain.id].name : COMMANDER_NAMES[action.commander]} took command of the captured ${leg.pirate.opponent}. Its hull and manifest are registered at the ${PORTS[leg.to].name} shipyard.`)
   } else if (action.type === 'releasePrize') {
     if (!Number.isSafeInteger(action.crates) || action.crates < 0 || action.crates > cargo.quantity || action.crates > state.ship.hold - cargoUsed(state)) return false
     if (action.crates) addCargo(state.cargo[cargo.good],action.crates,0)
@@ -713,6 +725,7 @@ function applyBuyerCommand(state: GameState, action: BuyerCommand): boolean {
   let gardenReceipt = ''
   if (!remaining) {
     order.status = 'filled'
+    creditMission(state)
     if (!state.garden && (order.id === 'fen-first-panes' || /^fen-garden-\d+-repair$/.test(order.id))) {
       state.garden = { repairedDay: state.day, jobs: [], lastLot: null }
       gardenReceipt = ' Four solar panes seal the greenhouse roof. Fen has set aside the first picking of winter pears for you. Visit the Winter Garden counter in Copperfall Yard.'
@@ -726,14 +739,16 @@ function applyBuyerCommand(state: GameState, action: BuyerCommand): boolean {
 function applyDockCommand(state: GameState, action: Command): boolean {
   switch (action.type) {
     case 'prepareCommand': {
-      if (!['hire','train','terms'].includes(action.course)) return false
-      const offer = officerOffer(state,action.course)
-      if (offer.port !== state.port || !offer.eligible || state.coins < offer.cost) return false
+      if (state.port !== 'copperfall' || !['hire','coach','appoint','standDown'].includes(action.course)) return false
+      const offer = officerOffer(state,action.course,action.sailor)
+      if (!offer.eligible || state.coins < offer.cost) return false
       state.coins -= offer.cost
       if (action.course === 'hire') state.command.hired = true
-      if (action.course === 'train') state.command.mateTrained = true
-      if (action.course === 'terms') state.command.terms = true
-      record(state, offer.title + (offer.cost ? ` · ${offer.cost} crowns paid at the shipyard.` : '. The pilots entered your qualification in the log.'))
+      const hand = state.command.aboard.find(member => member.id === action.sailor)
+      if (hand && action.course === 'coach') hand.coached = true
+      if (hand && action.course === 'appoint') hand.role = 'mate'
+      if (hand && action.course === 'standDown') hand.role = 'deckhand'
+      record(state, offer.title + (offer.cost ? ` · ${offer.cost} crowns paid at the shipyard.` : '. The Wayfarer’s muster is updated.'))
       return true
     }
     case 'unloadPrize': {
@@ -778,6 +793,7 @@ function applyDockCommand(state: GameState, action: Command): boolean {
       state.exchange.orders.push(state.port)
       witnessCityOrder(state, state.port)
       state.coins += order.pay
+      creditMission(state)
       experience(state, 6)
       const gardenReceipt = state.port === 'copperfall' ? gardenWorkReceipt(state, `garden-civic-${exchangeCycle(state.day)}`, order.name) : ''
       record(state, `Filled “${order.name}” for ${order.pay} crowns. Cargo cost ${cost} crowns. The receipt bears the seal of the ${CITY_ECONOMY[state.port].institution}.` + gardenReceipt)
@@ -823,6 +839,7 @@ function applyDockCommand(state: GameState, action: Command): boolean {
         return false
       state.coins -= INVOICE_COST
       state.mission = 'lit'
+      creditMission(state)
       state.buyers.seed = Math.floor(Math.random() * 65536)
       state.certificate = 'aboard'
       state.level = charterLevel
@@ -898,10 +915,14 @@ function applyDockCommand(state: GameState, action: Command): boolean {
       return true
     }
     case 'chooseAbility':
-      if (state.level < charterLevel || state.ability || !ABILITY_IDS.includes(action.ability)) return false
-      state.ability = action.ability
+      if (!canLearnPerk(state,action.ability)) return false
+      if (state.ability) state.command.perks.push(action.ability)
+      else {
+        if (!ABILITY_IDS.includes(action.ability as AbilityId)) return false
+        state.ability = action.ability as AbilityId
+      }
       rememberMarket(state)
-      record(state, 'Learned ' + ABILITIES[action.ability].name + '.')
+      record(state, 'Learned ' + CAPTAIN_PERKS[action.ability].name + '.')
       return true
     default:
       return false
@@ -1041,7 +1062,8 @@ function validSave(value: unknown): value is GameState {
     value.tradeProfitRemainder >= TRADE_PROFIT_PER_XP ||
     !integer(value.notoriety) ||
     !integer(value.voyageCount) ||
-    (value.level !== 1 && value.level !== charterLevel) ||
+    (!integer(value.level,1) || value.level > LAST_CAPTAIN_LEVEL ||
+      value.level > charterLevel && value.xp < (value.level - 1) * CAPTAIN_XP_PER_LEVEL) ||
     !(value.ability === null || ABILITY_IDS.includes(value.ability as AbilityId)) ||
     !['new', 'arrived', 'briefed'].includes(String(value.firstWatch)) ||
     typeof value.mission !== 'string' ||
@@ -1058,7 +1080,7 @@ function validSave(value: unknown): value is GameState {
     return false
   // A restored chapter must still have a path to its remaining actions and rewards.
   if (
-    (value.level === charterLevel) !== (value.mission === 'lit') ||
+    (value.level >= charterLevel) !== (value.mission === 'lit') ||
     (value.level === 1 &&
       (value.ability !== null ||
         value.level < PORTS[value.port].requiredLevel ||
@@ -1088,7 +1110,7 @@ function validSave(value: unknown): value is GameState {
     quantity += lot.quantity
   }
   return (
-    validRegister(value.command, value.voyageCount) &&
+    validRegister(value.command, value.voyageCount, value.ability as AbilityId | null, value.level) &&
     !(object(value.voyage) && value.command.prizes.some(ship => ship.id === value.voyageCount)) &&
     validGarden(value.garden, value.day) &&
     validBuyerLedger(value.buyers, cargo as Record<GoodId, CargoLot>, value.day) &&
