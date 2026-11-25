@@ -886,7 +886,7 @@
   align-items: center;
   justify-content: flex-end;
   width: 100%;
-  height: 100%;
+  height: calc(100% - var(--notice-space, 0px));
   padding: clamp(14px, 3.4vw, 54px);
   background: linear-gradient(90deg, transparent 35%, #0c171b20 65%, #0c171b70);
 }
@@ -1158,8 +1158,8 @@
 .sk-interior .sk-first-light .sk-layout {
   position: absolute;
   right: clamp(14px, 4vw, 55px);
-  bottom: clamp(14px, 4vw, 55px);
-  max-height: calc(100% - 85px);
+  bottom: calc(clamp(14px, 4vw, 55px) + var(--notice-space, 0px));
+  max-height: calc(100% - 85px - var(--notice-space, 0px));
   overflow-y: auto;
   overscroll-behavior: contain;
   width: min(470px, calc(100% - 28px));
@@ -1210,7 +1210,7 @@
     line-height: 1.2;
   }
   .sk-interior .sk-first-light .sk-layout {
-    max-height: calc(100% - 150px);
+    max-height: calc(100% - 150px - var(--notice-space, 0px));
   }
 }
 .sk-interior.sk-illustrated[data-view='authority'] {
@@ -1226,7 +1226,7 @@
 .sk-chart-orders p {font-size:13px;margin:5px 0 8px;}
 .sk-interior .sk-map-popover {z-index:4;}
 
-.sk-station-host { position: fixed; inset: 0; z-index: 14; background: #08182166; }
+.sk-station-host { position: fixed; inset: 0 0 var(--notice-space, 0px); z-index: 14; background: #08182166; }
 
 .sk-map-copy .sk-departure-supplies {
   margin: .65rem 0 .2rem;
@@ -1234,4 +1234,10 @@
   border-left: 2px solid var(--sk-mint);
   color: var(--sk-text);
   font-size: .88rem;
+}
+
+@media (max-width: 650px) {
+  .sk-mapstage:has(.sk-map-popover) .sk-chart-orders > div {
+    max-height: min(29svh, 185px);
+  }
 }

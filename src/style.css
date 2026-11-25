@@ -614,12 +614,14 @@ button {
 }
 #toast {
   position: fixed;
-  bottom: clamp(15px, 3.4vh, 33px);
+  bottom: max(6px, env(safe-area-inset-bottom));
   left: 50%;
-  z-index: 12;
+  z-index: 17;
   transform: translate(-50%, 9px);
   width: max-content;
-  max-width: min(570px, 67vw);
+  max-width: min(570px, calc(100vw - 16px));
+  max-height: 26dvh;
+  overflow-y: auto;
   color: #f5ead3;
   background: #17272df5;
   border: 1px solid #a4926e;
@@ -727,10 +729,6 @@ button {
   .place-label b {
     font-size: 16px;
   }
-  #toast {
-    max-width: 90vw;
-    bottom: 64px;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -745,5 +743,7 @@ button {
 #toast.visible { display:flex; align-items:center; gap:12px; pointer-events:auto; text-align:left; }
 #toast[hidden] { display:none; }
 #toast button { flex:none; font:600 12px var(--font-sans); color:#ffe1a2; background:#2b3b39; border:1px solid #ac956d; border-radius:3px; padding:7px 9px; }
-body:has(main[data-screen="battle"]) #toast { bottom: auto; top:72px; }
+#toast span { min-width:0; overflow-wrap:anywhere; }
+.quay :is(.field-tools, .discover, .walk-help) { margin-bottom: var(--notice-space, 0px); }
+.quay .quay-overlay { bottom: var(--notice-space, 0px); }
 @media(max-width:560px){#toast.visible{font-size:12px;gap:6px;max-width:94vw}#toast button{max-width:90px}}
