@@ -31,41 +31,28 @@ const shots = [
 export function openPrologue(onFinish?: () => void) {
   const dialog = document.createElement('dialog')
   dialog.className = 'prologue'
-  dialog.setAttribute('aria-label', 'The first watch · opening cinematic')
+  dialog.setAttribute('aria-label', 'The first watch · opening story')
   dialog.innerHTML =
-    '<div class="prologue-frames" aria-hidden="true"></div><div class="prologue-letterbox"></div><div class="prologue-tools"><button data-sound></button><button data-pause></button><button data-skip>Skip intro</button></div><div class="prologue-copy" aria-live="polite"><small></small><h1></h1><p></p><cite></cite></div><div class="prologue-foot"><div class="prologue-reel" aria-hidden="true"><i></i><i></i><i></i></div><button data-next></button></div>'
+    '<div class="prologue-frames" aria-hidden="true"></div><div class="prologue-letterbox"></div><div class="prologue-tools"><button data-sound></button><button data-skip>Skip intro</button></div><div class="prologue-copy" aria-live="polite"><small></small><h1></h1><p></p><cite></cite></div><div class="prologue-foot"><div class="prologue-reel" aria-hidden="true"><i></i><i></i><i></i></div><button data-next></button></div>'
   const frames = dialog.querySelector<HTMLElement>('.prologue-frames')!
-  const plates = shots.map((s, i) => {
+  const plates = shots.map((s) => {
     const img = document.createElement('img')
     img.src = import.meta.env.BASE_URL + 'art/' + s.plate + '.webp'
     img.alt = ''
-    img.style.setProperty('--camera-x', i === 1 ? '3%' : '-2%')
     frames.append(img)
     return img
   })
   const btn = (name: string) =>
     dialog.querySelector<HTMLButtonElement>('[data-' + name + ']')!
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)')
-  let index = 0,
-    paused = reduced.matches,
-    readingReport = false,
-    elapsed = 0,
-    frame = 0,
-    previous: number | undefined,
-    finished = false
-  const duration = 14000
+  let index = 0
+  let finished = false
   function controls() {
     btn('sound').textContent = soundEnabled() ? 'Sound on' : 'Sound off'
     btn('sound').setAttribute('aria-pressed', String(soundEnabled()))
-    btn('pause').textContent = paused ? 'Play' : 'Pause'
-    dialog.classList.toggle('held', paused)
   }
   function finish() {
     if (finished) return
     finished = true
-    cancelAnimationFrame(frame)
-    document.removeEventListener('visibilitychange', visibility)
-    document.removeEventListener('skyrates-playtest', holdForReport)
     dialog.close()
     dialog.remove()
     onFinish?.()
@@ -80,20 +67,9 @@ export function openPrologue(onFinish?: () => void) {
     btn('next').textContent =
       index === shots.length - 1 ? 'Take the helm →' : 'Next →'
     bell(shot.sound)
-    elapsed = 0
-    meters()
-  }
-  function meters() {
-    dialog
-      .querySelectorAll<HTMLElement>('.prologue-reel i')
-      .forEach((bar, i) =>
-        bar.style.setProperty(
-          '--progress',
-          String(
-            i < index ? 1 : i === index ? Math.min(1, elapsed / duration) : 0,
-          ),
-        ),
-      )
+    dialog.querySelectorAll('.prologue-reel i').forEach((bar, i) => {
+      bar.classList.toggle('read', i <= index)
+    })
   }
   function next() {
     if (index < shots.length - 1) {
@@ -101,28 +77,8 @@ export function openPrologue(onFinish?: () => void) {
       draw()
     } else finish()
   }
-  function holdForReport(event: Event) {
-    readingReport = (event as CustomEvent<boolean>).detail
-    previous = undefined
-  }
-  function visibility() {
-    previous = undefined
-  }
-  function tick(now: number) {
-    if (previous !== undefined && !paused && !readingReport && !document.hidden) {
-      elapsed += Math.min(now - previous, 200)
-      if (elapsed >= duration && index < shots.length - 1) next()
-      meters()
-    }
-    previous = now
-    if (!finished) frame = requestAnimationFrame(tick)
-  }
   btn('skip').onclick = finish
   btn('next').onclick = next
-  btn('pause').onclick = () => {
-    paused = !paused
-    controls()
-  }
   btn('sound').onclick = () => {
     toggleSound()
     controls()
@@ -131,12 +87,9 @@ export function openPrologue(onFinish?: () => void) {
     e.preventDefault()
     finish()
   })
-  document.addEventListener('visibilitychange', visibility)
-  document.addEventListener('skyrates-playtest', holdForReport)
   document.body.append(dialog)
   dialog.showModal()
   controls()
   draw()
   btn('next').focus({ preventScroll: true })
-  frame = requestAnimationFrame(tick)
 }

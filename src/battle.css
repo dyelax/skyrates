@@ -132,7 +132,6 @@ body:has(.air-duel) {
   display: block;
   height: 100%;
   background: #97d4bc;
-  transition: width 0.16s;
 }
 .air-duel .duel-ship-readout:last-child .duel-hull-track i {
   background: #e99e77;
@@ -165,7 +164,6 @@ body:has(.air-duel) {
   text-align: center;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.17s;
 }
 .air-duel .duel-banner.visible {
   opacity: 1;

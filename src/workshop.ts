@@ -6,7 +6,7 @@ import { icon } from './icons'
 import { renderInterior, type InteriorView } from './interiors'
 import { PORTS, type Command, type GameState } from './model'
 import { ROOM_SCENES, roomTargets, type RoomPoint } from './workshop-scenes'
-import { illustrateRoom } from './workshop-camera'
+import { mountRoomPan } from './workshop-camera'
 import type { RoomTarget, Station } from './voxel/workroom-plan'
 import './workshop.css'
 
@@ -65,7 +65,6 @@ export function mountWorkshop(
   section.style.setProperty('--cabinet', `url("${artwork('cabinet-' + station + '-' + port)}")`)
   section.innerHTML = `<div class="atelier-view"><div class="room-plate">
       <img class="room-picture" alt="" draggable="false" src="${artwork(room.art)}" fetchpriority="high">
-      <div class="room-foreground" aria-hidden="true"></div><div class="room-glints" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
       <div class="atelier-places">${hotspots}</div></div></div>
     <div class="atelier-caption"><small>${PORTS[port].name}</small><h1>${title}</h1></div>
     <button type="button" data-quay class="atelier-back" aria-label="Return to harbor">${icon('arrow-right')} Harbor</button>
@@ -85,9 +84,8 @@ export function mountWorkshop(
   const abort = new AbortController()
   const opts = { signal: abort.signal }
   const entrance: RoomPoint = [(room.worker[0] + room.counter[0]) / 2, Math.min(53, room.worker[1] + 2)]
-  const camera = illustrateRoom(section, plate, picture, entrance, abort.signal)
-  const foreground = section.querySelector<HTMLElement>('.room-foreground')!
-  foreground.style.backgroundImage = `url("${artwork(room.art)}")`
+  const viewport = section.querySelector<HTMLElement>('.atelier-view')!
+  const pan = mountRoomPan(viewport, plate, picture, entrance, abort.signal)
   let returnTo: HTMLButtonElement | undefined
   const reading = () => !paper.hidden || !talk.hidden
 
@@ -136,13 +134,13 @@ export function mountWorkshop(
     if (el?.closest('[data-quay]')) { navigate('harbor'); return }
     if (reading()) return
     if (el?.closest('.room-hints')) { toggleHints(); return }
-    if (el?.closest('.atelier-home')) { camera.pointAt(entrance); return }
+    if (el?.closest('.atelier-home')) { pan.pointAt(entrance); return }
     const pin = el?.closest<HTMLButtonElement>('[data-place]')
     if (pin) activate(pin.dataset.place as RoomTarget)
   }, opts)
   section.addEventListener('focusin', event => {
     const pin = event.target instanceof HTMLElement ? event.target.closest<HTMLButtonElement>('[data-place]') : null
-    if (pin?.matches(':focus-visible')) camera.pointAt(room[pin.dataset.place as RoomTarget]!)
+    if (pin?.matches(':focus-visible')) pan.reveal(room[pin.dataset.place as RoomTarget]!)
   }, opts)
   document.addEventListener('keydown', event => {
     if (document.querySelector('dialog[open]') || event.defaultPrevented) return
@@ -166,12 +164,12 @@ export function mountWorkshop(
     if (event.metaKey || event.ctrlKey || event.altKey) return
     if (event.target instanceof HTMLElement && event.target.closest('input,textarea,[contenteditable="true"]')) return
     switch (event.key.toLowerCase()) {
-      case 'home': event.preventDefault(); camera.pointAt(entrance); break
+      case 'home': event.preventDefault(); pan.pointAt(entrance); break
       case 'h': if (!event.repeat) toggleHints(); break
-      case 'arrowleft': case 'a': case 'q': event.preventDefault(); camera.nudge(-60, 0); break
-      case 'arrowright': case 'd': case 'e': event.preventDefault(); camera.nudge(60, 0); break
-      case 'arrowup': case 'w': event.preventDefault(); camera.nudge(0, -48); break
-      case 'arrowdown': case 's': event.preventDefault(); camera.nudge(0, 48); break
+      case 'arrowleft': case 'a': case 'q': event.preventDefault(); pan.nudge(-60, 0); break
+      case 'arrowright': case 'd': case 'e': event.preventDefault(); pan.nudge(60, 0); break
+      case 'arrowup': case 'w': event.preventDefault(); pan.nudge(0, -48); break
+      case 'arrowdown': case 's': event.preventDefault(); pan.nudge(0, 48); break
     }
   }, opts)
 

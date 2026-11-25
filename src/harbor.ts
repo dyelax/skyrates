@@ -1,12 +1,10 @@
 import { portWeather } from './weather'
-import { paintedWeather } from './scene-weather'
 import { cargoUsed, PORTS, type GameState, type PortId } from './model'
 import { CITY_ECONOMY } from './city-economy'
 import type { ContactWriter } from './characters'
 import { icon } from './icons'
 import { mountDockTalk } from './dock-talk'
-import { mountIllustratedCharacter } from './illustrated-character'
-import { mountHarborDepth } from './illustrated-harbor'
+import './illustrated-harbor.css'
 import { artwork } from './artwork'
 import { bell, soundEnabled, toggleSound } from './audio'
 import type { InteriorView } from './interiors'
@@ -16,7 +14,6 @@ type Place = 'market' | 'local' | 'authority' | 'ship' | 'shipyard' | 'civic'
 type Zone = [left: number, top: number, right: number, bottom: number, pinX: number, pinY: number]
 interface Quay {
   region: string
-  weather: string
   local: string
   role: string
   zones: Record<Place, Zone>
@@ -24,7 +21,6 @@ interface Quay {
 const quays: Record<PortId, Quay> = {
   sunstep: {
     region: 'The Inner Reaches',
-    weather: 'Clear skies',
     local: 'Moss Pellar',
     role: 'Orchard porter',
     zones: {
@@ -38,7 +34,6 @@ const quays: Record<PortId, Quay> = {
   },
   glasshouse: {
     region: 'The Inner Reaches',
-    weather: 'Violet haze',
     local: 'Sella Venn',
     role: 'Master glazier',
     zones: {
@@ -52,7 +47,6 @@ const quays: Record<PortId, Quay> = {
   },
   copperfall: {
     region: 'The Inner Reaches',
-    weather: 'Fair winds',
     local: 'Skipper Neri',
     role: 'Tender skipper',
     zones: {
@@ -66,7 +60,6 @@ const quays: Record<PortId, Quay> = {
   },
   meridian: {
     region: 'The Outer Reaches',
-    weather: 'High cirrus',
     local: 'Pilot Sen',
     role: 'Weather pilot',
     zones: {
@@ -139,7 +132,6 @@ export function mountHarbor(
   main.innerHTML = `<section class="quay" aria-label="${PORTS[state.port].name} harbor">
     <div class="quay-scroll" tabindex="-1"><div class="quay-track"><div class="quay-plate">
       <img class="quay-art" alt="The working docks at ${PORTS[state.port].name}" src="${scenery}" fetchpriority="high">
-      ${paintedWeather(weather)}
       ${places.map((place) => spot(state, place)).join('')}
     </div></div></div>
     <div class="quay-shade" aria-hidden="true"></div>
@@ -186,16 +178,6 @@ export function mountHarbor(
     },
     { passive: true },
   )
-  const stopDepth = mountHarborDepth(scene, plate, scroller, state.port, lit, places.map((place) => ({
-    button: plate.querySelector<HTMLButtonElement>(`[data-place="${place}"]`)!,
-    x: quay.zones[place][4],
-    y: quay.zones[place][5],
-  })))
-
-  const stopCharacter = mountIllustratedCharacter(
-    plate, state.port, plate.querySelector<HTMLButtonElement>('[data-place="local"]')!, lit,
-  )
-
   function labelsOn() {
     const show = scene.classList.toggle('show-places')
     labels.setAttribute('aria-pressed', String(show))
@@ -223,7 +205,7 @@ export function mountHarbor(
   function manifest() {
     const hull = Math.round((state.ship.hull / state.ship.maxHull) * 100)
     overlay.innerHTML = `<section class="vessel-sheet" role="dialog" aria-labelledby="vessel-name"><div class="popover-top"><span class="ink-label">Ship’s papers</span><button type="button" data-close aria-label="Close ship manifest">${icon('x')}</button></div>
-      <img src="art/kestrel.webp" alt="Solar-sail schooner in profile"><h2 id="vessel-name">The Wayfarer</h2><p>Lift-keel schooner <a class="ship-model-link" href="./study.html">Inspect 3D model</a></p>
+      <img src="art/kestrel.webp" alt="Solar-sail schooner in profile"><h2 id="vessel-name">The Wayfarer</h2><p>Lift-keel schooner</p>
       <dl><div><dt>${icon('shield')} Hull</dt><dd>${hull}%</dd></div><div><dt>${icon('package')} Hold</dt><dd>${cargoUsed(state)} / ${state.ship.hold}</dd></div><div><dt>${icon('users')} Crew</dt><dd>${state.ship.crew} hands</dd></div></dl>
       <button type="button" class="gold-action" data-go="chart">${icon('compass')} Plot a course ${icon('arrow-right')}</button></section>`
     overlay.querySelector<HTMLElement>('[data-close]')!.focus({ preventScroll: true })
@@ -265,7 +247,7 @@ export function mountHarbor(
       scroller.scrollBy({
         left: verticalPan ? 0 : Number(pan) * scroller.clientWidth * 0.56,
         top: verticalPan ? Number(pan) * scroller.clientHeight * 0.56 : 0,
-        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+        behavior: 'instant',
       })
     if ('close' in button.dataset) closePanel()
     if ('sound' in button.dataset) {
@@ -300,6 +282,14 @@ export function mountHarbor(
       }
       return
     }
+    if (ev.target instanceof HTMLElement && ev.target.closest('input,textarea,[contenteditable="true"]')) return
+    const dx = ev.key === 'ArrowLeft' ? -64 : ev.key === 'ArrowRight' ? 64 : 0
+    const dy = ev.key === 'ArrowUp' ? -48 : ev.key === 'ArrowDown' ? 48 : 0
+    if ((dx && track.offsetWidth > scroller.clientWidth + 1) || (dy && track.offsetHeight > scroller.clientHeight + 1)) {
+      ev.preventDefault()
+      scroller.scrollBy({ left: dx, top: dy, behavior: 'instant' })
+      return
+    }
     if (ev.code === 'KeyH') {
       ev.preventDefault()
       labelsOn()
@@ -330,8 +320,6 @@ export function mountHarbor(
   document.addEventListener('keydown', keyboard)
   return () => {
     resize.disconnect()
-    stopCharacter()
-    stopDepth()
     document.removeEventListener('keydown', keyboard)
     scene.removeEventListener('click', click)
   }

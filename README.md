@@ -1,6 +1,6 @@
 # Skyrates
 
-[Play Skyrates](https://dyelax.github.io/skyrates/) · [Rotate the Wayfarer](https://dyelax.github.io/skyrates/study.html)
+[Play Skyrates](https://dyelax.github.io/skyrates/)
 
 ![Exploring the docks at Sunstep Quay in Skyrates](docs/harbor.webp)
 
@@ -8,13 +8,9 @@ Take the helm of the Wayfarer, a wooden schooner that rides a glowing lift keel 
 
 ## At the quay
 
-Point at a person or a building in the harbor painting. The foreground shifts slightly against the distant skyline, and the local speaker turns toward you. Click the market to trade, talk to the porter for a lead, or visit Harbormaster Vale for your commission. **H** reveals place names. On a narrow screen, swipe along the quay or use its pan arrows. Inside a shop, select the person to speak, the counter for business, or the door to go back outside. Select the moored Wayfarer to inspect your hold, hull, and crew.
+Point at a person or a building in the harbor painting. Click the market to trade, talk to the porter for a lead, or visit Harbormaster Vale for your commission. **H** reveals place names. On a narrow screen, swipe along the quay or use its pan arrows. Inside a shop, select the person to speak, the counter for business, or the door to go back outside. Select the moored Wayfarer to inspect your hold, hull, and crew.
 
 Open the sky chart with **M** or the compass. Select an island for passage time, recorded prices, and sailing orders. The captain’s log opens with **J**. Decisions, cargo, and completed encounters save automatically in this browser. Sound and fullscreen are available from the small options control at the quay.
-
-## Inspect the Wayfarer
-
-Choose **Inspect 3D model** from the moored ship’s papers or open the model study directly. Drag to orbit, pinch or scroll to zoom, or choose **Turntable**. When the canvas has keyboard focus, use the arrows to rotate, **+ / −** to zoom and **Home** to reset. **Painting** opens the original elevation for comparison. The study loads its model separately from the game.
 
 ## In a fight
 
@@ -67,7 +63,7 @@ npm run dev
 
 `npm test` runs the economy, save, progression, and combat regression tests. `npm run build` type-checks the game and builds the static site into `dist/`. `npm run preview` serves that build locally.
 
-The TypeScript game simulation is independent of the interface. Port definitions and chapter tuning live in [the game data](src/data.ts). Phaser renders painted airships and boarding crews over a moving cloud deck. The harbor renderer samples the original ImageGen paintings at different depths. The same harbor image and clickable locations work when WebGL is unavailable. [Artwork and production prompts](docs/artwork.md) · [Bundled third-party notices](public/licenses)
+The TypeScript game simulation is independent of the interface. Port definitions and chapter tuning live in [the game data](src/data.ts). Phaser renders painted airships and boarding crews over a still cloud painting. The ports and workshops use still ImageGen illustrations with selectable people, buildings and counters. The same harbor image and clickable locations work when WebGL is unavailable. [Artwork and production prompts](docs/artwork.md) · [Bundled third-party notices](public/licenses)
 
 The public game is served from the root of the `gh-pages` branch. Publish the contents of a tested `dist/` build to that branch with a `.nojekyll` file. The `main` branch contains the source and editable game data.
 

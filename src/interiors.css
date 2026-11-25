@@ -824,19 +824,6 @@
 .sk-interior .sk-voyage-brief .sk-quote {
   margin-bottom: 5px;
 }
-@media (prefers-reduced-motion: no-preference) {
-  .sk-interior .sk-voyage .sk-scene img {
-    animation: sk-passage-drift 26s ease-in-out infinite alternate;
-  }
-  @keyframes sk-passage-drift {
-    from {
-      transform: scale(1.035) translate(-0.35%, 0.05%);
-    }
-    to {
-      transform: scale(1.055) translate(0.45%, -0.25%);
-    }
-  }
-}
 @container (max-width: 650px) {
   .sk-interior .sk-voyage-brief {
     grid-template-columns: 1fr;
