@@ -2,7 +2,7 @@
 
 [Play Skyrates](https://dyelax.github.io/skyrates/)
 
-![Sunstep Quay above the cloud sea](public/art/quay-sunstep.webp)
+![Exploring the docks at Sunstep Quay in Skyrates](docs/harbor.webp)
 
 Take the helm of the Wayfarer, a wooden schooner that rides a glowing lift keel beneath translucent solar sails. Your first commission is to restore the Skyway Beacon. The glassworkers have a replacement lens ready, and someone still has to pay them.
 
