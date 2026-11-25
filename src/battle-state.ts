@@ -21,7 +21,7 @@ export interface BattleSnapshot {
   course: Point | null
   intercepting: boolean
   escaping: boolean
-  windSight: boolean
+  windSight?: boolean // Retired control in version 1 saves.
   terminal: BattleEnding | null
 }
 
@@ -47,6 +47,7 @@ export function validBattleSnapshot(v: unknown): v is BattleSnapshot {
     && Array.isArray(v.projectiles) && v.projectiles.length <= 128 && v.projectiles.every(s =>
       record(s) && point(s) && finite(s.vx) && finite(s.vy) && nonnegative(s.damage) && nonnegative(s.lifetime) && typeof s.enemy === 'boolean')
     && finite(v.aiDelay) && (v.course === null || point(v.course))
-    && [v.intercepting, v.escaping, v.windSight].every(f => typeof f === 'boolean')
+    && [v.intercepting, v.escaping].every(f => typeof f === 'boolean')
+    && (v.windSight === undefined || typeof v.windSight === 'boolean')
     && (v.terminal === null || BATTLE_ENDINGS.includes(v.terminal as BattleEnding))
 }

@@ -2,13 +2,13 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   armedSide, buildOpponent, buildShip, discharge, hitsShip,
-  inArc, moveShot, steerRaider, STILL_AIR, WATCH_CUTTER, type Shot,
+  gunBearsOn, moveShot, steerRaider, STILL_AIR, WATCH_CUTTER, type Shot,
 } from '../src/battle-model'
 import { RAIDER_PROFILES } from '../src/raiders'
 
 const origin = { x: 0, y: 0 }
-const toPort = { x: 0, y: -100 }
-const toStarboard = { x: 0, y: 100 }
+const toPort = { x: 0, y: -100, heading: 0 }
+const toStarboard = { x: 0, y: 100, heading: 0 }
 
 test('raiders bring exactly the hull and firing stations reported by the lookout', () => {
   for (const profile of RAIDER_PROFILES) {
@@ -18,12 +18,12 @@ test('raiders bring exactly the hull and firing stations reported by the lookout
     assert.equal(foe.guns.length, profile.cannons)
     assert.equal(armedSide(foe, toPort), 'port')
     assert.equal(armedSide(foe, toStarboard), profile.cannons === 1 ? 'port' : 'starboard')
-    assert.ok(inArc(foe, armedSide(foe, toPort), toPort))
+    assert.ok(gunBearsOn(foe, foe.guns[0], toPort))
     if (profile.cannons === 1) {
       foe.heading = Math.PI
-      assert.ok(inArc(foe, armedSide(foe, toStarboard), toStarboard), 'a scout can turn its port gun to bear')
+      assert.ok(gunBearsOn(foe, foe.guns[0], toStarboard), 'a scout can turn its port gun to bear')
     } else {
-      assert.ok(inArc(foe, armedSide(foe, toStarboard), toStarboard), 'both armed rails can bear')
+      assert.ok(gunBearsOn(foe, foe.guns[1], toStarboard), 'both armed rails can bear')
     }
   }
 })
@@ -49,8 +49,8 @@ test('the one-gun scout can bring its port gun to bear and hit a stationary hull
     let hit = false
     for (let tick = 0; tick < 8 / dt && !hit; tick++) {
       steerRaider(scout, player, area, false, dt, STILL_AIR)
-      if (!shot && tick * dt >= 3.5 && inArc(scout, gun.side, player))
-        shot = discharge(scout, gun, player, 0)
+      if (!shot && tick * dt >= 3.5 && gunBearsOn(scout, gun, player))
+        shot = discharge(scout, gun, 0)
       if (shot && shot.lifetime > 0) {
         moveShot(shot, dt)
         hit = hitsShip(shot, player)
