@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   act,
+  advanceDrill,
   boardingStrength,
   cargoUsed,
   freightOffer,
@@ -20,6 +21,7 @@ import {
 
 function land(state: GameState, to: PortId, tow = true): GameState {
   let next = act(state, { type: 'sail', to })
+  if (next.drill) next = act(next, { type: 'endDrill', skip: true })
   next = act(next, { type: 'continueVoyage' })
   if (next.voyage?.phase === 'tender') next = act(next, { type: 'tender', help: tow })
   if (next.voyage?.phase === 'raider') next = act(next, { type: 'evade' })
@@ -120,7 +122,7 @@ test('a penniless captain can deliver bonded mail, and arriving twice cannot pay
   assert.equal(freightOffer(state), null)
   const sailing = act(state, { type: 'sail', to: offer.to })
   assert.equal(act(sailing, { type: 'buy', good: 'glass', quantity: 1 }), sailing)
-  state = act(reload(sailing), { type: 'continueVoyage' })
+  state = act(act(reload(sailing), { type: 'endDrill', skip: true }), { type: 'continueVoyage' })
   assert.equal(state.coins, offer.pay)
   assert.equal(state.freight, null)
   assert.equal(act(state, { type: 'continueVoyage' }), state)
@@ -278,8 +280,48 @@ test('unacknowledged notices survive later actions, travel, and reload in order'
   const signed = act(initialState(), { type: 'acceptMission' })
   const sailing = act(signed, { type: 'sail', to: 'glasshouse' })
   assert.deepEqual(reload(sailing).pendingNotices, [signed.notice, sailing.notice])
-  assert.deepEqual(reload({ ...sailing, pendingNotices: sailing.pendingNotices.slice(1) }).pendingNotices, [sailing.notice])
+  assert.deepEqual(reload({ ...sailing, pendingNotices: sailing.pendingNotices.slice(1) }).pendingNotices, [
+    sailing.notice,
+  ])
   const old = JSON.parse(JSON.stringify(signed))
   delete old.pendingNotices
   assert.equal(loadGame({ getItem: () => JSON.stringify(old) }).mission, 'accepted')
+})
+
+test('first sailing orders start the watch drill once and checkpoints survive reload', () => {
+  let state = act(initialState(), { type: 'sail', to: 'glasshouse' })
+  assert.equal(state.drill, 'briefing')
+  assert.equal(act(state, { type: 'continueVoyage' }), state)
+  assert.equal(act(state, { type: 'endDrill', skip: false }), state)
+  assert.equal(advanceDrill(state, 'board'), state)
+  for (const stage of ['dodge', 'fire', 'board', 'melee', 'debrief'] as const) {
+    state = reload(advanceDrill(state, stage))
+    assert.equal(state.drill, stage)
+  }
+  const cleared = act(state, { type: 'endDrill', skip: false })
+  assert.equal(cleared.ship.hull, 100)
+  assert.equal(cleared.coins, state.coins)
+  const landed = act(cleared, { type: 'continueVoyage' })
+  assert.equal(landed.port, 'glasshouse')
+  assert.equal(act(landed, { type: 'sail', to: 'sunstep' }).drill, null)
+  const practice = act(landed, { type: 'practiceDrill' })
+  assert.equal(practice.drill, 'briefing')
+  assert.equal(practice.voyage, null)
+  const left = act(reload(practice), { type: 'endDrill', skip: true })
+  assert.equal(left.coins, landed.coins)
+  assert.equal(left.day, landed.day)
+  assert.equal(left.voyageCount, landed.voyageCount)
+})
+
+test('legacy ships underway keep their existing four guns when loading the newer register', () => {
+  const raw = JSON.parse(JSON.stringify(initialState()))
+  delete raw.drill
+  delete raw.ship.cannons
+  raw.voyageCount = 3
+  const old = loadGame({ getItem: () => JSON.stringify(raw) })
+  assert.equal(old.ship.cannons, 4)
+  assert.equal(old.drill, null)
+  const original = initialState()
+  assert.equal(original.ship.cannons, 1)
+  assert.equal(act(original, { type: 'upgrade', upgrade: 'guns' }).ship.cannons, 2)
 })

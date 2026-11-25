@@ -1,3 +1,4 @@
+import { DRILL_STAGES, nextStage, type DrillStage } from './drill'
 import {
   ABILITIES,
   ABILITY_IDS,
@@ -31,6 +32,7 @@ export interface Ship {
   hull: number
   maxHull: number
   guns: number
+  cannons: number
   crew: number
   veterans: number
 }
@@ -67,6 +69,7 @@ export interface GameState {
   specialFreightTaken: boolean
   voyageCount: number
   voyage: Voyage | null
+  drill: DrillStage | null
   pricesSeen: Partial<Record<PortId, MarketVisit>>
   freight: Freight | null
   log: { day: number; text: string }[]
@@ -76,7 +79,8 @@ export interface GameState {
 
 export type BattleResult = 'won' | 'boarded' | 'escaped' | 'lost'
 export type Command =
-  | { type: 'acceptMission' | 'presentCommission' | 'deliverCertificate' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' }
+  | { type: 'acceptMission' | 'presentCommission' | 'deliverCertificate' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' | 'practiceDrill' }
+  | { type: 'endDrill'; skip: boolean }
   | { type: 'buy' | 'sell'; good: GoodId; quantity: number }
   | { type: 'sail'; to: PortId }
   | { type: 'tender'; help: boolean }
@@ -105,7 +109,7 @@ export function initialState(): GameState {
       glass: { quantity: 0, cost: 0 },
       machinery: { quantity: 0, cost: 0 },
     },
-    ship: { hold: 12, hull: 100, maxHull: 100, guns: 0, crew: 6, veterans: 1 },
+    ship: { hold: 12, hull: 100, maxHull: 100, guns: 0, cannons: 1, crew: 6, veterans: 1 },
     level: 1,
     xp: 0,
     notoriety: 0,
@@ -116,6 +120,7 @@ export function initialState(): GameState {
     specialFreightTaken: false,
     voyageCount: 0,
     voyage: null,
+    drill: null,
     pricesSeen: {},
     freight: null,
     log: [{ day: 1, text: 'Took the helm at Sunstep Quay. Harbormaster Vale has a commission waiting.' }],
@@ -231,8 +236,16 @@ export function upgradeOffer(state: GameState, upgrade: UpgradeId): UpgradeOffer
       }
     case 'guns':
       return {
-        name: 'Cannon refit',
-        description: 'Improve the power of both gun batteries.',
+        name: ship.cannons < 4 ? 'Fit another cannon' : 'Cannon refit',
+        description:
+          ship.cannons < 4
+            ? [
+                '',
+                'Add a starboard bow gun.',
+                'Fit a second port gun for a broadside.',
+                'Fit a second starboard gun for a broadside.',
+              ][ship.cannons]
+            : 'Improve power and reload speed on all four guns.',
         cost: 70 + 40 * ship.guns,
         available: ship.guns < 3,
       }
@@ -446,10 +459,15 @@ function applyDockCommand(state: GameState, action: Command): boolean {
         `Paid the lens invoice. The Skyway Beacon shines again. Reached level ${state.level}, gained a captain ability, and opened ${PORTS[BEACON_COMMISSION.opens].name}. Bring Iona’s certificate to Pilot Sen for repayment.`,
       )
       return true
+    case 'practiceDrill':
+      state.drill = 'briefing'
+      state.notice = ''
+      return true
     case 'sail':
       if (action.to === state.port || !isUnlocked(state, action.to)) return false
       state.voyageCount += 1
       state.day += routeDays(state.port, action.to)
+      if (state.voyageCount === 1 && state.port === 'sunstep') state.drill = 'briefing'
       state.voyage = { id: state.voyageCount, from: state.port, to: action.to, phase: 'underway' }
       state.notice = 'Underway for ' + PORTS[action.to].name + '.'
       return true
@@ -486,6 +504,7 @@ function applyDockCommand(state: GameState, action: Command): boolean {
           break
         case 'guns':
           ship.guns += 1
+          ship.cannons = Math.min(4, ship.cannons + 1)
           break
         case 'crew':
           ship.crew += 2
@@ -512,8 +531,23 @@ function applyDockCommand(state: GameState, action: Command): boolean {
   }
 }
 
+export function advanceDrill(state: GameState, stage: DrillStage): GameState {
+  if (state.drill === null || nextStage(state.drill) !== stage) return state
+  return { ...state, drill: stage }
+}
+
 export function act(state: GameState, command: Command): GameState {
   const next = structuredClone(state)
+  if (state.drill) {
+    if (command.type !== 'endDrill' || (!command.skip && state.drill !== 'debrief')) return state
+    next.drill = null
+    next.notice = ''
+    if (!command.skip && state.voyage) {
+      record(next, 'Cleared the Harbor Watch exercise. The Wayfarer can continue her passage.')
+      next.pendingNotices.push(next.notice)
+    }
+    return next
+  }
   const changed = state.voyage ? applyVoyageCommand(next, command) : applyDockCommand(next, command)
   if (!changed) return state
   if (next.notice) next.pendingNotices.push(next.notice)
@@ -575,6 +609,8 @@ function validShip(value: unknown): value is Ship {
     integer(value.hull, 1) &&
     integer(value.maxHull, value.hull) &&
     integer(value.guns) &&
+    integer(value.cannons, 1) &&
+    value.cannons <= 4 &&
     integer(value.crew, 1) &&
     integer(value.veterans) &&
     value.veterans <= value.crew
@@ -586,6 +622,15 @@ function validSave(value: unknown): value is GameState {
     !object(value) ||
     value.version !== 1 ||
     !isPort(value.port) ||
+    !(value.drill === null || DRILL_STAGES.includes(value.drill as DrillStage)) ||
+    (value.drill !== null &&
+      value.voyage !== null &&
+      !(
+        object(value.voyage) &&
+        value.voyage.id === 1 &&
+        value.voyage.from === 'sunstep' &&
+        value.voyage.phase === 'underway'
+      )) ||
     !integer(value.day, 1) ||
     !integer(value.coins) ||
     !integer(value.xp) ||
@@ -600,7 +645,8 @@ function validSave(value: unknown): value is GameState {
     !['unseen', 'helped', 'passed'].includes(value.tender) ||
     typeof value.specialFreightTaken !== 'boolean' ||
     typeof value.notice !== 'string' ||
-    !Array.isArray(value.pendingNotices) || !value.pendingNotices.every(n => typeof n === 'string') ||
+    !Array.isArray(value.pendingNotices) ||
+    !value.pendingNotices.every((n) => typeof n === 'string') ||
     !Array.isArray(value.log)
   )
     return false
@@ -650,8 +696,14 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
     const serialized = (storage ?? globalThis.localStorage).getItem(SAVE_KEY)
     if (serialized) {
       const value: unknown = JSON.parse(serialized)
-      if (object(value) && value.version === 1 && value.pendingNotices === undefined) value.pendingNotices = []
-      if (object(value) && value.version === 1 && value.certificate === undefined) value.certificate = value.mission === 'lit' ? 'aboard' : 'none'
+      if (object(value) && value.version === 1) {
+        if (value.pendingNotices === undefined) value.pendingNotices = []
+        if (value.certificate === undefined) value.certificate = value.mission === 'lit' ? 'aboard' : 'none'
+        if (value.drill === undefined) value.drill = null
+        if (object(value.ship) && value.ship.cannons === undefined) {
+          value.ship.cannons = value.voyageCount === 0 && value.ship.guns === 0 ? 1 : 4
+        }
+      }
       if (validSave(value)) return value
     }
   } catch {

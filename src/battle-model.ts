@@ -1,3 +1,4 @@
+import { GUN_POSITIONS } from './drill'
 export const SKY = { width: 940, height: 460 }
 export const GUN_ARC = Math.PI * 0.31
 export const SHOT_SPEED = 310
@@ -60,12 +61,15 @@ export function buildShip(
   hullLevel: number,
   remainingHull?: number,
   quickGunnery = false,
+  cannons = Math.min(4, 1 + gunLevel),
 ): Vessel {
   const reload = Math.max(2.1, 4.2 - gunLevel * 0.26) * (quickGunnery ? 0.8 : 1)
-  const guns: Gun[] = []
-  for (const side of ['port', 'starboard'] as const) {
-    for (let station = 0; station < 2; station++) guns.push({ side, station, cooldown: 0, reload })
-  }
+  const guns: Gun[] = GUN_POSITIONS.slice(0, cannons).map(({ side, station }) => ({
+    side,
+    station,
+    cooldown: 0,
+    reload,
+  }))
   const maxHull = 100 + 25 * hullLevel
   return {
     ...pos,
