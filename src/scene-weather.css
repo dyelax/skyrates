@@ -90,3 +90,7 @@
     animation: none !important;
   }
 }
+
+.world-ready .quay-plate > .weather-film {
+  display: none;
+}

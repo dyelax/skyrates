@@ -460,3 +460,15 @@ body:has(.air-duel.is-drill) #toast {
     left: 9px;
   }
 }
+
+.duel-stage > .weather-film {
+  opacity: 0.58;
+}
+.duel-wind strong {
+  text-transform: none;
+}
+@media (max-width: 720px) {
+  .air-duel:not(.is-drill) .duel-banner {
+    top: 99px;
+  }
+}

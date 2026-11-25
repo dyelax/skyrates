@@ -143,15 +143,15 @@ export class CloudDeck {
     } else {
       const t = this.time
       this.lower?.setPosition(
-        this.width * (0.5 + 0.035 * Math.sin(t * 0.045)),
-        this.height * (0.5 + 0.032 * Math.cos(t * 0.035)),
+        this.width * (0.5 + 0.035 * wind.x * Math.sin(t * 0.045)),
+        this.height * (0.5 + 0.032 * wind.y * Math.sin(t * 0.045)),
       )
       this.upper
         ?.setPosition(
-          this.width * (0.5 + 0.12 * Math.sin(t * 0.11)),
-          this.height * (0.5 + 0.09 * Math.cos(t * 0.08)),
+          this.width * (0.5 + 0.12 * wind.x * Math.sin(t * 0.11)),
+          this.height * (0.5 + 0.09 * wind.y * Math.sin(t * 0.11)),
         )
-        .setAlpha(0.24 + 0.09 * Math.sin(t * 0.18))
+        .setAlpha(0.24 + storm * 0.15 + 0.09 * Math.sin(t * 0.18))
     }
   }
 

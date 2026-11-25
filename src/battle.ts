@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { CloudDeck } from './cloud-deck'
 import type { WeatherReport } from './weather'
+import { paintedWeather } from './scene-weather'
 import {
   SKY,
   GUN_ARC,
@@ -134,7 +135,7 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
     : `<figure class="duel-wind"><div class="duel-anemoscope" aria-hidden="true"><i style="transform:rotate(${windAngle}deg)">➜</i></div><figcaption><strong>${weather.knots} kn · ${weather.bearing}</strong><span>${weather.kind} · ${weather.season}</span></figcaption><button data-action="windage" aria-pressed="false" title="Aim upwind to counter shot drift (V)"><kbd>V</kbd> Wind sight</button></figure>`
   root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause"><kbd>P</kbd> Pause</button></div>
     <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : ENEMY_NAME, 'enemy')}</div>
-    ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div><div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
+    ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div>${options.drill ? '' : paintedWeather(weather)}<div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
     <div class="duel-console">${battery('port', cannons)}${battery('starboard', cannons)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Set an intercept course to board on contact"><kbd>B</kbd> Ram</button><button type="button" data-action="escape"><kbd>R</kbd> Break away</button></div></div></div>
     <div class="duel-foot"><span>${options.drill ? 'Watch exercise · Chalk rounds' : '<kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Click raider to fire · Ram to board'}</span><span data-read="crew"></span></div>`
   if (options.drill) {
