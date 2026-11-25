@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { mountBattleFx } from './battle-fx'
 import './battle-fx.css'
 import type { WeatherReport } from './weather'
-import { paintedWeather } from './scene-weather'
+import { CloudDeck } from './cloud-deck'
 import {
   SKY,
   GUN_ARC,
@@ -133,7 +133,7 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
     : `<figure class="duel-wind"><div class="duel-anemoscope" aria-hidden="true"><i style="transform:rotate(${windAngle}deg)">➜</i></div><figcaption><strong>${weather.knots} kn · ${weather.bearing}</strong><span>${weather.kind} · ${weather.season}</span></figcaption><button data-action="windage" aria-pressed="false" title="Aim upwind to counter shot drift (V)"><kbd>V</kbd> Wind sight</button>${options.onExit ? '<button type="button" data-exit-test>Leave test</button>' : ''}</figure>`
   root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause"><kbd>P</kbd> Pause</button></div>
     <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : options.opponent.name, 'enemy')}</div>
-    ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div>${options.drill ? '' : paintedWeather(weather)}<div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
+    ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div><div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
     <div class="duel-console">${battery('port', cannons)}${battery('starboard', cannons)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Steer to contact or push the touching ships apart"><kbd>B</kbd> <span data-read="ramOrder">Close in</span></button><button type="button" data-action="escape"><kbd>R</kbd> <span data-read="escapeOrder">Break away</span></button></div></div></div>
     <div class="duel-foot"><span>${options.drill ? 'Watch exercise · Chalk rounds' : '<kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Click raider to fire · Touch to engage crews'}</span><span data-read="crew"></span></div>`
   if (options.drill) {
@@ -193,8 +193,7 @@ class SkyBattle extends Phaser.Scene {
   private playerView!: ShipView
   private foeView!: ShipView
   private area: FlightArea
-  private veil!: Phaser.GameObjects.Rectangle
-  private sky!: Phaser.GameObjects.Image
+  private clouds?: CloudDeck
   private overlays!: Phaser.GameObjects.Graphics
   private paths!: Phaser.GameObjects.Graphics
   private shots: Projectile[] = []
@@ -279,12 +278,7 @@ class SkyBattle extends Phaser.Scene {
         return
       }
     }
-    this.sky = this.add.image(0, 0, 'sea').setDepth(0)
-    this.fitSkyPainting(this.area)
-    this.veil = this.add
-      .rectangle(0, 0, this.area.width, this.area.height, 0x0a2133, 0.18)
-      .setOrigin(0)
-      .setDepth(1)
+    this.clouds = new CloudDeck(this, this.opts.weather, Boolean(this.drill), this.area.width, this.area.height)
     this.paths = this.add.graphics().setDepth(2)
     this.playerView = this.makeShip('schooner', 114)
     this.foeView = this.makeShip('opponent', 110)
@@ -368,13 +362,7 @@ class SkyBattle extends Phaser.Scene {
     if (this.course) objects.push(this.course)
     const factor = (next.bottom - next.top) / Math.max(1, previous.bottom - previous.top)
     for (const p of objects) p.y = next.top + (p.y - previous.top) * factor
-    if (this.sky) this.fitSkyPainting(next)
-    this.veil?.setSize(next.width, next.height)
-  }
-
-  private fitSkyPainting(area: FlightArea) {
-    this.sky.setPosition(area.width / 2, area.height / 2)
-      .setScale(Math.max(area.width / this.sky.width, area.height / this.sky.height))
+    this.clouds?.resize(next.width, next.height)
   }
 
   disconnect() {
@@ -1110,6 +1098,7 @@ class SkyBattle extends Phaser.Scene {
     if (!this.ready || this.ended || this.pausedDuel) return
     // Bound catch-up after background throttling; use the same physics tick at all display rates.
     const dt = Math.min(.16, delta / 1000)
+    this.clouds?.update(dt)
     this.accumulator += dt
     this.paths.clear()
     while (this.accumulator >= PHYSICS_STEP && !this.ended) {
