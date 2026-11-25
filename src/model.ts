@@ -1,0 +1,642 @@
+import {
+  ABILITIES,
+  ABILITY_IDS,
+  BEACON_COMMISSION,
+  BONDED_MAIL,
+  ENCOUNTERS,
+  GOODS,
+  GOOD_IDS,
+  INVOICE_COST,
+  PORTS,
+  PORT_IDS,
+  TENDER_DEED,
+  UPGRADE_IDS,
+  type AbilityId,
+  type GoodId,
+  type PortId,
+  type UpgradeId,
+} from './data'
+export * from './data'
+
+export interface Quote {
+  buy: number
+  sell: number
+}
+export interface CargoLot {
+  quantity: number
+  cost: number
+}
+export interface Ship {
+  hold: number
+  hull: number
+  maxHull: number
+  guns: number
+  crew: number
+  veterans: number
+}
+export interface MarketVisit {
+  day: number
+  prices: Record<GoodId, Quote>
+}
+export interface Freight {
+  from: PortId
+  to: PortId
+  pay: number
+  special: boolean
+}
+export interface Voyage {
+  id: number
+  from: PortId
+  to: PortId
+  phase: 'underway' | 'tender' | 'raider' | 'battle'
+}
+export interface GameState {
+  version: 1
+  port: PortId
+  day: number
+  coins: number
+  cargo: Record<GoodId, CargoLot>
+  ship: Ship
+  level: number
+  xp: number
+  notoriety: number
+  ability: AbilityId | null
+  mission: 'offered' | 'accepted' | 'invoice' | 'lit'
+  tender: 'unseen' | 'helped' | 'passed'
+  specialFreightTaken: boolean
+  voyageCount: number
+  voyage: Voyage | null
+  pricesSeen: Partial<Record<PortId, MarketVisit>>
+  freight: Freight | null
+  log: { day: number; text: string }[]
+  notice: string
+}
+
+export type BattleResult = 'won' | 'boarded' | 'escaped' | 'lost'
+export type Command =
+  | { type: 'acceptMission' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' }
+  | { type: 'buy' | 'sell'; good: GoodId; quantity: number }
+  | { type: 'sail'; to: PortId }
+  | { type: 'tender'; help: boolean }
+  | { type: 'resolveBattle'; id: number; result: BattleResult; hull: number }
+  | { type: 'upgrade'; upgrade: UpgradeId }
+  | { type: 'chooseAbility'; ability: AbilityId }
+export type GameCommand = Command
+
+export interface UpgradeOffer {
+  name: string
+  description: string
+  cost: number
+  available: boolean
+}
+export const SAVE_KEY = 'skyrates.save.v1'
+const charterLevel = PORTS[BEACON_COMMISSION.opens].requiredLevel
+
+export function initialState(): GameState {
+  const state: GameState = {
+    version: 1,
+    port: BEACON_COMMISSION.home,
+    day: 1,
+    coins: BEACON_COMMISSION.startingCoins,
+    cargo: {
+      provisions: { quantity: 0, cost: 0 },
+      glass: { quantity: 0, cost: 0 },
+      machinery: { quantity: 0, cost: 0 },
+    },
+    ship: { hold: 12, hull: 100, maxHull: 100, guns: 0, crew: 6, veterans: 1 },
+    level: 1,
+    xp: 0,
+    notoriety: 0,
+    ability: null,
+    mission: 'offered',
+    tender: 'unseen',
+    specialFreightTaken: false,
+    voyageCount: 0,
+    voyage: null,
+    pricesSeen: {},
+    freight: null,
+    log: [{ day: 1, text: 'Took the helm at Sunstep Quay. Harbormaster Vale has a commission waiting.' }],
+    notice: '',
+  }
+  rememberMarket(state)
+  return state
+}
+
+export function routeDays(from: PortId, to: PortId): number {
+  return PORTS[from].daysTo[to]
+}
+
+export function isUnlocked(state: GameState, port: PortId): boolean {
+  return PORT_IDS.includes(port) && state.level >= PORTS[port].requiredLevel
+}
+
+export function cargoUsed(state: GameState): number {
+  return GOOD_IDS.reduce((used, good) => used + state.cargo[good].quantity, 0)
+}
+
+export function priceAt(state: GameState, port: PortId, good: GoodId): Quote {
+  // A three-day price cycle keeps remembered quotes useful while ports retain their specialties.
+  const cycle = (Math.floor((state.day - 1) / 3) + PORT_IDS.indexOf(port) + GOOD_IDS.indexOf(good)) % 3
+  const price = PORTS[port].prices[good] + cycle - 1
+  const wholesale = Math.floor(price * 0.9)
+  const sell = Math.max(1, Math.min(price - 2, wholesale - 1))
+  const buy = state.ability === 'broker' ? wholesale : price
+  return { buy, sell }
+}
+
+function rememberMarket(state: GameState) {
+  state.pricesSeen[state.port] = {
+    day: state.day,
+    prices: {
+      provisions: priceAt(state, state.port, 'provisions'),
+      glass: priceAt(state, state.port, 'glass'),
+      machinery: priceAt(state, state.port, 'machinery'),
+    },
+  }
+}
+
+export function boardingStrength(state: GameState): number {
+  return (state.ship.crew + 1.5 * state.ship.veterans) * (state.ability === 'leader' ? 1.25 : 1)
+}
+
+export function prestigeTitle(state: GameState): string {
+  if (state.notoriety >= 6) return 'Famed sky captain'
+  if (state.notoriety >= 3) return 'Known on the skyways'
+  if (state.notoriety >= 1) return 'Familiar face'
+  return 'Unknown captain'
+}
+
+export function greeting(state: GameState): string {
+  switch (state.port) {
+    case 'sunstep':
+      if (state.mission === 'lit')
+        return '“I saw it from the quay last night. First light on the outer route in six weeks.” Vale makes room for you at the chart table.'
+      if (state.mission === 'offered')
+        return '“The Skyway Beacon has gone dark. Take this commission to Keeper Iona at Glasshouse Reach. We need that light back.”'
+      if (state.notoriety > 0)
+        return 'Vale puts down her manifest. “The pilots have been talking about you. How fares the beacon?”'
+      return '“A light for every ship past the horizon,” Vale says. “You’ll find the keeper above the glassworks.”'
+    case 'glasshouse':
+      if (state.mission === 'invoice')
+        return `Iona sets a brass-bound crate on the counter. “Lens is cut. Fitting is included. That’ll be ${INVOICE_COST} crowns.” A dockworker mentions Copperfall is buying glass for its greenhouses.`
+      if (state.mission === 'lit')
+        return '“Come up and see it tonight,” Iona says. A ribbon of light sweeps the glazing sheds.'
+      return 'The keeper polishes a lens beside the cold lamp. “Vale at Sunstep is still looking for a captain.”'
+    case 'copperfall':
+      if (state.tender === 'helped' && !state.specialFreightTaken)
+        return '“That’s the captain who towed me in!” Skipper Neri waves from the freight desk. “I’ve a good run reserved for you.”'
+      if (state.tender === 'helped')
+        return 'Neri greets you by name. The freight hands shift a bench over to make room for you.'
+      if (state.tender === 'passed')
+        return 'Neri has lashed a spare towline to the tender. At the desk, the yardmaster points you to the ordinary freight board.'
+      return '“Our furnace crews can make a keel in a week,” Orr says. “But every pane in our new greenhouses has to be shipped in.”'
+    case 'meridian':
+      return state.notoriety >= 3
+        ? '“There’s the beacon captain!” Pilot Sen beckons you to the front berth. “We’ve a hungry weather crew up here.”'
+        : 'Pilot Sen ties off your bowline. “Welcome to the outer skyways.”'
+  }
+}
+
+export function freightOffer(state: GameState): Omit<Freight, 'from'> | null {
+  if (state.voyage || state.freight) return null
+  const contract = TENDER_DEED.contract
+  if (state.port === contract.from && state.tender === 'helped' && !state.specialFreightTaken) {
+    return { to: contract.to, pay: contract.pay, special: true }
+  }
+  const to = PORTS[state.port].mailTo
+  return { to, pay: BONDED_MAIL.basePay + BONDED_MAIL.payPerDay * routeDays(state.port, to), special: false }
+}
+
+export function upgradeOffer(state: GameState, upgrade: UpgradeId): UpgradeOffer {
+  const ship = state.ship
+  switch (upgrade) {
+    case 'hold':
+      return {
+        name: 'Hold extension',
+        description: 'Fit racks for 4 more crates.',
+        cost: 48 + (ship.hold - 12) * 5,
+        available: ship.hold < 32,
+      }
+    case 'hull':
+      return {
+        name: 'Hull plating',
+        description: 'Increase maximum and current hull by 25.',
+        cost: 65 + (ship.maxHull - 100),
+        available: ship.maxHull < 200,
+      }
+    case 'guns':
+      return {
+        name: 'Cannon refit',
+        description: 'Improve the power of both gun batteries.',
+        cost: 70 + 40 * ship.guns,
+        available: ship.guns < 3,
+      }
+    case 'crew':
+      return {
+        name: 'Hire deckhands',
+        description: 'Sign on two novice deckhands.',
+        cost: 26,
+        available: ship.crew + 2 <= 24,
+      }
+    case 'veteran':
+      return {
+        name: 'Hire a veteran',
+        description: 'Sign on one fighter worth 2½ novice hands in a boarding action.',
+        cost: 44,
+        available: ship.crew < 24,
+      }
+    case 'repair':
+      return {
+        name: 'Repair hull',
+        description: 'Restore the hull to full strength.',
+        cost: Math.ceil((ship.maxHull - ship.hull) / 2),
+        available: ship.hull < ship.maxHull,
+      }
+  }
+}
+
+function record(state: GameState, text: string) {
+  state.notice = text
+  state.log.unshift({ day: state.day, text })
+}
+
+function experience(state: GameState, amount: number) {
+  // The outer chart is a charter privilege earned by restoring the beacon.
+  state.xp = Math.min(state.level === 1 ? 90 : 199, state.xp + amount)
+}
+
+function arrive(state: GameState, encounterOutcome = '') {
+  const voyage = state.voyage
+  if (!voyage) return
+  const previous = voyage.from
+  state.port = voyage.to
+  state.voyage = null
+  rememberMarket(state)
+  record(state, 'Docked at ' + PORTS[state.port].name + ' after leaving ' + PORTS[previous].name + '.')
+  if (state.freight?.to === state.port) {
+    const job = state.freight
+    state.coins += job.pay
+    state.freight = null
+    experience(state, job.special ? TENDER_DEED.contract.xp : BONDED_MAIL.xp)
+    record(
+      state,
+      (job.special ? 'Delivered Neri’s freight' : 'Delivered the bonded freight') +
+        ' and earned ' +
+        job.pay +
+        ' crowns.',
+    )
+  }
+  if (state.port === BEACON_COMMISSION.keeperPort && state.mission === 'accepted') {
+    state.mission = 'invoice'
+    record(
+      state,
+      `Keeper Iona presents a ${INVOICE_COST}-crown invoice for the beacon lens. Copperfall is buying solar glass for its new greenhouses.`,
+    )
+  }
+  const contract = TENDER_DEED.contract
+  if (state.port === contract.from && state.tender === 'helped' && !state.specialFreightTaken) {
+    record(
+      state,
+      `Skipper Neri remembers your tow. A freight run to ${PORTS[contract.to].name} is yours for ${contract.pay} crowns.`,
+    )
+  }
+  if (encounterOutcome) state.notice = encounterOutcome + ' ' + state.notice
+}
+
+function trade(state: GameState, action: Extract<Command, { good: GoodId }>): boolean {
+  const { good, quantity } = action
+  if (!GOOD_IDS.includes(good) || !Number.isSafeInteger(quantity) || quantity <= 0) return false
+  const lot = state.cargo[good]
+  const quote = priceAt(state, state.port, good)
+  if (action.type === 'buy') {
+    const total = quantity * quote.buy
+    if (total > state.coins || quantity > state.ship.hold - cargoUsed(state)) return false
+    state.coins -= total
+    lot.quantity += quantity
+    lot.cost += total
+    record(state, 'Bought ' + quantity + ' ' + GOODS[good].name.toLowerCase() + ' for ' + total + ' crowns.')
+  } else {
+    if (quantity > lot.quantity) return false
+    const total = quantity * quote.sell
+    const cost = Math.round((lot.cost * quantity) / lot.quantity)
+    lot.quantity -= quantity
+    lot.cost -= cost
+    state.coins += total
+    const profit = total - cost
+    if (profit > 0) experience(state, Math.min(6, profit))
+    const result = profit === 0 ? 'Broke even.' : `${Math.abs(profit)}-crown ${profit > 0 ? 'profit' : 'loss'}.`
+    record(state, `Sold ${quantity} ${GOODS[good].name.toLowerCase()} for ${total} crowns. ${result}`)
+  }
+  return true
+}
+
+function applyVoyageCommand(state: GameState, action: Command): boolean {
+  const voyage = state.voyage
+  if (!voyage) return false
+  switch (action.type) {
+    case 'continueVoyage':
+      if (voyage.phase !== 'underway') return false
+      if (voyage.id <= ENCOUNTERS.safeOpeningVoyages) {
+        arrive(state)
+      } else if (state.tender === 'unseen' && voyage.id >= ENCOUNTERS.tenderFromVoyage) {
+        voyage.phase = 'tender'
+        state.notice = 'A tender hangs under a torn solar sail. Its skipper signals for a tow.'
+      } else if (voyage.id % ENCOUNTERS.raiderInterval === 0) {
+        voyage.phase = 'raider'
+        state.notice = 'A raider crosses your wake. You have room to give her the slip.'
+      } else {
+        arrive(state)
+      }
+      return true
+    case 'tender':
+      if (voyage.phase !== 'tender') return false
+      if (action.help) {
+        state.tender = 'helped'
+        state.day += TENDER_DEED.towDays
+        state.notoriety += TENDER_DEED.notoriety
+        experience(state, TENDER_DEED.xp)
+        record(
+          state,
+          `Gave Skipper Neri’s tender a tow. She works out of ${PORTS[TENDER_DEED.contract.from].name}.`,
+        )
+      } else {
+        state.tender = 'passed'
+        record(state, 'Passed the stranded tender and kept to the sailing schedule.')
+      }
+      arrive(state, state.notice)
+      return true
+    case 'evade':
+      if (voyage.phase !== 'raider') return false
+      record(state, 'Evaded a raider among the cloud banks.')
+      arrive(state, state.notice)
+      return true
+    case 'engage':
+      if (voyage.phase !== 'raider') return false
+      voyage.phase = 'battle'
+      state.notice = 'Battle stations. The raider is closing.'
+      return true
+    case 'resolveBattle': {
+      if (voyage.phase !== 'battle' || action.id !== voyage.id || !Number.isFinite(action.hull)) return false
+      if (!['lost', 'won', 'boarded', 'escaped'].includes(action.result)) return false
+      state.ship.hull = Math.min(state.ship.maxHull, Math.max(1, Math.round(action.hull)))
+      if (action.result === 'lost') {
+        state.ship.hull = Math.max(state.ship.hull, Math.ceil(state.ship.maxHull * 0.35))
+        const ransom = Math.floor(state.coins * 0.2)
+        state.coins -= ransom
+        record(state, 'The raider took ' + ransom + ' crowns in ransom and let you limp into port.')
+      } else if (action.result === 'escaped') {
+        record(state, 'Broke contact with the raider and reached friendly skies.')
+      } else {
+        const prize = action.result === 'boarded' ? 40 : 25
+        state.coins += prize
+        state.notoriety += 1
+        experience(state, 12)
+        record(
+          state,
+          (action.result === 'boarded' ? 'The crew took the raider by boarding' : 'Drove off the raider') +
+            ' and claimed ' +
+            prize +
+            ' crowns.',
+        )
+      }
+      arrive(state, state.notice)
+      return true
+    }
+    default:
+      return false
+  }
+}
+
+function applyDockCommand(state: GameState, action: Command): boolean {
+  switch (action.type) {
+    case 'buy':
+    case 'sell':
+      return trade(state, action)
+    case 'acceptMission':
+      if (state.port !== BEACON_COMMISSION.home || state.mission !== 'offered') return false
+      state.mission = 'accepted'
+      record(
+        state,
+        'Accepted Vale’s commission. Visit Keeper Iona at Glasshouse Reach to relight the Skyway Beacon.',
+      )
+      return true
+    case 'payInvoice':
+      if (state.port !== BEACON_COMMISSION.keeperPort || state.mission !== 'invoice' || state.coins < INVOICE_COST)
+        return false
+      state.coins -= INVOICE_COST
+      state.mission = 'lit'
+      state.level = charterLevel
+      state.xp += BEACON_COMMISSION.xp
+      state.notoriety += BEACON_COMMISSION.notoriety
+      record(
+        state,
+        `Paid the lens invoice. The Skyway Beacon shines again. Reached level ${state.level}, gained a captain ability, and unlocked ${PORTS[BEACON_COMMISSION.opens].name}.`,
+      )
+      return true
+    case 'sail':
+      if (action.to === state.port || !isUnlocked(state, action.to)) return false
+      state.voyageCount += 1
+      state.day += routeDays(state.port, action.to)
+      state.voyage = { id: state.voyageCount, from: state.port, to: action.to, phase: 'underway' }
+      state.notice = 'Underway for ' + PORTS[action.to].name + '.'
+      return true
+    case 'takeFreight': {
+      const offer = freightOffer(state)
+      if (!offer) return false
+      state.freight = { ...offer, from: state.port }
+      if (offer.special) state.specialFreightTaken = true
+      record(
+        state,
+        'Signed for ' +
+          (offer.special ? 'Neri’s cargo' : 'bonded mail') +
+          ' to ' +
+          PORTS[offer.to].name +
+          ' for ' +
+          offer.pay +
+          ' crowns. The dispatch travels in the ship’s mail locker.',
+      )
+      return true
+    }
+    case 'upgrade': {
+      if (!UPGRADE_IDS.includes(action.upgrade)) return false
+      const offer = upgradeOffer(state, action.upgrade)
+      if (!offer.available || state.coins < offer.cost) return false
+      state.coins -= offer.cost
+      const ship = state.ship
+      switch (action.upgrade) {
+        case 'hold':
+          ship.hold += 4
+          break
+        case 'hull':
+          ship.maxHull += 25
+          ship.hull += 25
+          break
+        case 'guns':
+          ship.guns += 1
+          break
+        case 'crew':
+          ship.crew += 2
+          break
+        case 'veteran':
+          ship.crew += 1
+          ship.veterans += 1
+          break
+        case 'repair':
+          ship.hull = ship.maxHull
+          break
+      }
+      record(state, offer.name + ' at ' + PORTS[state.port].name + ' for ' + offer.cost + ' crowns.')
+      return true
+    }
+    case 'chooseAbility':
+      if (state.level < charterLevel || state.ability || !ABILITY_IDS.includes(action.ability)) return false
+      state.ability = action.ability
+      rememberMarket(state)
+      record(state, 'Learned ' + ABILITIES[action.ability].name + '.')
+      return true
+    default:
+      return false
+  }
+}
+
+export function act(state: GameState, command: Command): GameState {
+  const next = structuredClone(state)
+  const changed = state.voyage ? applyVoyageCommand(next, command) : applyDockCommand(next, command)
+  return changed ? next : state
+}
+
+function object(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function integer(value: unknown, min = 0): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= min
+}
+
+function isPort(value: unknown): value is PortId {
+  return PORT_IDS.includes(value as PortId)
+}
+
+function validQuote(value: unknown): value is Quote {
+  return object(value) && integer(value.buy, 1) && integer(value.sell, 1) && value.sell < value.buy
+}
+
+function validVisit(value: unknown): value is MarketVisit {
+  if (!object(value) || !integer(value.day, 1) || !object(value.prices)) return false
+  const prices = value.prices
+  return GOOD_IDS.every((good) => validQuote(prices[good]))
+}
+
+function validVoyage(value: unknown, currentPort: unknown, voyageCount: unknown): boolean {
+  return (
+    value === null ||
+    (object(value) &&
+      integer(value.id, 1) &&
+      value.id === voyageCount &&
+      value.from === currentPort &&
+      isPort(value.to) &&
+      value.from !== value.to &&
+      typeof value.phase === 'string' &&
+      ['underway', 'tender', 'raider', 'battle'].includes(value.phase))
+  )
+}
+
+function validFreight(value: unknown): boolean {
+  return (
+    value === null ||
+    (object(value) &&
+      isPort(value.from) &&
+      isPort(value.to) &&
+      value.from !== value.to &&
+      integer(value.pay, 1) &&
+      typeof value.special === 'boolean')
+  )
+}
+
+function validShip(value: unknown): value is Ship {
+  return (
+    object(value) &&
+    integer(value.hold, 1) &&
+    integer(value.hull, 1) &&
+    integer(value.maxHull, value.hull) &&
+    integer(value.guns) &&
+    integer(value.crew, 1) &&
+    integer(value.veterans) &&
+    value.veterans <= value.crew
+  )
+}
+
+function validSave(value: unknown): value is GameState {
+  if (
+    !object(value) ||
+    value.version !== 1 ||
+    !isPort(value.port) ||
+    !integer(value.day, 1) ||
+    !integer(value.coins) ||
+    !integer(value.xp) ||
+    !integer(value.notoriety) ||
+    !integer(value.voyageCount) ||
+    (value.level !== 1 && value.level !== charterLevel) ||
+    !(value.ability === null || ABILITY_IDS.includes(value.ability as AbilityId)) ||
+    typeof value.mission !== 'string' ||
+    !['offered', 'accepted', 'invoice', 'lit'].includes(value.mission) ||
+    typeof value.tender !== 'string' ||
+    !['unseen', 'helped', 'passed'].includes(value.tender) ||
+    typeof value.specialFreightTaken !== 'boolean' ||
+    typeof value.notice !== 'string' ||
+    !Array.isArray(value.log)
+  )
+    return false
+  // A restored chapter must still have a path to its remaining actions and rewards.
+  if (
+    (value.level === charterLevel) !== (value.mission === 'lit') ||
+    (value.level === 1 &&
+      (value.ability !== null ||
+        value.level < PORTS[value.port].requiredLevel ||
+        (object(value.voyage) &&
+          isPort(value.voyage.to) &&
+          value.level < PORTS[value.voyage.to].requiredLevel))) ||
+    (value.specialFreightTaken && value.tender !== 'helped')
+  )
+    return false
+  if (!value.log.every((entry) => object(entry) && integer(entry.day, 1) && typeof entry.text === 'string'))
+    return false
+  if (!validVoyage(value.voyage, value.port, value.voyageCount) || !validFreight(value.freight)) return false
+  if (!validShip(value.ship) || !object(value.cargo) || !object(value.pricesSeen)) return false
+  const cargo = value.cargo
+  let quantity = 0
+  for (const good of GOOD_IDS) {
+    const lot = cargo[good]
+    if (!object(lot) || !integer(lot.quantity) || !integer(lot.cost) || (lot.quantity === 0 && lot.cost !== 0))
+      return false
+    quantity += lot.quantity
+  }
+  return (
+    quantity <= value.ship.hold &&
+    validVisit(value.pricesSeen[value.port]) &&
+    Object.entries(value.pricesSeen).every(([key, snapshot]) => isPort(key) && validVisit(snapshot))
+  )
+}
+
+export function saveGame(state: GameState, storage?: Pick<Storage, 'setItem'>): boolean {
+  try {
+    const target = storage ?? globalThis.localStorage
+    target.setItem(SAVE_KEY, JSON.stringify(state))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
+  try {
+    const serialized = (storage ?? globalThis.localStorage).getItem(SAVE_KEY)
+    if (serialized) {
+      const value: unknown = JSON.parse(serialized)
+      if (validSave(value)) return value
+    }
+  } catch {
+    // Storage can be unavailable in private browsing or when an earlier write was interrupted.
+  }
+  return initialState()
+}

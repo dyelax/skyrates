@@ -1,0 +1,106 @@
+.dock-talk {
+  position: absolute;
+  z-index: 12;
+  left: clamp(8px, 2%, 30px);
+  right: clamp(8px, 2%, 30px);
+  bottom: clamp(8px, 2%, 24px);
+  max-width: 790px;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: clamp(90px, 12vw, 142px) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(12px, 2%, 22px);
+  padding: 14px 18px 14px 14px;
+  border: 1px solid #9e9571;
+  border-radius: 3px;
+  box-shadow:
+    0 8px 36px #071015aa,
+    inset 0 0 0 3px #bfb38c10;
+  background: linear-gradient(118deg, #1c3033fc, #111e25fc 62%);
+  color: #eee6d6;
+  text-align: left;
+  pointer-events: auto;
+}
+.talk-portrait {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 1px solid #7e8070;
+}
+.dock-talk .talk-copy {
+  min-width: 0;
+}
+.dock-talk .talk-role {
+  margin: 0 26px 0 0;
+  color: #c5aa78;
+  text-transform: uppercase;
+  font: 600 10px/1.5 var(--font-sans);
+  letter-spacing: 0.13em;
+}
+.dock-talk h2 {
+  margin: 0 24px 5px 0;
+  font: 600 clamp(22px, 2vw, 29px)/1.1 var(--font-serif);
+  color: #f1dcb5;
+}
+.dock-talk .talk-speech {
+  margin: 0;
+  font: 400 clamp(14px, 1.15vw, 17px)/1.42 var(--font-sans);
+  color: #f0e8db;
+}
+.dock-talk .talk-speech:focus {
+  outline: none;
+}
+.talk-replies {
+  display: flex;
+  gap: 5px 7px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.talk-replies button {
+  min-height: 31px;
+  padding: 5px 9px;
+  border: 1px solid #60675c;
+  background: #253538;
+  color: #e3d4b9;
+  text-align: left;
+  font: 500 13px/1.25 var(--font-sans);
+}
+.talk-replies button:hover {
+  background: #364349;
+  border-color: #d2bc81;
+  color: #fff2d7;
+}
+.talk-close {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 0;
+  color: #dccfb8;
+  font: 23px/1 var(--font-sans);
+}
+.talk-close:hover {
+  color: #fff;
+  background: #415050;
+}
+@media (max-width: 650px) {
+  .dock-talk {
+    grid-template-columns: 65px minmax(0, 1fr);
+    padding: 10px;
+    gap: 9px;
+    max-height: min(92%, 460px);
+    overflow: auto;
+  }
+  .talk-replies {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .talk-replies button {
+    min-height: 34px;
+  }
+}
