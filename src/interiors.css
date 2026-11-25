@@ -1227,3 +1227,11 @@
 .sk-interior .sk-map-popover {z-index:4;}
 
 .sk-station-host { position: fixed; inset: 0; z-index: 14; background: #08182166; }
+
+.sk-map-copy .sk-departure-supplies {
+  margin: .65rem 0 .2rem;
+  padding-left: .65rem;
+  border-left: 2px solid var(--sk-mint);
+  color: var(--sk-text);
+  font-size: .88rem;
+}

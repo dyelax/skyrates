@@ -290,6 +290,7 @@ function chart(state: GameState, ui: Controls) {
       <details class="sk-fold"><summary>Climate and trade on arrival</summary><p>${CLIMATES[dest].region}. ${seasonAt(state.day + days)} · day ${state.day + days}.</p>${marketOutlook(dest,state.day+days)}</details>
       <details class="sk-fold"><summary>Port trade &amp; services</summary><p>${CITY_ECONOMY[dest].tradeLead}</p><p>${CITY_ECONOMY[dest].institution} requests ${CITY_ECONOMY[dest].order.quantity} × ${GOODS[CITY_ECONOMY[dest].order.good].name}.</p></details>
       <details class="sk-fold"><summary>Recorded prices</summary>${rememberedPrices(state, dest)}</details>
+      ${!current && unlocked && state.voyageCount === 0 ? '<p class="sk-departure-supplies"><b>Cleared to sail.</b> Rations and lift fuel are aboard. Provisions are trade cargo. You can leave with an empty hold.</p>' : ''}
       <div class="sk-actions">${
         current
           ? ui.button(
@@ -462,6 +463,7 @@ export function renderInterior(
   dispatch: (command: Command) => void,
   navigate: Navigate,
   recordContact: ContactWriter,
+  inWorkshop = false,
 ): void {
   let settings = settingsByDocument.get(root.ownerDocument)
   if (!settings || settings.port !== state.port) {
@@ -504,7 +506,7 @@ export function renderInterior(
     settings,
     page,
     register,
-    refresh: () => renderInterior(root, view, state, dispatch, navigate, recordContact),
+    refresh: () => renderInterior(root, view, state, dispatch, navigate, recordContact, inWorkshop),
     button: (label, callback, options = {}) =>
       `<button type="button" class="sk-button ${options.secondary ? 'sk-secondary' : ''}" data-action="${register(callback)}" ${options.disabled ? 'disabled' : ''}>${label}</button>`,
   }
@@ -537,7 +539,7 @@ export function renderInterior(
       })
     }
   }
-  if (view === 'market' || view === 'shipyard' || view === 'civic') {
+  if (!inWorkshop && (view === 'market' || view === 'shipyard' || view === 'civic')) {
     const npc = npcAtPort(state.port, view)
     const sheet = page.querySelector<HTMLElement>('.sk-room-ledger')!
     const talk = document.createElement('button')

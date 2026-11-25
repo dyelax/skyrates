@@ -442,3 +442,40 @@ export function validContacts(value: unknown, day: number): value is Contacts {
     )
   })
 }
+
+// These cues identify a guessed confidence locally. Their contents never enter
+// the model's prompt. Asking again or supplying the details cannot raise trust.
+const privateSubjects: Record<NpcId, RegExp> = {
+  moss: /dismissed|apprentice|after sunset|teach(?:ing)? her|tutor/i,
+  vale: /pledged|family (?:trees|orchard|allotment)|south terrace/i,
+  nettle: /file mark|switched.*weight|lighter weight/i,
+  joss: /spare spring|altered.*brake|porter.*hand/i,
+  sella: /annealing slip|master.s signature|first lens.*master/i,
+  iona: /unsigned|order to wait|return strip|warning before/i,
+  brin: /off.*booking board|families who fled|unbooked slip/i,
+  tal: /wedding bell|pawn ticket|bought.*batch back/i,
+  neri: /retired pilot|rescue roll|pilot.*off the roll/i,
+  orr: /delegate.s reserved|changed the docket|garden.*crane slot/i,
+  rada: /sister.s.*carriage|second test|pin walked/i,
+  fen: /brother.*(?:roster|badge)|missing.*roster|lunch pail/i,
+  sen: /storm shelter|unchartered crews|hid.*return line/i,
+  uma: /spoiled roll|sponsors stopped|blue silk.*flag/i,
+  lask: /cut the return rope|clean.cut end|blame the storm/i,
+  orin: /signature twice|missing witness|reenacted the reading/i,
+}
+
+export function confidenceReply(state: GameState,id:NpcId,question:string,answer=''):string|undefined{
+  const context=characterContext(state,id)
+  if(id==='sen' && /(?:shelter|unchartered)/i.test(question) && /(?:exact|bearing|location|where|coordinate)/i.test(question))
+    return 'I can tell you what shelter means on a night like that. Its bearing stays off your chart.'
+  const request=/\b(?:secret|secrets|confession|confess|in confidence|hiding from me)\b/i.test(question)
+  const guessed=privateSubjects[id].test(question)
+  if(context.relationship.tier==='confidant'){
+    if(request)return context.confidences.at(-1)
+    return
+  }
+  if(request||guessed||privateSubjects[id].test(answer)){
+    if(!guessed && context.confidences[0])return context.confidences[0]
+    return 'Give us a few watches together, Captain. For now I can tell you about my work.'
+  }
+}

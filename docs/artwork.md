@@ -75,3 +75,9 @@ ImageGen produced two orthographic atlases for the four ports. One contains Suns
 ## Fleet sailcloth
 
 ImageGen painted a square, four-panel cloth study with the Wayfarer’s ivory sunburst on teal, the raiders’ vermilion chevron, the Harbor Watch’s indigo diagonal and an amber solar weave. Its pigment and stitching wrap over curved sail geometry that reefs and flexes during battle. The hulls and deck fittings use the harbor’s ImageGen timber and patinated metal. [Fleet sailcloth](../public/art/fleet-sailcloth.webp)
+
+## Working interiors and character materials
+
+Sixteen ImageGen cabinet studies give each market, public office, shipyard and local institution its own close-range display. They depict the local job from the front so the painted shelves, tools and samples sit inside modeled cabinet joinery. Sunstep’s weighing room holds fruit and folded scions. Glasshouse shows annealing registers and lens stock. Copperfall presents reclaimed parts and winter seedlings. Meridian’s cabinets carry silk, weather drums and brass instruments.
+
+A separate ImageGen sheet supplies sixteen front-facing character materials in the four cities. Facial pigment follows the brow, cheek and nose geometry on the animated head. The same worker uses the same face on the quay and indoors.

@@ -1,8 +1,16 @@
 import * as T from 'three'
-import type { PortId } from '../data'
+import { PORT_IDS, type PortId } from '../data'
+import { stations, type Station } from './workroom-plan'
 import { Blocks, palette, type Paints, type V2, type V3 } from './blocks'
 import type { HarborPlan } from './ports'
 
+const faceFor = (port: PortId, role: Station) => PORT_IDS.indexOf(port) * 4 + stations.indexOf(role)
+const locals: Record<PortId, Station> = {
+  sunstep: 'civic',
+  glasshouse: 'market',
+  copperfall: 'market',
+  meridian: 'authority',
+}
 interface Clothes {
   skin: string
   shade: string
@@ -64,15 +72,36 @@ interface Rig {
   mesh: T.SkinnedMesh
   joint: Record<string, T.Bone>
 }
+// The same complexion follows a named worker between their outdoor shift and their counter.
+const complexions = [
+  ['#b78668', '#302d28'],
+  ['#956c57', '#968e84'],
+  ['#b48260', '#3e352c'],
+  ['#ce9c82', '#925439'],
+  ['#ba8a69', '#46372d'],
+  ['#977459', '#787369'],
+  ['#c29773', '#332e2b'],
+  ['#c79b86', '#a48d70'],
+  ['#b47f63', '#3a302b'],
+  ['#90634d', '#64574a'],
+  ['#bb9475', '#8b8070'],
+  ['#b78b69', '#483d34'],
+  ['#aa8064', '#42352d'],
+  ['#cea08b', '#955a41'],
+  ['#aa785a', '#47372b'],
+  ['#c3997f', '#9c7759'],
+]
 const boxes = new T.BoxGeometry(1, 1, 1).toNonIndexed()
 
 /** Every voxel in a limb shares its anatomical joint. Each person needs one draw call. */
-function person(clothes: Clothes, material: T.MeshStandardMaterial): Rig {
+function person(clothes: Clothes, material: T.MeshStandardMaterial, face?: number): Rig {
+  if (face !== undefined) clothes = { ...clothes, skin: complexions[face][0], hair: complexions[face][1] }
   const joint: Record<string, T.Bone> = {},
     bones: T.Bone[] = [],
     pos: number[] = [],
     norm: number[] = [],
     cols: number[] = [],
+    uvs: number[] = [],
     indices: number[] = [],
     weights: number[] = []
   function bone(name: string, parent: string | null, x: number, y: number, z: number) {
@@ -106,7 +135,26 @@ function person(clothes: Clothes, material: T.MeshStandardMaterial): Rig {
       pt.set(x + pc.getX(k) * w, y + pc.getY(k) * h, z + pc.getZ(k) * d).applyMatrix4(node.matrixWorld)
       pos.push(pt.x, pt.y, pt.z)
       norm.push(nc.getX(k), nc.getY(k), nc.getZ(k))
-      cols.push(c.r, c.g, c.b)
+      const portrait =
+        face !== undefined &&
+        material.map &&
+        name === 'head' &&
+        (shade === clothes.skin || shade === clothes.shade) &&
+        nc.getZ(k) > 0.5 &&
+        y > 0.05
+      if (portrait) {
+        // Paint the relief of the brow, cheeks and nose in head coordinates.
+        const u = T.MathUtils.clamp((x + pc.getX(k) * w) / 0.235 + 0.5, 0.018, 0.982)
+        const v = T.MathUtils.clamp((y + pc.getY(k) * h - 0.027) / 0.225, 0.018, 0.982)
+        uvs.push(((face % 4) + u) * 0.25, 1 - (Math.floor(face / 4) + 1 - v) * 0.2)
+        cols.push(1, 1, 1)
+      } else {
+        const cloth = [clothes.coat, clothes.shirt, clothes.hat, clothes.pants].includes(shade)
+        if (cloth) {
+          uvs.push(0.02 + (pc.getX(k) + 0.5) * 0.21, 0.02 + (pc.getY(k) + 0.5) * 0.16)
+        } else uvs.push(0.88, 0.1)
+        cols.push(c.r, c.g, c.b)
+      }
       indices.push(i, 0, 0, 0)
       weights.push(1, 0, 0, 0)
     }
@@ -144,12 +192,13 @@ function person(clothes: Clothes, material: T.MeshStandardMaterial): Rig {
   piece('head', 0, 0.2, -0.016, 0.237, 0.155, 0.209, clothes.skin)
   piece('head', 0, 0.111, 0.117, 0.064, 0.045, 0.042, clothes.shade)
   piece('head', 0, 0.147, 0.121, 0.049, 0.067, 0.045, clothes.skin)
-  piece('head', 0, 0.078, 0.109, 0.076, 0.012, 0.019, '#8b5e49')
+  if (face === undefined || !material.map) piece('head', 0, 0.078, 0.109, 0.076, 0.012, 0.019, '#8b5e49')
   for (const s of [-1, 1]) {
     piece('head', s * 0.119, 0.147, -0.007, 0.036, 0.072, 0.055, clothes.skin)
-    piece('head', s * 0.054, 0.173, 0.111, 0.041, 0.023, 0.017, '#e0cbb1')
-    piece('head', s * 0.054, 0.173, 0.122, 0.018, 0.022, 0.014, '#443d37')
-    piece('head', s * 0.054, 0.201, 0.111, 0.05, 0.016, 0.02, clothes.hair)
+    if (face === undefined || !material.map) piece('head', s * 0.054, 0.173, 0.111, 0.041, 0.023, 0.017, '#e0cbb1')
+    if (face === undefined || !material.map) piece('head', s * 0.054, 0.173, 0.122, 0.018, 0.022, 0.014, '#443d37')
+    if (face === undefined || !material.map)
+      piece('head', s * 0.054, 0.201, 0.111, 0.05, 0.016, 0.02, clothes.hair)
     piece('head', s * 0.111, 0.209, -0.05, 0.034, 0.121, 0.101, clothes.hair)
   }
   piece('head', 0, 0.24, -0.021, 0.244, 0.116, 0.235, clothes.hair)
@@ -157,7 +206,7 @@ function person(clothes: Clothes, material: T.MeshStandardMaterial): Rig {
   if (clothes.style === 'cap') {
     piece('head', 0, 0.304, -0.011, 0.273, 0.079, 0.251, clothes.hat)
     piece('head', 0, 0.27, 0.105, 0.252, 0.038, 0.14, clothes.hat)
-    piece('head', 0, 0.104, 0.123, 0.115, 0.024, 0.022, clothes.hair)
+    if (face === undefined || !material.map) piece('head', 0, 0.104, 0.123, 0.115, 0.024, 0.022, clothes.hair)
   } else if (clothes.style === 'band' || clothes.style === 'bun') {
     piece('head', 0, 0.258, -0.011, 0.254, 0.048, 0.237, clothes.hat)
     for (const s of [-1, 1]) {
@@ -172,6 +221,7 @@ function person(clothes: Clothes, material: T.MeshStandardMaterial): Rig {
     piece('head', 0.128, 0.115, -0.011, 0.024, 0.053, 0.02, '#d1a462')
   }
   const geo = new T.BufferGeometry()
+  geo.setAttribute('uv', new T.Float32BufferAttribute(uvs, 2))
   geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3))
   geo.setAttribute('normal', new T.Float32BufferAttribute(norm, 3))
   geo.setAttribute('color', new T.Float32BufferAttribute(cols, 3))
@@ -280,22 +330,28 @@ function cart(materials: Paints) {
   }
   return { g, wheels }
 }
-export function buildPeople(scene: T.Scene, id: PortId, plan: HarborPlan, materials: Paints) {
-  const m = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 })
-  const make = (cl: Clothes) => {
-    const rig = person(cl, m)
+export function buildPeople(
+  scene: T.Scene,
+  id: PortId,
+  plan: HarborPlan,
+  materials: Paints,
+  atlas: T.Texture | null = null,
+) {
+  const m = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, map: atlas })
+  const make = (cl: Clothes, role?: Station) => {
+    const rig = person(cl, m, role ? faceFor(id, role) : undefined)
     scene.add(rig.mesh)
     return rig
   }
   const outfit = attire[id],
-    local = make(outfit)
+    local = make(outfit, locals[id])
   local.mesh.name = 'Dockside local'
-  const keeper = make({ ...outfit, hat: '#354a49', coat: '#34665c', scarf: '#bb9866', style: 'bun' })
+  const keeper = make({ ...outfit, hat: '#354a49', coat: '#34665c', scarf: '#bb9866', style: 'bun' }, 'authority')
   keeper.mesh.position.set(plan.authority[0] + 0.77, 0, plan.authority[1] + 3.26)
-  const vendor = make({ ...outfit, coat: '#a96f4f', hat: '#b38c5e', shirt: '#ded3ad', style: 'cap' })
+  const vendor = make({ ...outfit, coat: '#a96f4f', hat: '#b38c5e', shirt: '#ded3ad', style: 'cap' }, 'market')
   vendor.mesh.position.set(plan.market[0] + 0.27, 0, plan.market[1] - 0.3)
   const buyer = make({ ...outfit, coat: '#657e6a', hat: '#71634e', scarf: '#ac8568', style: 'hood' })
-  const smith = make({ ...outfit, coat: '#6b5442', shirt: '#ab9b7b', hat: '#4e5a5c', style: 'band' })
+  const smith = make({ ...outfit, coat: '#6b5442', shirt: '#ab9b7b', hat: '#4e5a5c', style: 'band' }, 'shipyard')
   smith.mesh.position.set(plan.yard[0] + 1.1, 0, plan.yard[1] + 2.45)
   const worker = make({ ...outfit, coat: '#53757c', hat: '#8b6c56', style: 'cap' })
   worker.mesh.position.set(plan.crew[0], 0, plan.crew[1])
@@ -417,4 +473,89 @@ export function buildPeople(scene: T.Scene, id: PortId, plan: HarborPlan, materi
   }
   update(0.016)
   return { update, anchor, local: local.mesh, keeper: keeper.mesh, vendor: vendor.mesh, smith: smith.mesh }
+}
+
+/** The person at a service station has an articulated rig and turns to the approaching captain. */
+export function stationArtisan(
+  scene: T.Scene,
+  port: PortId,
+  role: 'market' | 'authority' | 'civic' | 'shipyard',
+  location: V2,
+  atlas: T.Texture,
+) {
+  const outfit = attire[port]
+  const material = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.81, map: atlas })
+  const byRole: Record<typeof role, Partial<Clothes>> = {
+    market: { coat: '#9a714e', hat: '#a67d50', shirt: '#e0c29b' },
+    authority: { coat: '#355c5a', hat: '#425b55', scarf: '#c9a466', style: 'bun' },
+    civic: { coat: '#64775b', shirt: '#d5c7a7', scarf: '#9d715c' },
+    shipyard: { coat: '#73533f', hat: '#5b6159', shirt: '#bea783', style: 'band' },
+  }
+  const sameDockworker =
+    (role === 'civic' && port === 'sunstep') ||
+    (role === 'market' && (port === 'copperfall' || port === 'glasshouse')) ||
+    (role === 'authority' && port === 'meridian')
+  const worker = person(sameDockworker ? outfit : { ...outfit, ...byRole[role] }, material, faceFor(port, role))
+  worker.mesh.position.set(location[0], 0, location[1])
+  scene.add(worker.mesh)
+  let elapsed = 0
+  return {
+    mesh: worker.mesh,
+    update(dt: number, viewer: T.Vector3) {
+      elapsed += dt
+      const angle = Math.atan2(viewer.x - worker.mesh.position.x, viewer.z - worker.mesh.position.z)
+      const gaze = Math.max(-0.56, Math.min(0.56, angle))
+      const rhythm = role === 'shipyard' ? 2.2 : role === 'market' ? 1.37 : 0.74
+      const reach = 0.12 + Math.max(0, Math.sin(elapsed * rhythm)) * 0.67
+      worker.mesh.rotation.y = gaze * 0.43
+      pose(worker, 0, 0, 0, reach, gaze * 0.56, elapsed)
+    },
+  }
+}
+
+export function marketVisitor(scene: T.Scene, id: PortId, end: V2, front: number, atlas: T.Texture) {
+  const material = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.79, map: atlas })
+  const attireHere = id === 'sunstep' ? attire[id] : { ...attire[id], coat: '#64775b', scarf: '#997259' }
+  const visitor = person(attireHere, material, faceFor(id, 'civic'))
+  scene.add(visitor.mesh)
+  const destination: V2 = [end[0] + 0.16, end[1] + 1.11]
+  const route = circuit(
+    [[-1.65, front - 1.2], [0.22, 0.8], destination, [1.53, 1.32]],
+    0.72,
+    [0.13, 4.15, 0.13, 1.32],
+  )
+  const anchor = new T.Vector3(),
+    parcel = new T.Mesh(
+      new T.BoxGeometry(0.19, 0.16, 0.2),
+      new T.MeshStandardMaterial({ color: id === 'sunstep' ? '#d7ae4f' : '#8cac9b' }),
+    )
+  scene.add(parcel)
+  let t = 0
+  function update(dt: number) {
+    t += dt
+    const step = route(t + 2.32),
+      atCounter = step.index === 1 && step.wait > 0
+    visitor.mesh.position.set(step.x, 0, step.z)
+    const angle = atCounter ? Math.PI : step.angle,
+      delta = Math.atan2(Math.sin(angle - visitor.mesh.rotation.y), Math.cos(angle - visitor.mesh.rotation.y))
+    visitor.mesh.rotation.y += delta * (1 - Math.exp(-dt * 5.7))
+    pose(
+      visitor,
+      t * 5.25,
+      step.walk,
+      0,
+      atCounter ? Math.max(0, Math.sin(step.wait * 0.78)) : 0,
+      Math.sin(t * 0.28) * 0.11,
+      t,
+    )
+    parcel.visible = atCounter
+    if (atCounter) {
+      const u = T.MathUtils.smoothstep(step.wait, 0.65, 2.7)
+      parcel.position.set(end[0] + 0.19, 1.14 + 0.16 * Math.sin(Math.PI * u), end[1] - 0.19 + u * 1.04)
+    }
+    anchor.copy(visitor.mesh.position)
+    anchor.y = 1.98
+  }
+  update(0.016)
+  return { mesh: visitor.mesh, anchor, update }
 }

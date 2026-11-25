@@ -1,3 +1,5 @@
+import { mountWorkshop, type Workshop } from './workshop'
+import { isStation } from './voxel/workroom-plan'
 import { openVoiceSettings } from './npc-voices'
 import { receiveCaptain } from './edition-transfer'
 import { firstWatchNote } from './handbook'
@@ -20,7 +22,7 @@ import {
   type Command,
 } from './model'
 import { renderInterior, type InteriorView } from './interiors'
-import { npcAtPort, type ContactWriter } from './characters'
+import { type ContactWriter } from './characters'
 import { mountHarbor } from './harbor'
 import { mountPlaytestChat } from './playtest-chat'
 import { openPrologue } from './prologue'
@@ -43,6 +45,7 @@ let view: View = state.drill
       ? 'battle'
       : 'voyage'
     : 'harbor'
+let workshop: Workshop | undefined
 let battleUnmount: (() => void) | undefined
 let renderToken = 0
 function drawNotice() {
@@ -75,7 +78,6 @@ const recordContact: ContactWriter = command => {
 function navigate(next: View) {
   if (state.voyage && next !== 'battle' && next !== 'voyage') return
   bell('select')
-  if (next === 'authority') recordContact({type: 'visitNpc', npc: npcAtPort(state.port, 'authority')})
   view = next
   render()
   window.scrollTo({ top: 0, behavior: 'instant' })
@@ -110,6 +112,13 @@ function dispatch(command: Command) {
 
 function render() {
   const token = ++renderToken
+  if (workshop && isStation(view) && workshop.key === state.port + '/' + view) {
+    main.dataset.saved = String(stored)
+    workshop.refresh()
+    return
+  }
+  workshop?.dispose()
+  workshop = undefined
   battleUnmount?.()
   battleUnmount = undefined
   harborUnmount?.()
@@ -189,6 +198,8 @@ function render() {
               : leg && dispatch({ type: 'resolveBattle', id: leg.id, result: 'escaped', hull: state.ship.hull }),
           )
       })
+  } else if (isStation(view)) {
+    workshop = mountWorkshop(main, view, () => state, dispatch, navigate, recordContact)
   } else renderInterior(main, view as InteriorView, state, dispatch, navigate, recordContact)
 }
 
