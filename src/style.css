@@ -567,6 +567,13 @@ button {
   font-size: 12px;
   color: #b6c3b9;
 }
+.ship-model-link {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 5px 0;
+  color: #efd69b;
+  text-underline-offset: 3px;
+}
 .vessel-sheet dl {
   display: flex;
   justify-content: space-between;

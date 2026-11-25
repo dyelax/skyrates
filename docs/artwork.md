@@ -87,3 +87,9 @@ A separate ImageGen sheet supplies sixteen front-facing character materials in t
 The four original ports and the two relit quays supply the camera view. Small depth masks follow the architecture, sails, foliage and foreground. Each named dockside speaker has hand-registered ImageGen profile, three-quarter and facing poses. The two relit quays have their own exposure-matched strips. The silent working pose is part of the original plate.
 
 ImageGen supplied eight new market and shipyard paintings and Pilot Sen’s office. Together with the established office and civic art these give all sixteen rooms their own stage. Service points use coordinates on the same painting as the camera. The navy and ivory [Harbor Watch cutter](../public/art/watch-top.webp) joins the original overhead Wayfarer, Cinder Wasp and deckhand sprites in combat.
+
+## Wayfarer model study
+
+ImageGen painted the [side elevation](../public/study/wayfarer-elevation.webp), the [unrigged deck](../public/study/wayfarer-deck.webp), the [transom](../public/study/wayfarer-stern.webp) and the [bow](../public/study/wayfarer-bow.webp). The hull uses solid curved sections, a domed gallery, round masts, cambered sails, paired shrouds and ladders. The study keeps these original sheets at hand for color registration. The game’s battle sprite remains its own lightweight artwork.
+
+Run `python3 tools/build_wayfarer.py` with Pillow and NumPy to regenerate the model files. The baker stores exterior square faces of a solid cubic lattice at two resolutions. Only the model study downloads them.

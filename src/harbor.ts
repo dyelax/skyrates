@@ -223,7 +223,7 @@ export function mountHarbor(
   function manifest() {
     const hull = Math.round((state.ship.hull / state.ship.maxHull) * 100)
     overlay.innerHTML = `<section class="vessel-sheet" role="dialog" aria-labelledby="vessel-name"><div class="popover-top"><span class="ink-label">Ship’s papers</span><button type="button" data-close aria-label="Close ship manifest">${icon('x')}</button></div>
-      <img src="art/kestrel.webp" alt="Solar-sail schooner in profile"><h2 id="vessel-name">The Wayfarer</h2><p>Lift-keel schooner</p>
+      <img src="art/kestrel.webp" alt="Solar-sail schooner in profile"><h2 id="vessel-name">The Wayfarer</h2><p>Lift-keel schooner <a class="ship-model-link" href="./study.html">Inspect 3D model</a></p>
       <dl><div><dt>${icon('shield')} Hull</dt><dd>${hull}%</dd></div><div><dt>${icon('package')} Hold</dt><dd>${cargoUsed(state)} / ${state.ship.hold}</dd></div><div><dt>${icon('users')} Crew</dt><dd>${state.ship.crew} hands</dd></div></dl>
       <button type="button" class="gold-action" data-go="chart">${icon('compass')} Plot a course ${icon('arrow-right')}</button></section>`
     overlay.querySelector<HTMLElement>('[data-close]')!.focus({ preventScroll: true })
@@ -289,7 +289,7 @@ export function mountHarbor(
         return
       }
       if (ev.key === 'Tab') {
-        const focus = Array.from(overlay.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'))
+        const focus = Array.from(overlay.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]'))
         if (focus.length && ev.shiftKey && focus[0] === document.activeElement) {
           ev.preventDefault()
           focus.at(-1)?.focus()
