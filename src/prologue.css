@@ -24,24 +24,10 @@
 }
 .prologue-frames img {
   object-fit: cover;
-  opacity: 0;
-  transition: opacity 0.9s;
-  transform: scale(1.07);
+  visibility: hidden;
 }
 .prologue-frames img.showing {
-  opacity: 1;
-  animation: prologue-travel 18s ease-out both;
-}
-.prologue.held img {
-  animation-play-state: paused;
-}
-@keyframes prologue-travel {
-  from {
-    transform: scale(1.07) translateX(var(--camera-x));
-  }
-  to {
-    transform: scale(1.155) translateX(0);
-  }
+  visibility: visible;
 }
 .prologue-letterbox {
   background: linear-gradient(
@@ -127,13 +113,8 @@
   width: clamp(22px, 4vw, 70px);
   background: #e3cf9e45;
 }
-.prologue-reel i::after {
-  content: '';
-  display: block;
-  height: 100%;
+.prologue-reel i.read {
   background: #efcf8b;
-  transform: scaleX(var(--progress, 0));
-  transform-origin: left;
 }
 @media (max-height: 460px) {
   .prologue-copy {
@@ -148,13 +129,5 @@
   .prologue-copy p {
     font-size: 0.94rem;
     max-width: 85%;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .prologue-frames img.showing {
-    animation: none;
-  }
-  .prologue-frames img {
-    transition: none;
   }
 }

@@ -1,5 +1,4 @@
 import Phaser from 'phaser'
-import { CloudDeck } from './cloud-deck'
 import type { WeatherReport } from './weather'
 import { paintedWeather } from './scene-weather'
 import {
@@ -195,14 +194,12 @@ class SkyBattle extends Phaser.Scene {
   private foeView!: ShipView
   private area: FlightArea
   private veil!: Phaser.GameObjects.Rectangle
-  private sky!: CloudDeck
+  private sky!: Phaser.GameObjects.Image
   private overlays!: Phaser.GameObjects.Graphics
   private paths!: Phaser.GameObjects.Graphics
   private shots: Projectile[] = []
   private sparks: Spark[] = []
-  private clock = 0
   private aiDelay = 3.5
-  private sprayIn = 0
   private hudIn = 0
   private bannerTTL = 3
   private pressed = new Set<string>()
@@ -276,7 +273,8 @@ class SkyBattle extends Phaser.Scene {
         return
       }
     }
-    this.sky = new CloudDeck(this, this.area.width, this.area.height)
+    this.sky = this.add.image(0, 0, 'sea').setDepth(0)
+    this.fitSkyPainting(this.area)
     this.veil = this.add
       .rectangle(0, 0, this.area.width, this.area.height, 0x0a2133, 0.18)
       .setOrigin(0)
@@ -285,8 +283,8 @@ class SkyBattle extends Phaser.Scene {
     this.playerView = this.makeShip('schooner', 114)
     this.foeView = this.makeShip('opponent', 110)
     this.root.dataset.shipRenderer = 'illustrated'
-    this.updateShipView(this.playerView, this.player, 0)
-    this.updateShipView(this.foeView, this.foe, 1.75)
+    this.updateShipView(this.playerView, this.player)
+    this.updateShipView(this.foeView, this.foe)
     this.overlays = this.add.graphics().setDepth(7)
     this.ready = true
     this.bindControls()
@@ -359,8 +357,13 @@ class SkyBattle extends Phaser.Scene {
     if (this.grapple) objects.push(this.grapple.center, this.grapple.startA, this.grapple.startB)
     const factor = (next.bottom - next.top) / Math.max(1, previous.bottom - previous.top)
     for (const p of objects) p.y = next.top + (p.y - previous.top) * factor
-    this.sky?.resize(next.width, next.height)
+    if (this.sky) this.fitSkyPainting(next)
     this.veil?.setSize(next.width, next.height)
+  }
+
+  private fitSkyPainting(area: FlightArea) {
+    this.sky.setPosition(area.width / 2, area.height / 2)
+      .setScale(Math.max(area.width / this.sky.width, area.height / this.sky.height))
   }
 
   disconnect() {
@@ -559,15 +562,14 @@ class SkyBattle extends Phaser.Scene {
     return { hull, shadow, scaleX: scale, scaleY: scale }
   }
 
-  private updateShipView(view: ShipView, ship: Vessel, phase: number) {
-    const float = Math.sin(this.clock * 2.1 + phase)
+  private updateShipView(view: ShipView, ship: Vessel) {
     const heel = 1 - Math.abs(ship.heel) * 0.13
     view.hull
-      .setPosition(ship.x, ship.y + float * 0.8)
+      .setPosition(ship.x, ship.y)
       .setRotation(ship.heading + ship.heel * 0.025)
-      .setScale(view.scaleX * (1 + float * 0.003), view.scaleY * heel)
+      .setScale(view.scaleX, view.scaleY * heel)
     view.shadow
-      .setPosition(ship.x + 3.5, ship.y + 8 + float)
+      .setPosition(ship.x + 3.5, ship.y + 8)
       .setRotation(ship.heading)
       .setScale(view.scaleX, view.scaleY * heel)
   }
@@ -605,7 +607,7 @@ class SkyBattle extends Phaser.Scene {
     this.shots.push({ ...shot, enemy })
     battleSound('cannon')
     this.burst(shot, enemy ? COPPER : GOLD, 11, 51)
-    this.cameras.main.shake(72, enemy ? 0.00065 : 0.0014)
+
     return true
   }
 
@@ -845,7 +847,7 @@ class SkyBattle extends Phaser.Scene {
     this.course = undefined
     if (elapsed === 0) {
       this.tell(`Grapples fast • ${this.opts.crew} hands boarding`, 2.35)
-      this.cameras.main.shake(180, 0.004)
+
     }
     this.syncHUD()
   }
@@ -938,11 +940,10 @@ class SkyBattle extends Phaser.Scene {
     ] as const) {
       const aft = localPoint(ship, -37, 0),
         nose = localPoint(ship, 26, 0)
-      const pulse = 0.8 + Math.sin(this.clock * 3.8) * 0.2
       for (const width of [18, 11, 6])
-        g.lineStyle(width, tint, pulse * 0.06).lineBetween(aft.x, aft.y + 3, nose.x, nose.y + 3)
+        g.lineStyle(width, tint, 0.05).lineBetween(aft.x, aft.y + 3, nose.x, nose.y + 3)
       const end = localPoint(ship, -43 - ship.throttle * 4, 0)
-      g.lineStyle(3, tint, 0.62 * pulse).lineBetween(aft.x, aft.y, end.x, end.y)
+      g.lineStyle(3, tint, 0.56).lineBetween(aft.x, aft.y, end.x, end.y)
     }
     for (const side of ['port', 'starboard'] as const) {
       if (!p.guns.some((gun) => gun.side === side)) continue
@@ -981,7 +982,7 @@ class SkyBattle extends Phaser.Scene {
         .lineBetween(c.x, c.y + 3, c.x, c.y + 9)
     }
     if (this.escaping) {
-      g.lineStyle(3, FAIR_WIND, 0.55 + Math.sin(this.clock * 4) * 0.15).strokeRoundedRect(
+      g.lineStyle(3, FAIR_WIND, 0.6).strokeRoundedRect(
         11,
         this.area.top + 11,
         this.area.width - 22,
@@ -1008,38 +1009,6 @@ class SkyBattle extends Phaser.Scene {
   private effects(dt: number) {
     const gfx = this.overlays
     gfx.clear()
-    this.sprayIn -= dt
-    if (!this.grapple && this.sprayIn <= 0) {
-      this.sprayIn = 0.1
-      for (const [ship, color] of [
-        [this.player, FAIR_WIND],
-        [this.foe, 0xfbb494],
-      ] as const) {
-        const p = localPoint(ship, -39, 0)
-        const size = 1 + ship.throttle * 0.4,
-          duration = 0.52 + ship.throttle * 0.07
-        this.sparks.push({
-          ...p,
-          vx: -ship.vx * 0.32 + Math.random() * 8 - 4,
-          vy: -ship.vy * 0.32 - 5,
-          size,
-          duration,
-          ttl: duration,
-          color,
-        })
-        if (ship.hull / ship.maxHull < 0.4) {
-          this.sparks.push({
-            ...localPoint(ship, 4, 4),
-            vx: 6,
-            vy: -14,
-            ttl: 1.3,
-            duration: 1.3,
-            size: 5 + Math.random() * 4,
-            color: 0x39424b,
-          })
-        }
-      }
-    }
     for (let i = this.sparks.length - 1; i >= 0; i--) {
       const s = this.sparks[i]
       s.ttl -= dt
@@ -1068,10 +1037,8 @@ class SkyBattle extends Phaser.Scene {
   update(_time: number, delta: number) {
     if (!this.ready || this.ended || this.pausedDuel) return
     const dt = Math.min(0.045, delta / 1000)
-    this.clock += dt
     this.bannerTTL -= dt
     if (this.bannerTTL <= 0) this.banner.classList.remove('visible')
-    this.sky.update(dt, this.player, this.foe, this.wind, this.drill ? 0 : this.opts.weather.severity)
     this.paths.clear()
     if (this.grapple) this.boardingTick(dt)
     else {
@@ -1121,7 +1088,7 @@ class SkyBattle extends Phaser.Scene {
           target.vy += s.vy * 0.018
           this.burst(s, s.enemy ? COPPER : GOLD, 18, 70)
           battleSound('hit')
-          this.cameras.main.shake(100, 0.002)
+
           if (this.drill === 'fire' && !s.enemy) {
             this.teach('board')
             break
@@ -1145,8 +1112,8 @@ class SkyBattle extends Phaser.Scene {
     for (const [i, ship] of [this.player, this.foe].entries()) {
       this.chartLabels[i].setPosition(ship.x, ship.y - 52).setVisible(!this.grapple)
     }
-    this.updateShipView(this.playerView, this.player, 0)
-    this.updateShipView(this.foeView, this.foe, 1.75)
+    this.updateShipView(this.playerView, this.player)
+    this.updateShipView(this.foeView, this.foe)
     this.effects(dt)
     this.hudIn -= dt
     if (this.hudIn <= 0) {

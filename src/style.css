@@ -352,9 +352,6 @@ button {
     0 1px 5px #100d13b5,
     0 0 0 3px #1a242b33;
   color: #fae6b8;
-  transition:
-    background 0.15s,
-    transform 0.15s;
 }
 .place-pin:after {
   content: '';
@@ -377,27 +374,6 @@ button {
   border-color: #fff0b2;
   background: #efd397;
 }
-.quay-spot.commission-spot .place-pin:before {
-  content: '';
-  position: absolute;
-  inset: -5px;
-  border: 1px solid #f8db98aa;
-  border-radius: 50%;
-  animation: signal 3.4s ease-out infinite;
-}
-@keyframes signal {
-  0% {
-    transform: scale(0.8);
-    opacity: 0;
-  }
-  28% {
-    opacity: 0.8;
-  }
-  100% {
-    transform: scale(1.3);
-    opacity: 0;
-  }
-}
 .place-label {
   position: absolute;
   left: var(--x);
@@ -412,9 +388,6 @@ button {
   background: linear-gradient(130deg, #172a30f2, #122026ee);
   padding: 6px 11px 7px;
   box-shadow: 0 4px 12px #11162255;
-  transition:
-    opacity 0.16s,
-    transform 0.16s;
   color: #fff1d8;
 }
 .place-label b {
@@ -567,13 +540,6 @@ button {
   font-size: 12px;
   color: #b6c3b9;
 }
-.ship-model-link {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 5px 0;
-  color: #efd69b;
-  text-underline-offset: 3px;
-}
 .vessel-sheet dl {
   display: flex;
   justify-content: space-between;
@@ -637,9 +603,6 @@ button {
   pointer-events: none;
   padding: 8px 15px;
   opacity: 0;
-  transition:
-    opacity 0.18s,
-    transform 0.18s;
   font-size: 13px;
   text-align: center;
 }

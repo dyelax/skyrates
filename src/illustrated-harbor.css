@@ -1,21 +1,6 @@
-.quay .quay-depth {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  pointer-events: none;
-}
-.quay .quay-depth.ready { opacity: 1; }
-.quay .quay-spot {
-  translate: calc(var(--quay-x, 0px) * var(--ink-depth, 0)) calc(var(--quay-y, 0px) * var(--ink-depth, 0));
-}
-.quay [data-illustrated-character] {
-  translate: calc(var(--quay-x, 0px) * var(--figure-depth, 0)) calc(var(--quay-y, 0px) * var(--figure-depth, 0));
-}
 /* Keep the geometry of the original paintings intact on a narrow screen.
    The dock pans under the captain's instruments, including on touch. */
-.quay .quay-scroll { overflow-y: auto; overscroll-behavior: contain; }
+.quay .quay-scroll { isolation: isolate; overflow-y: auto; overscroll-behavior: contain; }
 .quay .quay-track {
   width: max(100%, calc(100svh * 1672 / 941));
   height: max(100%, calc(100vw * 941 / 1672));
@@ -29,11 +14,22 @@
   color: #fae9bf;
   backdrop-filter: blur(4px);
 }
-.quay .weather-film[data-sky='haze'] { --air: #ecd7ad30; }
-.quay .weather-film[data-sky='haze']::before { opacity: .45; }
 .quay .pan-hints { top: 58%; }
 @media (hover: hover) and (pointer: fine) {
   .quay:not(.show-places) .quay-spot:not(:hover, :focus-visible, .commission-spot) .place-pin {
     opacity: 0;
   }
+}
+/* Set the name and speech marker beside the worker, leaving eyes and hands visible. */
+.quay .quay-spot.person .place-pin,
+.quay .quay-spot.person .place-label {
+  left: calc(var(--x) + 56%);
+  top: calc(var(--y) + 8%);
+}
+.quay .quay-spot.person .place-label {
+  transform: translate(-16%, calc(-100% - 14px));
+}
+.quay .quay-spot.person:is(:hover, :focus-visible) .place-label,
+.quay.show-places .quay-spot.person .place-label {
+  transform: translate(-16%, calc(-100% - 22px));
 }
