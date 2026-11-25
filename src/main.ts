@@ -107,6 +107,7 @@ function render() {
           log: 'Captain’s log',
           battle: 'Battle stations',
           shipyard: 'Shipyard',
+          civic: 'Local institution',
           authority: 'Port Authority',
           voyage: 'On passage',
         }[view]) + ' · Skyrates'

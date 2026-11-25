@@ -17,6 +17,7 @@ import {
   type PortId,
   type UpgradeId,
 } from './data'
+import { allotment, CITY_ECONOMY, exchangeCycle } from './city-economy'
 export * from './data'
 
 export interface Quote {
@@ -38,7 +39,14 @@ export interface Ship {
 }
 export interface MarketVisit {
   day: number
-  prices: Record<GoodId, Quote>
+  prices: Partial<Record<GoodId, Quote>>
+  stock?: Partial<Record<GoodId, number>>
+}
+export interface Exchange {
+  cycle: number
+  purchases: Partial<Record<PortId, Partial<Record<GoodId, number>>>>
+  orders: PortId[]
+  services: PortId[]
 }
 export interface Freight {
   from: PortId
@@ -70,6 +78,7 @@ export interface GameState {
   voyageCount: number
   voyage: Voyage | null
   drill: DrillStage | null
+  exchange: Exchange
   pricesSeen: Partial<Record<PortId, MarketVisit>>
   freight: Freight | null
   log: { day: number; text: string }[]
@@ -79,7 +88,7 @@ export interface GameState {
 
 export type BattleResult = 'won' | 'boarded' | 'escaped' | 'lost'
 export type Command =
-  | { type: 'acceptMission' | 'presentCommission' | 'deliverCertificate' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' | 'practiceDrill' }
+  | { type: 'acceptMission' | 'presentCommission' | 'deliverCertificate' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' | 'practiceDrill' | 'fillCityOrder' | 'useCityService' }
   | { type: 'endDrill'; skip: boolean }
   | { type: 'buy' | 'sell'; good: GoodId; quantity: number }
   | { type: 'sail'; to: PortId }
@@ -108,6 +117,10 @@ export function initialState(): GameState {
       provisions: { quantity: 0, cost: 0 },
       glass: { quantity: 0, cost: 0 },
       machinery: { quantity: 0, cost: 0 },
+      grafts: { quantity: 0, cost: 0 },
+      prisms: { quantity: 0, cost: 0 },
+      governors: { quantity: 0, cost: 0 },
+      soundings: { quantity: 0, cost: 0 },
     },
     ship: { hold: 12, hull: 100, maxHull: 100, guns: 0, cannons: 1, crew: 6, veterans: 1 },
     level: 1,
@@ -121,6 +134,7 @@ export function initialState(): GameState {
     voyageCount: 0,
     voyage: null,
     drill: null,
+    exchange: freshExchange(1),
     pricesSeen: {},
     freight: null,
     log: [{ day: 1, text: 'Took the helm at Sunstep Quay. Harbormaster Vale has a commission waiting.' }],
@@ -153,15 +167,43 @@ export function priceAt(state: GameState, port: PortId, good: GoodId): Quote {
   return { buy, sell }
 }
 
-function rememberMarket(state: GameState) {
-  state.pricesSeen[state.port] = {
+function freshExchange(day: number): Exchange {
+  return { cycle: exchangeCycle(day), purchases: {}, orders: [], services: [] }
+}
+
+function currentExchange(state: GameState): Exchange {
+  return state.exchange.cycle === exchangeCycle(state.day) ? state.exchange : freshExchange(state.day)
+}
+
+export function stockAt(state: GameState, port: PortId, good: GoodId): number {
+  const bought = currentExchange(state).purchases[port]?.[good] ?? 0
+  return Math.max(0, allotment(port, good, state.day) - bought)
+}
+
+function rememberMarket(state: GameState, port = state.port) {
+  state.pricesSeen[port] = {
     day: state.day,
-    prices: {
-      provisions: priceAt(state, state.port, 'provisions'),
-      glass: priceAt(state, state.port, 'glass'),
-      machinery: priceAt(state, state.port, 'machinery'),
-    },
+    prices: Object.fromEntries(GOOD_IDS.map(good => [good, priceAt(state, port, good)])),
+    stock: Object.fromEntries(GOOD_IDS.map(good => [good, stockAt(state, port, good)])),
   }
+}
+
+export function cityOrder(state: GameState) {
+  const order = CITY_ECONOMY[state.port].order
+  const pay = order.quantity * priceAt(state, state.port, order.good).sell + order.premium
+  const filled = currentExchange(state).orders.includes(state.port)
+  return { ...order, pay, filled, ready: !filled && state.cargo[order.good].quantity >= order.quantity }
+}
+
+export function cityService(state: GameState) {
+  const used = currentExchange(state).services.includes(state.port)
+  if (state.port === 'glasshouse') {
+    return { name: 'Reserve a cooling rack', description: 'Bring two solar glass and eight crowns. The choir will anneal one optical prism blank for your hold.', used, ready: !used && state.coins >= 8 && state.cargo.glass.quantity >= 2 }
+  }
+  if (state.port === 'meridian') {
+    return { name: 'Buy the pilot dispatch', description: 'Six crowns buys today’s courier sheet of prices and remaining lots at all four ports. Read it in your sky chart.', used, ready: !used && state.coins >= 6 }
+  }
+  return null
 }
 
 export function boardingStrength(state: GameState): number {
@@ -218,6 +260,11 @@ export function freightOffer(state: GameState): Omit<Freight, 'from'> | null {
 }
 
 export function upgradeOffer(state: GameState, upgrade: UpgradeId): UpgradeOffer {
+  const offer = shipOffer(state, upgrade)
+  return { ...offer, available: offer.available && CITY_ECONOMY[state.port].upgrades.includes(upgrade) }
+}
+
+function shipOffer(state: GameState, upgrade: UpgradeId): UpgradeOffer {
   const ship = state.ship
   switch (upgrade) {
     case 'hold':
@@ -317,6 +364,13 @@ function arrive(state: GameState, encounterOutcome = '') {
   if (encounterOutcome) state.notice = encounterOutcome + ' ' + state.notice
 }
 
+function releaseCargo(lot: CargoLot, quantity: number) {
+  const cost = Math.round((lot.cost * quantity) / lot.quantity)
+  lot.quantity -= quantity
+  lot.cost -= cost
+  return cost
+}
+
 function trade(state: GameState, action: Extract<Command, { good: GoodId }>): boolean {
   const { good, quantity } = action
   if (!GOOD_IDS.includes(good) || !Number.isSafeInteger(quantity) || quantity <= 0) return false
@@ -324,7 +378,10 @@ function trade(state: GameState, action: Extract<Command, { good: GoodId }>): bo
   const quote = priceAt(state, state.port, good)
   if (action.type === 'buy') {
     const total = quantity * quote.buy
-    if (total > state.coins || quantity > state.ship.hold - cargoUsed(state)) return false
+    if (total > state.coins || quantity > state.ship.hold - cargoUsed(state) || quantity > stockAt(state, state.port, good)) return false
+    state.exchange = currentExchange(state)
+    const bought = state.exchange.purchases[state.port] ??= {}
+    bought[good] = (bought[good] ?? 0) + quantity
     state.coins -= total
     lot.quantity += quantity
     lot.cost += total
@@ -332,15 +389,14 @@ function trade(state: GameState, action: Extract<Command, { good: GoodId }>): bo
   } else {
     if (quantity > lot.quantity) return false
     const total = quantity * quote.sell
-    const cost = Math.round((lot.cost * quantity) / lot.quantity)
-    lot.quantity -= quantity
-    lot.cost -= cost
+    const cost = releaseCargo(lot, quantity)
     state.coins += total
     const profit = total - cost
     if (profit > 0) experience(state, Math.min(6, profit))
     const result = profit === 0 ? 'Broke even.' : `${Math.abs(profit)}-crown ${profit > 0 ? 'profit' : 'loss'}.`
     record(state, `Sold ${quantity} ${GOODS[good].name.toLowerCase()} for ${total} crowns. ${result}`)
   }
+  rememberMarket(state)
   return true
 }
 
@@ -426,6 +482,34 @@ function applyDockCommand(state: GameState, action: Command): boolean {
     case 'buy':
     case 'sell':
       return trade(state, action)
+    case 'fillCityOrder': {
+      const order = cityOrder(state)
+      if (!order.ready) return false
+      const cost = releaseCargo(state.cargo[order.good], order.quantity)
+      state.exchange = currentExchange(state)
+      state.exchange.orders.push(state.port)
+      state.coins += order.pay
+      experience(state, 6)
+      record(state, `Filled “${order.name}” for ${order.pay} crowns. Cargo cost ${cost} crowns. The receipt bears the seal of the ${CITY_ECONOMY[state.port].institution}.`)
+      return true
+    }
+    case 'useCityService': {
+      if (!cityService(state)?.ready) return false
+      state.exchange = currentExchange(state)
+      state.exchange.services.push(state.port)
+      if (state.port === 'glasshouse') {
+        const inputCost = releaseCargo(state.cargo.glass, 2)
+        state.coins -= 8
+        state.cargo.prisms.quantity++
+        state.cargo.prisms.cost += inputCost + 8
+        record(state, 'The choir packed one annealed prism blank in your hold. The glass and rack fee are entered in its cost.')
+      } else {
+        state.coins -= 6
+        for (const port of PORT_IDS) rememberMarket(state, port)
+        record(state, 'Your chart now holds today’s prices and available lots from every exchange.')
+      }
+      return true
+    }
     case 'acceptMission':
       if (state.port !== BEACON_COMMISSION.home || state.mission !== 'offered') return false
       state.mission = 'accepted'
@@ -573,7 +657,20 @@ function validQuote(value: unknown): value is Quote {
 function validVisit(value: unknown): value is MarketVisit {
   if (!object(value) || !integer(value.day, 1) || !object(value.prices)) return false
   const prices = value.prices
-  return GOOD_IDS.every((good) => validQuote(prices[good]))
+  return ['provisions', 'glass', 'machinery'].every(good => validQuote(prices[good]))
+    && Object.entries(prices).every(([good, quote]) => GOOD_IDS.includes(good as GoodId) && validQuote(quote))
+    && (value.stock === undefined || validCounts(value.stock))
+}
+
+function validCounts(value: unknown): boolean {
+  return object(value) && Object.entries(value).every(([key, number]) => GOOD_IDS.includes(key as GoodId) && integer(number))
+}
+
+function validExchange(value: unknown, day: number): boolean {
+  if (!object(value) || !integer(value.cycle) || value.cycle > exchangeCycle(day) || !object(value.purchases)) return false
+  const ports = (list: unknown) => Array.isArray(list) && list.every(isPort) && new Set(list).size === list.length
+  return ports(value.orders) && ports(value.services) &&
+    Object.entries(value.purchases).every(([port, counts]) => isPort(port) && validCounts(counts))
 }
 
 function validVoyage(value: unknown, currentPort: unknown, voyageCount: unknown): boolean {
@@ -665,6 +762,7 @@ function validSave(value: unknown): value is GameState {
   if (!value.log.every((entry) => object(entry) && integer(entry.day, 1) && typeof entry.text === 'string'))
     return false
   if (!validVoyage(value.voyage, value.port, value.voyageCount) || !validFreight(value.freight)) return false
+  if (!validExchange(value.exchange, value.day)) return false
   if (!validShip(value.ship) || !object(value.cargo) || !object(value.pricesSeen)) return false
   const cargo = value.cargo
   let quantity = 0
@@ -700,6 +798,12 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
         if (value.pendingNotices === undefined) value.pendingNotices = []
         if (value.certificate === undefined) value.certificate = value.mission === 'lit' ? 'aboard' : 'none'
         if (value.drill === undefined) value.drill = null
+        if (value.exchange === undefined && integer(value.day, 1) && object(value.cargo)) {
+          value.exchange = freshExchange(value.day)
+          for (const good of ['grafts', 'prisms', 'governors', 'soundings']) {
+            if (value.cargo[good] === undefined) value.cargo[good] = { quantity: 0, cost: 0 }
+          }
+        }
         if (object(value.ship) && value.ship.cannons === undefined) {
           value.ship.cannons = value.voyageCount === 0 && value.ship.guns === 0 ? 1 : 4
         }
