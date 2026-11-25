@@ -6,6 +6,7 @@ import { openPrologue } from './prologue'
 import { voyageWeather } from './weather'
 import { paintedWeather } from './scene-weather'
 import './interiors.css'
+import { startDialogue } from './character-dialogue'
 import { characterContext, npcAtPort, npcName, type ContactWriter } from './characters'
 import { mountStationTalk } from './dock-talk'
 import { CITY_ECONOMY, nextPosting, RARITY } from './city-economy'
@@ -521,6 +522,15 @@ export function renderInterior(
     (insideRoom ? `<div class="sk-room-overlay"><div class="sk-room-ledger">${content}</div></div>` : content)
   if (view === 'authority') {
     const npc = npcAtPort(state.port, 'authority')
+    const speaker = page.querySelector<HTMLElement>('.sk-office-dialogue')
+    if (speaker) {
+      const talk = document.createElement('button')
+      talk.type = 'button'
+      talk.className = 'sk-button sk-secondary'
+      talk.textContent = 'Speak freely with ' + npcName(npc)
+      talk.onclick = () => startDialogue(npc,recordContact)
+      speaker.append(talk)
+    }
     for (const topic of page.querySelectorAll<HTMLDetailsElement>('[data-contact-topic]')) {
       topic.addEventListener('toggle', () => {
         if (topic.open) recordContact({type: 'rememberNpc', npc, memory:'You asked me, “'+topic.querySelector('summary')!.textContent+'”'})

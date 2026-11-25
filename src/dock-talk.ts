@@ -1,4 +1,5 @@
 import './dock-talk.css'
+import { startDialogue } from './character-dialogue'
 import { characterContext, npcAtPort, type ContactWriter, type NpcId } from './characters'
 import { CITY_ECONOMY } from './city-economy'
 import { GOODS, INVOICE_COST, PORTS, priceAt, TENDER_DEED, type GameState } from './model'
@@ -241,6 +242,7 @@ export function mountStationTalk(
         speech.focus({ preventScroll: true })
       })
     }
+    addReply('Speak freely', () => startDialogue(id, recordContact))
     for (const next of local.topics) {
       if (next !== topic) addReply(next.ask, () => speak(next))
     }
