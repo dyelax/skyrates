@@ -42,3 +42,5 @@ npm run dev
 The TypeScript game simulation is independent of the interface. Port definitions and chapter tuning live in [the game data](src/data.ts). Phaser handles the real-time encounters, and a lightweight WebGL effect adds atmospheric light to the illustrated quays. [Artwork and production prompts](docs/artwork.md) · [Bundled third-party notices](public/licenses)
 
 The public game is served from the root of the `gh-pages` branch. Publish the contents of a tested `dist/` build to that branch with a `.nojekyll` file. The `main` branch contains the source and editable game data.
+
+[Design research and first-voyage playtests](docs/design/merchant-and-pirate-games.md)
