@@ -1,4 +1,4 @@
-import { PORTS, type GameState } from './model'
+import { EMPTY_HOLD_TOLL, PORTS, type GameState } from './model'
 import { CITY_ECONOMY } from './city-economy'
 import './handbook.css'
 
@@ -20,6 +20,10 @@ export function openHandbook(state: GameState) {
     [
       'Why underwrite the lens?',
       'Vale wants the mail lane open. You advance 240 crowns for Iona’s lens. First light earns your outer-route charter and a captain ability. Deliver the relighting certificate to Pilot Sen at Meridian to receive 300 crowns. The payment leaves you 60 crowns ahead.',
+    ],
+    [
+      'What does a raider demand?',
+      `A raider demands one crate of your highest-valued cargo or its home-port list price in crowns. Empty holds owe ${EMPTY_HOLD_TOLL} crowns. Paying guarantees passage. Refuse and take the helm to fight or order a breakaway and reach an edge. On defeat the raider takes the named crate, or up to ${EMPTY_HOLD_TOLL} of your existing crowns from an empty hold. Commission papers and bonded mail travel safely. The Harbor Watch exercise is free.`,
     ],
     [
       'How do I fight and board?',

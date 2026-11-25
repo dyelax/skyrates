@@ -29,7 +29,7 @@ On your first departure from Sunstep, the Harbor Watch runs a chalk-round exerci
 
 The arrow on the wind gauge points downwind. Watch your heading as the wind carries the hull sideways. Rounds curve downwind in flight. Set the wind sight to allow for drift on long shots. The Harbor Watch runs its exercise in sheltered air.
 
-Each cannon refit adds a gun until all four stations are filled. A side with two fitted guns gains a broadside order. Each cannon reloads separately. Turning brings a fresh battery to bear. Contact brings the crews together, and crew size, experience, and hull condition influence the outcome. Captains can also slip past a raider before engaging.
+Each cannon refit adds a gun until all four stations are filled. A side with two fitted guns gains a broadside order. Each cannon reloads separately. Turning brings a fresh battery to bear. Contact brings the crews together, and crew size, experience, and hull condition influence the outcome. A skyway raider demands your most valuable trade crate or its listed value in crowns. An empty hold owes five crowns. Pay for safe passage, or refuse and take the helm to fight or run for the edge. Defeat forfeits the named crate or up to five crowns from an empty hold. Commission papers and bonded mail stay aboard.
 
 ## Local edition
 

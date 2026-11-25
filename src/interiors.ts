@@ -1,4 +1,5 @@
 import { artwork } from './artwork'
+import { RAIDER_CANNONS } from './battle-model'
 import { seasonalPosting } from './seasonal-trade'
 import { openHandbook } from './handbook'
 import { routeWeather, seasonAt, CLIMATES } from './weather'
@@ -21,6 +22,8 @@ import {
   PORTS,
   PORT_IDS,
   boardingStrength,
+  raiderToll,
+  seizureLabel,
   cargoUsed,
   freightOffer,
   stockAt,
@@ -432,12 +435,18 @@ function voyage(state: GameState, ui: Controls) {
       ui.button('Give them a tow · 1 day', () => ui.act({ type: 'tender', help: true })) +
       ui.button('Hold your course', () => ui.act({ type: 'tender', help: false }), { secondary: true })
   } else if (leg.phase === 'raider') {
-    title = 'Sails on the bearing'
-    line = 'The approaching ship turns its guns broadside.'
-    copy = 'A raider is closing on your schooner. Take the helm and fight, or shake pursuit in the cloud banks.'
-    buttons =
-      ui.button('Take the helm', () => ui.act({ type: 'engage' })) +
-      ui.button('Evade the raider', () => ui.act({ type: 'evade' }), { secondary: true })
+    const toll = raiderToll(state)
+    const item = toll.good ? GOODS[toll.good].name.toLowerCase() : ''
+    title = 'A toll on the skyway'
+    line = item ? `“One crate of ${item}, Captain. Or ${toll.crowns} crowns. Then you may pass.”`
+      : `“Empty hold? Passage is ${toll.crowns} crowns, Captain.”`
+    const ownGuns = state.ship.cannons + (state.ship.cannons === 1 ? ' gun' : ' guns')
+    copy = `Lookout reports ${RAIDER_CANNONS} guns across both rails. You have ${ownGuns}, ${state.ship.hull}/${state.ship.maxHull} hull and ${state.coins} crowns. ` +
+      `Pay for safe passage. Refuse the toll and fight or run for an edge. Defeat costs ${seizureLabel(state)}. Papers and bonded mail stay aboard.`
+    buttons = (toll.good ? ui.button('Hand over 1 crate of ' + item, () => ui.act({ type: 'payToll', id: leg.id, payment: 'cargo' })) : '') +
+      ui.button('Pay ' + toll.crowns + ' crowns', () => ui.act({ type: 'payToll', id: leg.id, payment: 'crowns' }), { disabled: state.coins < toll.crowns }) +
+      ui.button('Refuse · take the helm', () => ui.act({ type: 'engage' }), { secondary: !!toll.good || state.coins >= toll.crowns })
+    if (!toll.good && state.coins < toll.crowns) copy += ' You cannot cover the toll.'
   } else if (leg.phase === 'battle') {
     title = 'Under fire'
     line = 'The gun crews stand ready.'
