@@ -1,17 +1,20 @@
 import './dock-talk.css'
+import { characterContext, npcAtPort, type ContactWriter, type NpcId } from './characters'
+import { CITY_ECONOMY } from './city-economy'
 import { GOODS, INVOICE_COST, PORTS, priceAt, TENDER_DEED, type GameState } from './model'
 
 type Destination = 'authority' | 'market' | 'shipyard' | 'chart' | 'log'
 interface Topic {
   ask: string
   answer: string
-  visit: { view: Destination }
+  visit?: { view: Destination }
+  recall?: boolean
 }
 interface Conversation {
   name: string
   role: string
   greeting: string
-  topics: [Topic, Topic]
+  topics: Topic[]
 }
 
 function conversation(state: GameState): Conversation {
@@ -131,11 +134,54 @@ export function mountDockTalk(
   host: HTMLElement,
   state: GameState,
   onClose: () => void,
+  recordContact: ContactWriter,
 ): void {
-  const local = conversation(state)
+  mountStationTalk(host, state, npcAtPort(state.port, 'dockworker'), onClose, recordContact)
+}
+
+const work: Record<NpcId, string> = {
+  moss: 'Spare a hand on that cart? The soft fruit goes to the kitchens. The green scions go to the winter garden.',
+  vale: 'I am checking the weights against the manifest. Bring a letter or a question and I can make room on the desk.',
+  nettle: 'There. The beam is level. You can watch me weigh the crate again if you like.',
+  joss: 'Listen to that cage climb. It ought to tick like a clock, all the way to the top terrace.',
+  sella: 'Hold that pane still. See how the flame stretches? That is where I need to grind.',
+  iona: 'The lamp glass is clean. The books are open. Which have you come to see?',
+  brin: 'A ship grew up in warm air like this one? I leave her seams a little room for the cold berth.',
+  tal: 'Give that blank another turn and watch the flame. If the edges line up, it can go upstairs.',
+  neri: 'Watch where you put your heels. I have two boats sharing this bollard until the shift bell.',
+  orr: 'These keel plates have to ring true before they leave the slip. Give me a moment and I will show you.',
+  rada: 'Two blows on the proof bell. Now listen to the plate sing back. We can fit another gun here when the hull is sound.',
+  fen: 'Walk on the ribs. The boards between them are the roof of somebody’s roots.',
+  sen: 'Come to the rail. You can tell which line has a balloon up by the way its shadow falls.',
+  uma: 'The folios travel under a silk wrap. The peaches go on top, unless you want to drink them.',
+  lask: 'You can feel a line start to fail before you see it. Keep one hand here. I will take the load.',
+  orin: 'That needle has been bouncing since dawn. I wait until a pilot tells me what the basket itself felt like.',
+}
+
+export function mountStationTalk(
+  host: HTMLElement,
+  state: GameState,
+  id: NpcId,
+  onClose: () => void,
+  recordContact: ContactWriter,
+): void {
+  state = recordContact({ type: 'visitNpc', npc: id })
+  const npc = characterContext(state,id)
+  const city = CITY_ECONOMY[state.port]
+  const quayLocal = id === npcAtPort(state.port,'dockworker')
+  const local: Conversation = quayLocal ? conversation(state) : {
+    name: npc.name, role: npc.role, greeting: work[id],
+    topics: [{ask:'What does this port need?', answer:city.order.need},{ask:'Where should I take a trade cargo?',answer:city.tradeLead}],
+  }
+  local.topics.push({ask:'How did you come to this work?',answer:npc.publicHistory})
+  if (npc.memories.length) local.topics.push({ ask:'Where did we leave off last time?', answer:npc.memories.at(-1)!, recall:true })
+  for (const [index,answer] of npc.confidences.entries()) {
+    local.topics.push({ask:index===0?'What matters to you here?':'What would you tell me in confidence?',answer})
+  }
   const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
   const panel = document.createElement('section')
-  panel.className = 'dock-talk'
+  panel.className = 'dock-talk' + (quayLocal ? '' : ' station-voice')
+  panel.dataset.npcId = id
   panel.setAttribute('role', 'dialog')
   panel.setAttribute('aria-label', 'Conversation with ' + local.name)
 
@@ -147,7 +193,7 @@ export function mountDockTalk(
   copy.className = 'talk-copy'
   const role = document.createElement('p')
   role.className = 'talk-role'
-  role.textContent = local.role
+  role.textContent = local.role + ' · ' + npc.relationship.label
   const name = document.createElement('h2')
   name.textContent = local.name
   const speech = document.createElement('p')
@@ -175,9 +221,11 @@ export function mountDockTalk(
     replies.append(button)
   }
   function speak(topic?: Topic) {
+    if (topic && !topic.recall) recordContact({type:'rememberNpc', npc:id, memory:'You asked me, “'+topic.ask+'”'})
     speech.textContent = topic?.answer ?? local.greeting
     replies.replaceChildren()
-    if (topic) {
+    const destination = topic?.visit?.view
+    if (destination) {
       addReply('Where can I find that?', () => {
         const directions: Record<Destination, string> = {
           authority: `Look for the port authority sign. ${PORTS[state.port].keeper} receives captains inside.`,
@@ -186,7 +234,7 @@ export function mountDockTalk(
           shipyard: 'Look for the workshop by the rigging. Ask the shipwright there.',
           log: 'It’s written in your captain’s log. Look for the book at your belt.',
         }
-        speech.textContent = directions[topic.visit.view]
+        speech.textContent = directions[destination]
         replies.replaceChildren()
         addReply('Ask something else', () => speak())
         addReply('Take your leave', leave)
@@ -208,7 +256,8 @@ export function mountDockTalk(
     }
   })
   copy.append(role, name, speech, replies)
-  panel.append(portrait, copy, close)
+  if (quayLocal) panel.append(portrait)
+  panel.append(copy, close)
   host.replaceChildren(panel)
   speak()
 }

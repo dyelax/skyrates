@@ -18,6 +18,7 @@ import {
   type Command,
 } from './model'
 import { renderInterior, type InteriorView } from './interiors'
+import { npcAtPort, type ContactWriter } from './characters'
 import { mountHarbor } from './harbor'
 import { openPrologue } from './prologue'
 import { voyageWeather } from './weather'
@@ -58,9 +59,20 @@ toast.querySelector('button')!.addEventListener('click', () => {
   if (toast.hidden) main.focus({ preventScroll: true })
 })
 
+const recordContact: ContactWriter = command => {
+  const next = act(state, command)
+  if (next !== state) {
+    state = next
+    stored = saveGame(state)
+    main.dataset.saved = String(stored)
+  }
+  return state
+}
+
 function navigate(next: View) {
   if (state.voyage && next !== 'battle' && next !== 'voyage') return
   bell('select')
+  if (next === 'authority') recordContact({type: 'visitNpc', npc: npcAtPort(state.port, 'authority')})
   view = next
   render()
   window.scrollTo({ top: 0, behavior: 'instant' })
@@ -115,7 +127,7 @@ function render() {
           voyage: 'On passage',
         }[view]) + ' · Skyrates'
   if (view === 'harbor') {
-    harborUnmount = mountHarbor(main, state, navigate)
+    harborUnmount = mountHarbor(main, state, navigate, recordContact)
     if (state.firstWatch === 'arrived' && state.port === 'sunstep' && state.mission === 'offered')
       firstWatchNote(main,state,()=>navigate('authority'),()=>{
         state = {...state,firstWatch:'briefed'}
@@ -174,7 +186,7 @@ function render() {
               : leg && dispatch({ type: 'resolveBattle', id: leg.id, result: 'escaped', hull: state.ship.hull }),
           )
       })
-  } else renderInterior(main, view as InteriorView, state, dispatch, navigate)
+  } else renderInterior(main, view as InteriorView, state, dispatch, navigate, recordContact)
 }
 
 document.addEventListener('pointerdown', beginAmbience, { once: true })

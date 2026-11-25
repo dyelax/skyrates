@@ -104,3 +104,6 @@
     min-height: 34px;
   }
 }
+
+.dock-talk.station-voice { grid-template-columns: minmax(0, 1fr); max-width: 640px; }
+.dock-talk { max-height: calc(100% - 24px); overflow-y: auto; }
