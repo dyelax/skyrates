@@ -19,6 +19,7 @@ import {
   type UpgradeId,
 } from './data'
 import { allotment, CITY_ECONOMY, exchangeCycle } from './city-economy'
+import { changeContact, validContacts, witnessCityOrder, type Contacts, type ContactCommand } from './characters'
 export * from './data'
 
 export interface Quote {
@@ -81,6 +82,7 @@ export interface GameState {
   voyage: Voyage | null
   drill: DrillStage | null
   exchange: Exchange
+  contacts: Contacts
   pricesSeen: Partial<Record<PortId, MarketVisit>>
   freight: Freight | null
   log: { day: number; text: string }[]
@@ -90,6 +92,7 @@ export interface GameState {
 
 export type BattleResult = 'won' | 'boarded' | 'escaped' | 'lost'
 export type Command =
+  | ContactCommand
   | { type: 'acceptMission' | 'presentCommission' | 'deliverCertificate' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' | 'practiceDrill' | 'fillCityOrder' | 'useCityService' }
   | { type: 'endDrill'; skip: boolean }
   | { type: 'buy' | 'sell'; good: GoodId; quantity: number }
@@ -138,6 +141,7 @@ export function initialState(): GameState {
     voyage: null,
     drill: null,
     exchange: freshExchange(1),
+    contacts: {},
     pricesSeen: {},
     freight: null,
     log: [{ day: 1, text: 'Took the helm at Sunstep Quay. Harbormaster Vale has a commission waiting.' }],
@@ -491,6 +495,7 @@ function applyDockCommand(state: GameState, action: Command): boolean {
       const cost = releaseCargo(state.cargo[order.good], order.quantity)
       state.exchange = currentExchange(state)
       state.exchange.orders.push(state.port)
+      witnessCityOrder(state, state.port)
       state.coins += order.pay
       experience(state, 6)
       record(state, `Filled “${order.name}” for ${order.pay} crowns. Cargo cost ${cost} crowns. The receipt bears the seal of the ${CITY_ECONOMY[state.port].institution}.`)
@@ -625,6 +630,7 @@ export function advanceDrill(state: GameState, stage: DrillStage): GameState {
 
 export function act(state: GameState, command: Command): GameState {
   const next = structuredClone(state)
+  if (command.type === 'visitNpc' || command.type === 'rememberNpc') return changeContact(next, command) ? next : state
   if (state.drill) {
     if (command.type !== 'endDrill' || (!command.skip && state.drill !== 'debrief')) return state
     next.drill = null
@@ -766,6 +772,7 @@ function validSave(value: unknown): value is GameState {
   if (!value.log.every((entry) => object(entry) && integer(entry.day, 1) && typeof entry.text === 'string'))
     return false
   if (!validVoyage(value.voyage, value.port, value.voyageCount) || !validFreight(value.freight)) return false
+  if (!validContacts(value.contacts, value.day)) return false
   if (!validExchange(value.exchange, value.day)) return false
   if (!validShip(value.ship) || !object(value.cargo) || !object(value.pricesSeen)) return false
   const cargo = value.cargo
@@ -813,7 +820,12 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
           value.ship.cannons = value.voyageCount === 0 && value.ship.guns === 0 ? 1 : 4
         }
       }
-      if (validSave(value)) return value
+      const legacyContacts = object(value) && value.version === 1 && value.contacts === undefined
+      if (legacyContacts) value.contacts = {}
+      if (validSave(value)) {
+        if (legacyContacts) for (const port of value.exchange.orders) witnessCityOrder(value, port)
+        return value
+      }
     }
   } catch {
     // Storage can be unavailable in private browsing or when an earlier write was interrupted.

@@ -1225,3 +1225,5 @@
 .sk-chart-orders h2 {font:600 23px/1.1 var(--font-serif);margin:4px 0;}
 .sk-chart-orders p {font-size:13px;margin:5px 0 8px;}
 .sk-interior .sk-map-popover {z-index:4;}
+
+.sk-station-host { position: fixed; inset: 0; z-index: 14; background: #08182166; }
