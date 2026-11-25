@@ -1,3 +1,4 @@
+import { firstWatchNote } from './handbook'
 import '@fontsource/barlow/latin-400.css'
 import '@fontsource/barlow/latin-500.css'
 import '@fontsource/barlow/latin-600.css'
@@ -112,7 +113,14 @@ function render() {
           authority: 'Port Authority',
           voyage: 'On passage',
         }[view]) + ' · Skyrates'
-  if (view === 'harbor') harborUnmount = mountHarbor(main, state, navigate)
+  if (view === 'harbor') {
+    harborUnmount = mountHarbor(main, state, navigate)
+    if (state.firstWatch === 'arrived' && state.port === 'sunstep' && state.mission === 'offered')
+      firstWatchNote(main,state,()=>navigate('authority'),()=>{
+        state = {...state,firstWatch:'briefed'}
+        stored=saveGame(state)
+      })
+  }
   else if (view === 'battle' && (state.voyage || state.drill)) {
     const leg = state.voyage
     main.innerHTML = '<section class="battle-loading" role="status">Taking the helm…</section>'
