@@ -208,9 +208,9 @@ export function mountBattleFx(
           heading: pose.heading,
           scaleX: view.hull.scaleX,
           scaleY: view.hull.scaleY,
-          driftX: (i - 1) * Math.cos(pose.heading) * 18 + 6,
-          driftY: (i - 1) * Math.sin(pose.heading) * 18,
-          spin: (i - 1) * 0.43 + 0.17,
+          driftX: (i - 1) * Math.cos(pose.heading) * 46 + 8,
+          driftY: (i - 1) * Math.sin(pose.heading) * 46 + (i % 2 ? -13 : 9),
+          spin: (i - 1) * 1.1 + 0.35,
         })
       }
     }
@@ -232,12 +232,12 @@ export function mountBattleFx(
     const t = clamp(wreck.age / (reduced ? 0.4 : WRECK_SECONDS))
     clouds.clear()
     for (const p of wreck.pieces) {
-      const fall = clamp((t - 0.15) / 0.85)
-      const scale = reduced ? 1 : 1 - fall * 0.53
+      const fall = clamp((t - 0.04) / 0.96)
+      const scale = reduced ? 1 : 1 - fall * 0.63
       p.image
         .setPosition(
           p.x + (reduced ? 0 : p.driftX * fall),
-          p.y + (reduced ? 0 : p.driftY * fall + 40 * fall * fall),
+          p.y + (reduced ? 0 : p.driftY * fall + 78 * fall * fall),
         )
         .setScale(p.scaleX * scale, p.scaleY * scale * (reduced ? 0.86 : 1 - 0.48 * fall))
         .setRotation(p.heading + (reduced ? 0.09 : p.spin * fall))
@@ -245,15 +245,32 @@ export function mountBattleFx(
       if (t > 0.16 || reduced) p.image.setTint(0x847873)
     }
     for (const site of wreck.sites) {
-      const fall = clamp((t - 0.18) / 0.82)
-      const y = site.y + (reduced ? 6 : 28 * fall)
+      const fall = clamp((t - 0.06) / 0.94)
+      const y = site.y + (reduced ? 6 : 57 * fall)
+      if (!reduced) {
+        const flash = clamp(1 - 5 * t)
+        clouds.fillStyle(0xffe4ae, flash * 0.6).fillEllipse(site.x, site.y, 45 * flash, 18 * flash)
+        // The lift housing comes apart before the larger pieces reach the cloud deck.
+        const travel = Math.min(1, t * 1.7)
+        for (let i = 0; i < 12; i++) {
+          const angle = i * 2.39996
+          const dx = Math.cos(angle),
+            dy = Math.sin(angle)
+          const distance = (22 + (i % 5) * 9) * travel
+          const x = site.x + dx * distance,
+            y = site.y + dy * distance + 49 * t * t
+          clouds
+            .lineStyle(2.2, i % 3 ? 0xb58254 : 0xffdc94, 1 - travel * travel)
+            .lineBetween(x, y, x + dx * 6, y + dy * 6 + 2)
+        }
+      }
       for (let i = 0; i < 7; i++) {
-        const offset = (i - 3) * 8,
+        const offset = (i - 3) * 12,
           spread = reduced ? 1 : 0.55 + fall * 0.85
-        const alpha = reduced ? 0.15 : Math.sin(Math.PI * fall) * 0.36
+        const alpha = reduced ? 0.15 : Math.sin(Math.PI * fall) * 0.52
         clouds
           .fillStyle(i % 2 ? 0xb6c8c1 : 0x8ca3a4, alpha)
-          .fillEllipse(site.x + offset * spread, y + Math.sin(i * 2) * 5, 19 + fall * 10, 10 + fall * 9)
+          .fillEllipse(site.x + offset * spread, y + Math.sin(i * 2) * 5, 25 + fall * 15, 13 + fall * 16)
       }
     }
     if (t >= 1) endWreck()
