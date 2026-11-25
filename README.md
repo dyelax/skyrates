@@ -8,7 +8,7 @@ Take the helm of the Wayfarer, a wooden schooner that rides a glowing lift keel 
 
 ## At the quay
 
-Walk the floating docks with **WASD** or the arrow keys. Drag to look around, or turn with **Q / E**. Tap the paving to walk there. **Home** returns you to the landing. Point at a building or a person to see who is there. Visit the market to trade, talk to the porter for a lead, or find Harbormaster Vale in the green doorway. Press **H** to reveal place names. Board the schooner to inspect the hold, hull, and crew.
+Walk the floating docks with **WASD** or the arrow keys. Drag to look around, or turn with **Q / E**. Tap the paving to walk there. **Home** returns you to the landing. Point at a building or a person to see who is there. Visit the market to trade, talk to the porter for a lead, or find Harbormaster Vale in the green doorway. Press **H** to reveal place names. Walk into a doorway or select its marker to enter. Inside, select the worker for a conversation or the counter for its ledger. Walk back through the door to return to the quay. Board the schooner to inspect the hold, hull, and crew.
 
 Open the sky chart with **M** or the compass. Select an island for passage time, recorded prices, and sailing orders. The captain’s log opens with **J**. Decisions, cargo, and completed encounters save automatically in this browser. Sound and fullscreen are available from the small options control at the quay.
 
