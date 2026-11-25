@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { assessPlaytest } from '../src/playtest-answers'
 import { initialState, act } from '../src/model'
 import { codexDraft, composeReport, describeGame, playtestThread } from '../src/playtest-report'
 
@@ -32,4 +33,13 @@ test('the report describes the moment without serializing the save or private ch
   assert.ok(!context.includes('pendingNotices'))
   assert.ok(!context.includes(start.log[0].text))
   assert.ok(composeReport('How do I dodge?', context).includes('How do I dodge?'))
+})
+
+test('a mechanic question earns both an actionable answer and a contextual clarity item', () => {
+  const food = assessPlaytest('Do I need rations?', initialState(), 'chart')
+  assert.match(food.answer, /without buying food/)
+  assert.match(food.todo, /Sunstep Quay · chart/)
+  const bug = assessPlaytest('The window is stuck.', initialState(), 'harbor')
+  assert.equal(bug.asks, false)
+  assert.match(bug.todo, /Reproduce/)
 })

@@ -171,3 +171,7 @@
     min-width: 42px;
   }
 }
+
+.playtest-check { justify-self: start; color: #f4dfb3; background: #24373c; border: 1px solid #8a816a; border-radius: 3px; padding: .42rem .7rem; }
+.playtest-answer { padding: .65rem; border-left: 2px solid #b5c5ac; background: #203136; overflow-wrap: anywhere; }
+.playtest-answer small { color: #dfc38d; }
