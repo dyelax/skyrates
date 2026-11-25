@@ -1,0 +1,173 @@
+.playtest-call {
+  position: fixed;
+  z-index: 21;
+  right: max(9px, env(safe-area-inset-right));
+  top: 48%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 35px;
+  min-width: 35px;
+  padding: 0 8px;
+  color: #ead8af;
+  background: #142831d4;
+  border: 1px solid #a8956a85;
+  border-radius: 5px;
+  font:
+    600 12px/1 Barlow,
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+.playtest-call svg {
+  width: 16px;
+  height: 16px;
+}
+.playtest-call span {
+  display: none;
+}
+.playtest-call:is(:hover, :focus-visible) span {
+  display: inline;
+}
+.playtest-call:focus-visible,
+.playtest-dialog :is(button, a, summary, textarea):focus-visible {
+  outline: 2px solid #ffd991;
+  outline-offset: 3px;
+}
+.playtest-dialog {
+  width: min(400px, calc(100vw - 28px));
+  max-height: min(720px, calc(100dvh - 28px));
+  padding: 20px;
+  overflow: auto;
+  border: 1px solid #b49d6f;
+  color: #f4ecd9;
+  background: #172a30;
+  box-shadow: 0 20px 60px #0514187d;
+  border-radius: 4px;
+  font:
+    500 14px/1.45 Barlow,
+    system-ui,
+    sans-serif;
+}
+.playtest-dialog::backdrop {
+  background: #08191f77;
+}
+.playtest-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 12px;
+}
+.playtest-dialog h2 {
+  margin: 0;
+  font:
+    600 29px/1.05 'Cormorant Garamond',
+    Georgia,
+    serif;
+}
+.playtest-dialog button,
+.playtest-dialog a {
+  cursor: pointer;
+}
+.playtest-dialog [data-close] {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid #71837b;
+  color: inherit;
+  border-radius: 3px;
+}
+.playtest-dialog [data-close] svg {
+  width: 16px;
+  height: 16px;
+}
+.playtest-dialog textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  margin-top: 6px;
+  resize: vertical;
+  border: 1px solid #76847e;
+  border-radius: 3px;
+  background: #102126;
+  color: #f1ecdb;
+  font: inherit;
+}
+.playtest-dialog textarea[hidden],
+.playtest-dialog [hidden] {
+  display: none;
+}
+.playtest-dialog details {
+  margin: 9px 0;
+  color: #d9e2d2;
+}
+.playtest-dialog summary {
+  cursor: pointer;
+}
+.playtest-dialog pre {
+  white-space: pre-wrap;
+  font:
+    500 12px/1.45 Barlow,
+    system-ui,
+    sans-serif;
+  margin: 8px 0;
+  color: #c2d2c8;
+}
+.playtest-dialog .playtest-open,
+.playtest-dialog [data-copy] {
+  display: inline-block;
+  margin-top: 4px;
+  border: 1px solid #d8bc83;
+  border-radius: 3px;
+  padding: 7px 12px;
+  background: #e9ca8b;
+  color: #15262c;
+  font:
+    700 13px/1.2 Barlow,
+    system-ui,
+    sans-serif;
+  text-decoration: none;
+}
+.playtest-dialog .playtest-open[aria-disabled='true'],
+.playtest-dialog [data-copy]:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.playtest-dialog p {
+  margin: 5px 0 8px;
+}
+.playtest-dialog .playtest-destination,
+.playtest-dialog .playtest-status {
+  font-size: 12px;
+  color: #c3d1c8;
+}
+.playtest-dialog .playtest-status:empty {
+  display: none;
+}
+.playtest-web {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.playtest-dialog .playtest-web a,
+.playtest-dialog .playtest-forget {
+  color: #efce93;
+}
+.playtest-dialog .playtest-forget {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-decoration: underline;
+  font: inherit;
+  font-size: 12px;
+}
+@media (pointer: coarse) {
+  .playtest-call {
+    height: 42px;
+    min-width: 42px;
+  }
+}

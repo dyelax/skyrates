@@ -20,6 +20,7 @@ import {
 import { renderInterior, type InteriorView } from './interiors'
 import { npcAtPort, type ContactWriter } from './characters'
 import { mountHarbor } from './harbor'
+import { mountPlaytestChat } from './playtest-chat'
 import { openPrologue } from './prologue'
 import { voyageWeather } from './weather'
 import { beginAmbience, bell } from './audio'
@@ -189,6 +190,7 @@ function render() {
   } else renderInterior(main, view as InteriorView, state, dispatch, navigate, recordContact)
 }
 
+mountPlaytestChat(() => ({state,view}))
 document.addEventListener('pointerdown', beginAmbience, { once: true })
 render()
 
