@@ -529,6 +529,10 @@ class SkyBattle extends Phaser.Scene {
   }
 
   private firePlayer(guns: Gun[]) {
+    if (this.drill === 'fire' && !inArc(this.player, 'port', this.foe)) {
+      this.tell('Turn until the fan is gold, or use Line up port gun.', 2.2)
+      return
+    }
     if (!guns.length) {
       this.tell('No cannon is fitted on that side.', 2)
       return
@@ -586,7 +590,10 @@ class SkyBattle extends Phaser.Scene {
     const locked = !this.ready || this.pausedDuel || !!this.grapple || this.ended
     this.player.guns.forEach((gun) => {
       const el = this.buttons[`gun${gunKey(gun)}`]
-      el.disabled = locked || gun.cooldown > 0 || (!!this.drill && this.drill !== 'fire')
+      el.disabled =
+        locked ||
+        gun.cooldown > 0 ||
+        (!!this.drill && (this.drill !== 'fire' || !inArc(this.player, gun.side, this.foe)))
       el.classList.toggle('bearing', inArc(this.player, gun.side, this.foe) && !el.disabled)
       el.style.setProperty('--gun-ready', `${100 * (1 - gun.cooldown / gun.reload)}%`)
       el.title =
@@ -1021,8 +1028,15 @@ class SkyBattle extends Phaser.Scene {
         this.course = { x: this.foe.x + this.foe.vx * lead, y: this.foe.y + this.foe.vy * lead }
       }
       if (this.course && !left && !right) {
-        if (Math.hypot(this.player.x - this.course.x, this.player.y - this.course.y) < 12) this.course = undefined
-        else helm = clamp(wrapAngle(angleBetween(this.player, this.course) - this.player.heading) * 2.2, -1, 1)
+        const distance = Math.hypot(this.player.x - this.course.x, this.player.y - this.course.y)
+        const turn = wrapAngle(angleBetween(this.player, this.course) - this.player.heading)
+        if (distance < (this.drill === 'dodge' ? 25 : 12)) {
+          this.course = undefined
+          if (this.drill === 'dodge') this.player.throttle = 0
+        } else {
+          helm = clamp(turn * 2.2, -1, 1)
+          if (this.drill === 'dodge') this.player.throttle = Math.abs(turn) > 1.15 ? 0 : distance < 52 ? 1 : 2
+        }
       }
       if (this.drill !== 'briefing' && this.drill !== 'debrief') moveShip(this.player, helm, dt)
       if (this.drill) this.exerciseHelm(dt)
@@ -1035,8 +1049,12 @@ class SkyBattle extends Phaser.Scene {
         this.finish('escaped')
         return
       }
-      p.x = clamp(p.x, 24, this.area.width - 24)
-      p.y = clamp(p.y, this.area.top + 22, this.area.bottom - 22)
+      // Keep practice shots within range, including tall phone and tablet viewports.
+      const mid = (this.area.top + this.area.bottom) / 2
+      p.x = clamp(p.x, this.drill ? 140 : 24, this.drill ? 765 : this.area.width - 24)
+      p.y = this.drill
+        ? clamp(p.y, Math.max(this.area.top + 22, mid - 134), Math.min(this.area.bottom - 22, mid + 134))
+        : clamp(p.y, this.area.top + 22, this.area.bottom - 22)
       for (let i = this.shots.length - 1; i >= 0; i--) {
         const s = this.shots[i]
         s.x += s.vx * dt
