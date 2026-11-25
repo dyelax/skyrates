@@ -48,6 +48,7 @@ export function openPrologue(onFinish?: () => void) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)')
   let index = 0,
     paused = reduced.matches,
+    readingReport = false,
     elapsed = 0,
     frame = 0,
     previous: number | undefined,
@@ -64,6 +65,7 @@ export function openPrologue(onFinish?: () => void) {
     finished = true
     cancelAnimationFrame(frame)
     document.removeEventListener('visibilitychange', visibility)
+    document.removeEventListener('skyrates-playtest', holdForReport)
     dialog.close()
     dialog.remove()
     onFinish?.()
@@ -99,11 +101,15 @@ export function openPrologue(onFinish?: () => void) {
       draw()
     } else finish()
   }
+  function holdForReport(event: Event) {
+    readingReport = (event as CustomEvent<boolean>).detail
+    previous = undefined
+  }
   function visibility() {
     previous = undefined
   }
   function tick(now: number) {
-    if (previous !== undefined && !paused && !document.hidden) {
+    if (previous !== undefined && !paused && !readingReport && !document.hidden) {
       elapsed += Math.min(now - previous, 200)
       if (elapsed >= duration && index < shots.length - 1) next()
       meters()
@@ -126,6 +132,7 @@ export function openPrologue(onFinish?: () => void) {
     finish()
   })
   document.addEventListener('visibilitychange', visibility)
+  document.addEventListener('skyrates-playtest', holdForReport)
   document.body.append(dialog)
   dialog.showModal()
   controls()

@@ -1,5 +1,7 @@
 import { mountWorkshop, type Workshop } from './workshop'
 import { isStation } from './voxel/workroom-plan'
+import { openVoiceSettings } from './npc-voices'
+import { receiveCaptain } from './edition-transfer'
 import { firstWatchNote } from './handbook'
 import '@fontsource/barlow/latin-400.css'
 import '@fontsource/barlow/latin-500.css'
@@ -22,6 +24,7 @@ import {
 import { renderInterior, type InteriorView } from './interiors'
 import { type ContactWriter } from './characters'
 import { mountHarbor } from './harbor'
+import { mountPlaytestChat } from './playtest-chat'
 import { openPrologue } from './prologue'
 import { voyageWeather } from './weather'
 import { beginAmbience, bell } from './audio'
@@ -200,6 +203,7 @@ function render() {
   } else renderInterior(main, view as InteriorView, state, dispatch, navigate, recordContact)
 }
 
+mountPlaytestChat(() => ({state,view}))
 document.addEventListener('pointerdown', beginAmbience, { once: true })
 render()
 
@@ -213,3 +217,6 @@ if (state.firstWatch === 'new' && !state.voyage && state.day === 1) {
     main.focus({ preventScroll: true })
   })
 }
+
+if (new URLSearchParams(location.search).has('voices')) openVoiceSettings()
+receiveCaptain()

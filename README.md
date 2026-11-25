@@ -31,6 +31,27 @@ The arrow on the wind gauge points downwind. Watch your heading as the wind carr
 
 Each cannon refit adds a gun until all four stations are filled. A side with two fitted guns gains a broadside order. Each cannon reloads separately. Turning brings a fresh battery to bear. Contact brings the crews together, and crew size, experience, and hull condition influence the outcome. Captains can also slip past a raider before engaging.
 
+## Local edition
+
+For conversations with your ChatGPT plan, start the personal edition on the computer where you will sign in. The hosted game also offers an on-device WebGPU model. A local Ollama installation can supply another voice.
+
+```sh
+git clone https://github.com/dyelax/skyrates.git
+cd skyrates
+npm ci
+npm run play:local
+```
+
+Open [the local edition](http://127.0.0.1:4817/?voices=1), choose **Sign in with ChatGPT**, approve Skyrates in the official sign-in window, and pick one of your available models. The public game’s voice settings can carry your captain across. You can also choose an installed Ollama model. The browser model downloads to the device when you select it.
+
+ChatGPT sign-in uses a loopback callback and PKCE. Only a registration identifier persists in your local user folder. Tokens stay in the running local process. **Disconnect ChatGPT** revokes the grant and **Manage usage** opens your plan controls. [OpenAI local integration guide](https://developers.openai.com/siwc/token-sharing-open-source/sign-in)
+
+## Playtest chat
+
+Click the small speech bubble at the right edge of the game, or press **F2**. Enter a mechanics question or bug report and choose **Open in Codex** to review the draft with the current screen, route, weather, cargo and objectives. The web option lets you copy the same report into Codex Web. The game remembers your unfinished text for this tab.
+
+To use an existing private Codex playtest conversation, open the game once with `#playtest=THREAD_UUID` appended to its URL. That browser remembers the thread and removes the fragment from the address bar. **Unlink playtest thread** restores the new-chat behavior. Configure the private tracker inside the owner’s thread. The [playtest triage skill](.agents/skills/skyrates-playtest/SKILL.md) guides mechanics answers, reproduction and duplicate checks.
+
 ## Run locally
 
 Use Node.js 22.12 or newer.

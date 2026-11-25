@@ -4,14 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
+    "dev": "vite --host 127.0.0.1",
+    "play:local": "npm run build && node companion/server.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@fontsource/barlow": "^5.2.0",
     "@fontsource/cormorant-garamond": "^5.2.0",
+    "@mlc-ai/web-llm": "^0.2.89",
+    "jose": "^6.2.18",
     "lucide-static": "^0.563.0",
     "phaser": "3.90.0",
     "three": "0.180.0"
