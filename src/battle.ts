@@ -91,7 +91,7 @@ interface FlightArea {
 }
 
 function measureSky(root: HTMLElement): FlightArea {
-  const viewport = root.getBoundingClientRect()
+  const viewport = root.querySelector<HTMLElement>('.duel-canvas')!.getBoundingClientRect()
   const unit = SKY.width / Math.max(1, viewport.width)
   const height = Math.round(viewport.height * unit)
   const gauges = root.querySelector<HTMLElement>('.duel-readouts')!.getBoundingClientRect()
@@ -341,7 +341,7 @@ class SkyBattle extends Phaser.Scene {
   }
 
   private labelSize(): string {
-    return `${Math.max(13, Math.min(23, Math.round((11 * SKY.width) / Math.max(1, this.root.clientWidth))))}px`
+    return `${Math.max(13, Math.min(23, Math.round((11 * SKY.width) / Math.max(1, this.root.querySelector<HTMLElement>('.duel-canvas')!.clientWidth))))}px`
   }
 
   resizeSky(next: FlightArea) {
