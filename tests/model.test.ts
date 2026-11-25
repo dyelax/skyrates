@@ -300,6 +300,61 @@ test('sale receipts report realized gain or loss on the allocated share of a mix
   assert.deepEqual(state.cargo.provisions, { quantity: 0, cost: 0 })
 })
 
+test('the opening shipment earns the same XP and carries the same profit through any sale size and reloads', () => {
+  const loaded = act(initialState(), { type: 'buy', good: 'provisions', quantity: 12 })
+  const arrived = land(loaded, 'glasshouse')
+  assert.equal(arrived.cargo.provisions.cost, 48)
+  assert.equal(priceAt(arrived, arrived.port, 'provisions').sell, 11)
+  for (const sizes of [[12], [2, 7, 3], Array(12).fill(1)]) {
+    let captain = arrived
+    for (const quantity of sizes) {
+      captain = reload(act(captain, { type: 'sell', good: 'provisions', quantity }))
+    }
+    assert.equal(captain.coins, 162)
+    assert.equal(captain.xp - arrived.xp, 8)
+    assert.equal(captain.tradeProfitRemainder, 4)
+    assert.deepEqual(captain.cargo.provisions, { quantity: 0, cost: 0 })
+  }
+})
+
+test('old saves preserve earned XP and mixed lot costs regardless of how a partial delivery is divided', () => {
+  const arrived = land(initialState(), 'glasshouse')
+  const old = JSON.parse(JSON.stringify(arrived))
+  delete old.tradeProfitRemainder
+  old.xp = 17
+  old.cargo.provisions = { quantity: 6, cost: 26 }
+  const captain = loadGame({ getItem: () => JSON.stringify(old) })
+  assert.equal(captain.xp, 17)
+  assert.equal(captain.tradeProfitRemainder, 0)
+
+  const sell = (state: GameState, quantity: number) => reload(act(state, { type: 'sell', good: 'provisions', quantity }))
+  const pair = sell(captain, 2)
+  const singles = sell(sell(captain, 1), 1)
+  assert.deepEqual(singles.cargo, pair.cargo)
+  assert.equal(pair.cargo.provisions.cost, 17)
+  for (const partial of [pair, singles]) {
+    assert.equal(partial.xp, 18)
+    assert.equal(partial.tradeProfitRemainder, 3)
+    const finished = sell(partial, 4)
+    assert.equal(finished.xp, 21)
+    assert.equal(finished.tradeProfitRemainder, 0)
+  }
+})
+
+test('buying and immediately reselling or breaking even leaves banked profit and XP intact', () => {
+  let state = { ...initialState(), xp: 15, tradeProfitRemainder: 9 }
+  for (let i = 0; i < 3; i++) {
+    state = act(state, { type: 'buy', good: 'provisions', quantity: 1 })
+    state = act(state, { type: 'sell', good: 'provisions', quantity: 1 })
+  }
+  assert.ok(state.coins < initialState().coins)
+  state.cargo.provisions = { quantity: 1, cost: priceAt(state, state.port, 'provisions').sell }
+  state = reload(act(state, { type: 'sell', good: 'provisions', quantity: 1 }))
+  assert.match(state.notice, /broke even/i)
+  assert.equal(state.xp, 15)
+  assert.equal(state.tradeProfitRemainder, 9)
+})
+
 test('unacknowledged notices survive later actions, travel, and reload in order', () => {
   const signed = act(initialState(), { type: 'acceptMission' })
   const sailing = act(signed, { type: 'sail', to: 'glasshouse' })

@@ -1,4 +1,4 @@
-import { MINIMUM_RAIDER_TOLL, PORTS, type GameState } from './model'
+import { MINIMUM_RAIDER_TOLL, TRADE_PROFIT_PER_XP, PORTS, type GameState } from './model'
 import { CITY_ECONOMY } from './city-economy'
 import './handbook.css'
 
@@ -12,6 +12,10 @@ export function openHandbook(state: GameState) {
     [
       'How do I earn my first crowns?',
       'Vale’s freight desk pays on delivery. A sealed dispatch takes no cargo space and needs no advance. For a first trade, buy a few crates of Sunstep provisions, carry them to Glasshouse, then sell through the Furnace Exchange. Copperfall buys Glasshouse solar glass for its winter garden.',
+    ],
+    [
+      'How does trading earn captain XP?',
+      `Every ${TRADE_PROFIT_PER_XP} crowns of profit from cargo sales earn 1 XP. Profit is your sale price less what you paid for the crates. Any crowns short of the next point carry over. Breaking even or taking a loss leaves that progress intact.`,
     ],
     [
       'Where do I go next?',

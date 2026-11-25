@@ -28,9 +28,13 @@ export interface Quote {
   buy: number
   sell: number
 }
-export interface CargoLot {
+interface CargoBasis {
   quantity: number
   cost: number
+}
+export interface CargoLot extends CargoBasis {
+  /** The pool before its first partial withdrawal. New purchases start a fresh pool. */
+  basis?: CargoBasis
 }
 export interface Ship {
   hold: number
@@ -73,6 +77,7 @@ export interface GameState {
   ship: Ship
   level: number
   xp: number
+  tradeProfitRemainder: number
   notoriety: number
   ability: AbilityId | null
   mission: 'offered' | 'accepted' | 'invoice' | 'lit'
@@ -133,6 +138,7 @@ export function initialState(): GameState {
     ship: { hold: 12, hull: 100, maxHull: 100, guns: 0, cannons: 1, crew: 6, veterans: 1 },
     level: 1,
     xp: 0,
+    tradeProfitRemainder: 0,
     notoriety: 0,
     ability: null,
     mission: 'offered',
@@ -340,6 +346,16 @@ function experience(state: GameState, amount: number) {
   state.xp = Math.min(state.level === 1 ? 90 : 199, state.xp + amount)
 }
 
+export const TRADE_PROFIT_PER_XP = 10
+
+export function awardTradeExperience(state: GameState, realizedProfit: number): void {
+  if (realizedProfit <= 0) return
+  const carry = state.tradeProfitRemainder + (realizedProfit % TRADE_PROFIT_PER_XP)
+  const earned = Math.floor(realizedProfit / TRADE_PROFIT_PER_XP) + Math.floor(carry / TRADE_PROFIT_PER_XP)
+  state.tradeProfitRemainder = carry % TRADE_PROFIT_PER_XP
+  experience(state, earned)
+}
+
 function arrive(state: GameState, encounterOutcome = '') {
   const voyage = state.voyage
   if (!voyage) return
@@ -374,11 +390,31 @@ function arrive(state: GameState, encounterOutcome = '') {
   if (encounterOutcome) state.notice = encounterOutcome + ' ' + state.notice
 }
 
-function releaseCargo(lot: CargoLot, quantity: number) {
-  const cost = Math.round((lot.cost * quantity) / lot.quantity)
-  lot.quantity -= quantity
-  lot.cost -= cost
-  return cost
+function addCargo(lot: CargoLot, quantity: number, cost: number) {
+  lot.quantity += quantity
+  lot.cost += cost
+  delete lot.basis
+}
+
+function remainingCargoCost(basis: CargoBasis, remaining: number) {
+  // Round the cost of all crates removed from this pool once, to the nearest crown.
+  // Use integer arithmetic even for a large hold in an older save.
+  const units = BigInt(basis.quantity)
+  const used = BigInt(basis.quantity - remaining)
+  return basis.cost - Number((BigInt(basis.cost) * used + units / 2n) / units)
+}
+
+export function releaseCargo(lot: CargoLot, quantity: number): number {
+  const remaining = lot.quantity - quantity
+  const basis = lot.basis ?? { quantity: lot.quantity, cost: lot.cost }
+  const remainingCost = remaining === 0 ? 0 : remainingCargoCost(basis, remaining)
+  const releasedCost = lot.cost - remainingCost
+  lot.quantity = remaining
+  lot.cost = remainingCost
+  // A uniform remainder has no fractional crowns left to allocate.
+  if (remaining > 1 && remainingCost % remaining !== 0) lot.basis = basis
+  else delete lot.basis
+  return releasedCost
 }
 
 function settleToll(state: GameState, settlement: TollSettlement) {
@@ -398,8 +434,7 @@ function trade(state: GameState, action: Extract<Command, { good: GoodId }>): bo
     const bought = state.exchange.purchases[state.port] ??= {}
     bought[good] = (bought[good] ?? 0) + quantity
     state.coins -= total
-    lot.quantity += quantity
-    lot.cost += total
+    addCargo(lot, quantity, total)
     record(state, 'Bought ' + quantity + ' ' + GOODS[good].name.toLowerCase() + ' for ' + total + ' crowns.')
   } else {
     if (quantity > lot.quantity) return false
@@ -407,7 +442,7 @@ function trade(state: GameState, action: Extract<Command, { good: GoodId }>): bo
     const cost = releaseCargo(lot, quantity)
     state.coins += total
     const profit = total - cost
-    if (profit > 0) experience(state, Math.min(6, profit))
+    awardTradeExperience(state, profit)
     const result = profit === 0 ? 'Broke even.' : `${Math.abs(profit)}-crown ${profit > 0 ? 'profit' : 'loss'}.`
     record(state, `Sold ${quantity} ${GOODS[good].name.toLowerCase()} for ${total} crowns. ${result}`)
   }
@@ -529,8 +564,7 @@ function applyDockCommand(state: GameState, action: Command): boolean {
       if (state.port === 'glasshouse') {
         const inputCost = releaseCargo(state.cargo.glass, 2)
         state.coins -= 8
-        state.cargo.prisms.quantity++
-        state.cargo.prisms.cost += inputCost + 8
+        addCargo(state.cargo.prisms, 1, inputCost + 8)
         record(state, 'The choir packed one annealed prism blank in your hold. The glass and rack fee are entered in its cost.')
       } else {
         state.coins -= 6
@@ -761,6 +795,8 @@ function validSave(value: unknown): value is GameState {
     !integer(value.day, 1) ||
     !integer(value.coins) ||
     !integer(value.xp) ||
+    !integer(value.tradeProfitRemainder) ||
+    value.tradeProfitRemainder >= TRADE_PROFIT_PER_XP ||
     !integer(value.notoriety) ||
     !integer(value.voyageCount) ||
     (value.level !== 1 && value.level !== charterLevel) ||
@@ -802,6 +838,11 @@ function validSave(value: unknown): value is GameState {
     const lot = cargo[good]
     if (!object(lot) || !integer(lot.quantity) || !integer(lot.cost) || (lot.quantity === 0 && lot.cost !== 0))
       return false
+    if (lot.basis !== undefined) {
+      const basis = lot.basis
+      if (!object(basis) || !integer(basis.quantity, Math.max(1, lot.quantity)) || !integer(basis.cost)) return false
+      if (remainingCargoCost({ quantity: basis.quantity, cost: basis.cost }, lot.quantity) !== lot.cost) return false
+    }
     quantity += lot.quantity
   }
   return (
@@ -827,6 +868,7 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
     if (serialized) {
       const value: unknown = JSON.parse(serialized)
       if (object(value) && value.version === 1) {
+        if (value.tradeProfitRemainder === undefined) value.tradeProfitRemainder = 0
         if (value.firstWatch === undefined) value.firstWatch = 'briefed'
         if (value.pendingNotices === undefined) value.pendingNotices = []
         if (value.certificate === undefined) value.certificate = value.mission === 'lit' ? 'aboard' : 'none'
