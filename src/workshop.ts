@@ -1,3 +1,4 @@
+import { artwork } from './artwork'
 import { CITY_ECONOMY } from './city-economy'
 import { npcAtPort, npcName, type ContactWriter } from './characters'
 import { mountStationTalk } from './dock-talk'
@@ -53,7 +54,7 @@ export function mountWorkshop(
   const section = document.createElement('section')
   section.className = 'atelier'
   section.setAttribute('aria-label', title)
-  section.style.setProperty('--arrival-art', 'url("art/civic-' + port + '.webp")')
+  section.style.setProperty('--arrival-art', `url("${artwork('civic-' + port)}")`)
   section.innerHTML = `<div class="atelier-view"><canvas aria-label="Walk around the workshop with WASD, drag to look, or tap the floor to walk."></canvas></div>
     <div class="atelier-caption"><small>${PORTS[port].name}</small><h1>${title}</h1></div>
     <button type="button" data-quay class="atelier-back" aria-label="Return to harbor">${icon('arrow-left')} Harbor</button>
