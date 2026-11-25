@@ -24,6 +24,8 @@ import {
   boardingStrength,
   forecastText,
   raiderForecast,
+  harvestLot,
+  harvestTerms,
   buyerLoadedQuantity,
   buyerOffers,
   buyerOrders,
@@ -226,6 +228,19 @@ function market(state: GameState, ui: Controls) {
   )
 }
 
+function harvestCard(state: GameState, ui: Controls) {
+  const lot = harvestLot(state)
+  if (!lot || state.port !== 'copperfall') return ''
+  const cost = lot.rate * lot.quantity
+  const space = state.ship.hold - cargoUsed(state)
+  const actions = lot.decision ? '' : `<div class="sk-actions">${ui.button('Buy both crates · ' + coins(cost), () =>
+    ui.act({ type: 'chooseHarvest', day: lot.day, decision: 'buy' }), { disabled: state.coins < cost || space < lot.quantity })}
+    ${ui.button('Pass to the shift kitchens', () => ui.act({ type: 'chooseHarvest', day: lot.day, decision: 'pass' }), { secondary: true })}</div>
+    ${state.coins < cost || space < lot.quantity ? `<p>Bring ${cost} crowns and ${lot.quantity} free hold spaces to take this picking.</p>` : ''}`
+  return `<article class="sk-card" data-harvest><div class="sk-kicker">Your first refusal</div><h2>Fen’s winter pears</h2>
+    <p>${harvestTerms(state)}</p>${actions}</article>`
+}
+
 function civic(state: GameState, ui: Controls) {
   const city = CITY_ECONOMY[state.port]
   const order = cityOrder(state)
@@ -238,7 +253,7 @@ function civic(state: GameState, ui: Controls) {
   }
   return heading(PORTS[state.port].name + ' · ' + city.district, city.institution) +
     `<p class="sk-quote">${city.practice}</p>
-    <article class="sk-card"><div class="sk-kicker">Local commission · next posting day ${nextPosting(state.day)}</div><h2>${order.name}</h2>
+    ${harvestCard(state, ui)}<article class="sk-card"><div class="sk-kicker">Local commission · next posting day ${nextPosting(state.day)}</div><h2>${order.name}</h2>
     <p>${order.need}</p>${details([['Requested', order.quantity + ' × ' + GOODS[order.good].name], ['In your hold', lot.quantity], ['On delivery', coins(order.pay)]])}
     <div class="sk-actions">${ui.button(order.filled ? 'Commission filled' : 'Deliver cargo · ' + coins(order.pay), () => ui.act({ type: 'fillCityOrder' }), { disabled: !order.ready })}
     ${!order.filled && !order.ready ? ui.button('Locate ' + PORTS[source].name, plotSource, { secondary: true }) : ''}</div></article>
@@ -393,7 +408,7 @@ function chart(state: GameState, ui: Controls) {
   }
   const objectives = chartObjectives(state)
   const orders = `<details class="sk-chart-orders" ${ui.settings.chartOrdersOpen ? 'open' : ''}><summary>Captain’s orders · ${objectives.length}${offers.length ? ` · ${offers.length} buyer posting${offers.length === 1 ? '' : 's'}` : ''}</summary><div>
-    ${objectives.map(job => `<article><small>${job.offered ? 'Available commission' : job.buyerId ? 'Signed buyer order' : 'Active order'}</small><h2>${safe(job.title)}</h2><p>${safe(job.detail)}</p>${ui.button('Locate ' + PORTS[job.destination].name, () => {
+    ${objectives.map(job => `<article><small>${job.privilege ? 'Earned privilege' : job.offered ? 'Available commission' : job.buyerId ? 'Signed buyer order' : 'Active order'}</small><h2>${safe(job.title)}</h2><p>${safe(job.detail)}</p>${ui.button('Locate ' + PORTS[job.destination].name, () => {
       ui.settings.chartOrdersOpen = false
       ui.settings.destination = job.destination
       ui.refresh()
@@ -597,7 +612,7 @@ export function renderInterior(
   }
   const art = {
     market: 'civic-' + state.port,
-    civic: 'civic-' + state.port,
+    civic: state.port === 'copperfall' && state.garden ? 'civic-copperfall-repaired' : 'civic-' + state.port,
     authority: settings.firstLight && state.mission === 'lit' ? null : offices[state.port],
     shipyard: 'yard',
     chart: null,

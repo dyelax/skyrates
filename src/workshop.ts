@@ -33,6 +33,10 @@ export function mountWorkshop(
   const port = current().port
   const city = CITY_ECONOMY[port]
   const room = ROOM_SCENES[port][station]
+  const gardenRoom = port === 'copperfall' && station === 'civic'
+  const repairedGarden = gardenRoom && !!current().garden
+  const painting = repairedGarden ? 'civic-copperfall-repaired' : room.art
+  const roomDescription = gardenRoom ? repairedGarden ? 'Four new solar panes shelter a crate of ripe winter pears.' : 'Rain falls through the broken roof onto the young pear trees.' : ''
   const npc = npcAtPort(port, station)
   const guest = npcAtPort(port, 'civic')
   const title = {
@@ -64,7 +68,7 @@ export function mountWorkshop(
   section.setAttribute('aria-label', title)
   section.style.setProperty('--cabinet', `url("${artwork('cabinet-' + station + '-' + port)}")`)
   section.innerHTML = `<div class="atelier-view"><div class="room-plate">
-      <img class="room-picture" alt="" draggable="false" src="${artwork(room.art)}" fetchpriority="high">
+      <img class="room-picture" alt="${roomDescription}" draggable="false" src="${artwork(painting)}" fetchpriority="high">
       <div class="atelier-places">${hotspots}</div></div></div>
     <div class="atelier-caption"><small>${PORTS[port].name}</small><h1>${title}</h1></div>
     <button type="button" data-quay class="atelier-back" aria-label="Return to harbor">${icon('arrow-right')} Harbor</button>

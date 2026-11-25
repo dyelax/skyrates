@@ -28,6 +28,11 @@ test('all sixteen station identities can earn a distinct private confidence thro
       const order = CITY_ECONOMY[port].order
       state.cargo[order.good] = { quantity: order.quantity, cost: 24 }
       state = act(state, { type: 'fillCityOrder' })
+      if (id === 'fen') {
+        assert.equal(characterContext(state, id).relationship.tier, 'trusted')
+        assert.deepEqual(characterContext(state, id).confidences, [])
+        continue // Fen's later garden jobs have their own progression test.
+      }
       const trusted = characterContext(state, id)
       assert.equal(trusted.relationship.tier, 'confidant')
       assert.equal(trusted.confidences.length, 2)

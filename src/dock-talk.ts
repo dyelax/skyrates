@@ -175,6 +175,11 @@ export function mountStationTalk(
     topics: [{ask:'What does this port need?', answer:city.order.need},{ask:'Where should I take a trade cargo?',answer:city.tradeLead}],
   }
   if (npc.paneDocket) local.topics.unshift({ ask:npc.firstPaneOrderOpen ? 'What are the terms for the garden panes?' : 'What happened with the first order for garden panes?', answer:npc.paneDocket, visit: { view:'market' } })
+  if (npc.harvestDocket) local.topics.unshift({ ask:'Who gets the first picking of winter pears?', answer:npc.harvestDocket })
+  if (id === 'fen' && npc.relationship.tier === 'confidant') {
+    local.greeting = 'Fen slides a small brass roster across the potting bench. “Stay a minute, Captain. There’s a name I left off this book.”'
+    local.topics.unshift({ ask:'Whose name belongs in the garden book?', answer:npc.confidences.at(-1)! })
+  }
   local.topics.push({ask:'How did you come to this work?',answer:npc.publicHistory})
   if (npc.memories.length) local.topics.push({ ask:'Where did we leave off last time?', answer:npc.memories.at(-1)!, recall:true })
   for (const [index,answer] of npc.confidences.entries()) {
