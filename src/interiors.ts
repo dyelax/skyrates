@@ -1,4 +1,5 @@
 import './interiors.css'
+import { chartObjectives } from './objectives'
 import {
   ABILITIES,
   ABILITY_IDS,
@@ -271,9 +272,16 @@ function chart(state: GameState, ui: Controls) {
             )
       }</div></div></aside>`
   }
+  const objectives = chartObjectives(state)
+  const orders = `<details class="sk-chart-orders"><summary>Captain’s orders · ${objectives.length}</summary><div>
+    ${objectives.map(job => `<article><small>${job.offered ? 'Available commission' : 'Active order'}</small><h2>${job.title}</h2><p>${safe(job.detail)}</p>${ui.button('Locate ' + PORTS[job.destination].name, () => {
+      ui.settings.destination = job.destination
+      ui.refresh()
+    }, { secondary: true })}</article>`).join('') || '<p>Your docket is clear. Visit a freight desk for another contract.</p>'}
+    </div></details>`
   return `<div class="sk-mapstage"><div class="sk-map-scroll"><div class="sk-chart" aria-label="Chart of four skyports">
       <img src="${artwork('sky-chart')}" alt="" class="sk-chart-art"><canvas aria-hidden="true" data-map width="880" height="624"></canvas>${nodes}</div></div>
-      <div class="sk-chart-plaque"><h1>Sky chart</h1><span>${PORTS[state.port].name}</span></div>${popover}</div>`
+      <div class="sk-chart-plaque"><h1>Sky chart</h1><span>${PORTS[state.port].name}</span></div>${orders}${popover}</div>`
 }
 
 function freightDesk(state: GameState, ui: Controls) {
@@ -467,7 +475,7 @@ export function renderInterior(
     if (!(event.target instanceof Element)) return
     const button = event.target.closest<HTMLButtonElement>('button[data-action]')
     if (button && !button.disabled) callbacks[Number(button.dataset.action)]?.()
-    else if (view === 'chart' && settings.destination && !event.target.closest('.sk-map-popover')) {
+    else if (view === 'chart' && settings.destination && !event.target.closest('.sk-map-popover, .sk-chart-orders')) {
       page.querySelector<HTMLButtonElement>('.sk-dismiss')?.click()
     }
   })

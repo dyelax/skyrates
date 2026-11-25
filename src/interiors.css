@@ -1216,3 +1216,12 @@
 .sk-interior.sk-illustrated[data-view='authority'] {
   background-position: 33% 16%;
 }
+
+.sk-chart-orders { position:absolute; z-index:3; top:14px; right:16px; max-width:min(285px,68vw); color:#f3e5c9; border:1px solid #af9a6f; background:#14252cf2; border-radius:3px; box-shadow:0 3px 10px #08142169; }
+.sk-chart-orders summary { cursor:pointer; padding:8px 12px; font-weight:600; font-size:13px; }
+.sk-chart-orders>div { max-height:65svh; overflow:auto; padding:0 12px 10px; }
+.sk-chart-orders article { padding:9px 0; border-top:1px solid #54605a; }
+.sk-chart-orders small { color:#d6b77b; font:600 10px var(--font-sans); text-transform:uppercase; letter-spacing:.12em; }
+.sk-chart-orders h2 {font:600 23px/1.1 var(--font-serif);margin:4px 0;}
+.sk-chart-orders p {font-size:13px;margin:5px 0 8px;}
+.sk-interior .sk-map-popover {z-index:4;}
