@@ -122,7 +122,7 @@
   line-height: 1;
 }
 .atelier-home {
-  bottom: 18px;
+  bottom: calc(18px + var(--notice-space, 0px));
   right: 20px;
   width: 33px;
   height: 33px;
@@ -142,6 +142,7 @@
 .atelier-paper,
 .atelier-conversation {
   z-index: 8;
+  height: calc(100% - var(--notice-space, 0px));
 }
 .atelier-paper[hidden],
 .atelier-conversation[hidden] {
@@ -178,14 +179,14 @@
 .atelier-tray .sk-room-ledger {
   width: 100%;
   max-width: 100%;
-  max-height: calc(100dvh - 72px);
+  max-height: calc(100dvh - 72px - var(--notice-space, 0px));
   padding-top: 38px;
 }
 .atelier-tray .sk-crumb {
   display: none;
 }
 .atelier-tray .sk-first-light {
-  max-height: calc(100dvh - 50px);
+  max-height: calc(100dvh - 50px - var(--notice-space, 0px));
   overflow: auto;
   background: #14232b;
 }
@@ -231,7 +232,7 @@
     width: 100%;
   }
   .atelier-tray .sk-room-ledger {
-    max-height: 73dvh;
+    max-height: min(73dvh, calc(100dvh - 20px - var(--notice-space, 0px)));
   }
   .atelier-caption {
     max-width: 68%;
