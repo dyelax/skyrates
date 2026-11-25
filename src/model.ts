@@ -1,3 +1,4 @@
+import { seasonalAdjustment } from './seasonal-trade'
 import { DRILL_STAGES, nextStage, type DrillStage } from './drill'
 import {
   ABILITIES,
@@ -162,7 +163,7 @@ export function cargoUsed(state: GameState): number {
 export function priceAt(state: GameState, port: PortId, good: GoodId): Quote {
   // A three-day price cycle keeps remembered quotes useful while ports retain their specialties.
   const cycle = (Math.floor((state.day - 1) / 3) + PORT_IDS.indexOf(port) + GOOD_IDS.indexOf(good)) % 3
-  const price = PORTS[port].prices[good] + cycle - 1
+  const price = Math.max(3, PORTS[port].prices[good] + cycle - 1 + seasonalAdjustment(port, good, state.day))
   const wholesale = Math.floor(price * 0.9)
   const sell = Math.max(1, Math.min(price - 2, wholesale - 1))
   const buy = state.ability === 'broker' ? wholesale : price

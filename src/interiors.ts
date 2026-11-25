@@ -1,3 +1,4 @@
+import { seasonalPosting } from './seasonal-trade'
 import { openHandbook } from './handbook'
 import { routeWeather, seasonAt, CLIMATES } from './weather'
 import { openPrologue } from './prologue'
@@ -84,6 +85,10 @@ function details(items: [string, string | number][]) {
   return `<dl class="sk-statlist">${items.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>`
 }
 
+function marketOutlook(port:PortId,day:number) {
+  return seasonalPosting(port,day).map(post => `<p><b>${GOODS[post.good].name} · ${post.adjustment>0?'+':''}${post.adjustment} cr</b><br>${post.reason}</p>`).join('')
+}
+
 function market(state: GameState, ui: Controls) {
   const { side } = ui.settings
   const used = cargoUsed(state)
@@ -128,7 +133,7 @@ function market(state: GameState, ui: Controls) {
     `<div class="sk-layout"><article class="sk-card"><div class="sk-card-head"><h2>Exchange floor</h2><div class="sk-switch" aria-label="Trade direction">
     <button type="button" data-action="${changeSide('buy')}" aria-pressed="${side === 'buy'}">Buy</button>
     <button type="button" data-action="${changeSide('sell')}" aria-pressed="${side === 'sell'}">Sell</button></div></div>
-    <ul class="sk-goods">${rows || '<li>Your hold is empty.</li>'}</ul><p>Next exchange posting on day ${nextPosting(state.day)}.</p></article>
+    <details class="sk-fold"><summary>Seasonal market · ${seasonAt(state.day)}</summary>${marketOutlook(state.port,state.day)}</details><ul class="sk-goods">${rows || '<li>Your hold is empty.</li>'}</ul><p>Next exchange posting on day ${nextPosting(state.day)}.</p></article>
     <aside class="sk-stack"><article class="sk-card"><h2>${city.institution}</h2><p>${city.order.need}</p>${ui.button('Visit ' + city.institution, () => ui.go('civic'), { secondary: true })}</article><details class="sk-fold sk-ledger-fold"><summary>Cargo manifest · ${used} / ${state.ship.hold}</summary>
     ${
       lots.length
@@ -276,7 +281,7 @@ function chart(state: GameState, ui: Controls) {
       <h2 id="sk-selected-port">${port.name}</h2>
       <p>${current ? 'Local exchange' : unlocked ? `${days}-day passage` : 'Relight the beacon to reach this port'} · ${GOODS[port.specialty].name}</p>
       <p class="sk-forecast">${forecast.summary} · wind toward ${forecast.bearing}, ${forecast.knots} kn</p>
-      <details class="sk-fold"><summary>Climate on arrival</summary><p>${CLIMATES[dest].region}. ${seasonAt(state.day + days)} · day ${state.day + days}.</p></details>
+      <details class="sk-fold"><summary>Climate and trade on arrival</summary><p>${CLIMATES[dest].region}. ${seasonAt(state.day + days)} · day ${state.day + days}.</p>${marketOutlook(dest,state.day+days)}</details>
       <details class="sk-fold"><summary>Port trade &amp; services</summary><p>${CITY_ECONOMY[dest].tradeLead}</p><p>${CITY_ECONOMY[dest].institution} requests ${CITY_ECONOMY[dest].order.quantity} × ${GOODS[CITY_ECONOMY[dest].order.good].name}.</p></details>
       <details class="sk-fold"><summary>Recorded prices</summary>${rememberedPrices(state, dest)}</details>
       <div class="sk-actions">${
