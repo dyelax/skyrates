@@ -72,6 +72,7 @@ export interface GameState {
   notoriety: number
   ability: AbilityId | null
   mission: 'offered' | 'accepted' | 'invoice' | 'lit'
+  firstWatch: 'new' | 'arrived' | 'briefed'
   certificate: 'none' | 'aboard' | 'paid'
   tender: 'unseen' | 'helped' | 'passed'
   specialFreightTaken: boolean
@@ -128,6 +129,7 @@ export function initialState(): GameState {
     notoriety: 0,
     ability: null,
     mission: 'offered',
+    firstWatch: 'new',
     certificate: 'none',
     tender: 'unseen',
     specialFreightTaken: false,
@@ -735,6 +737,7 @@ function validSave(value: unknown): value is GameState {
     !integer(value.voyageCount) ||
     (value.level !== 1 && value.level !== charterLevel) ||
     !(value.ability === null || ABILITY_IDS.includes(value.ability as AbilityId)) ||
+    !['new', 'arrived', 'briefed'].includes(String(value.firstWatch)) ||
     typeof value.mission !== 'string' ||
     !['offered', 'accepted', 'invoice', 'lit'].includes(value.mission) ||
     !(value.mission === 'lit' ? value.certificate === 'aboard' || value.certificate === 'paid' : value.certificate === 'none') ||
@@ -795,6 +798,7 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
     if (serialized) {
       const value: unknown = JSON.parse(serialized)
       if (object(value) && value.version === 1) {
+        if (value.firstWatch === undefined) value.firstWatch = 'briefed'
         if (value.pendingNotices === undefined) value.pendingNotices = []
         if (value.certificate === undefined) value.certificate = value.mission === 'lit' ? 'aboard' : 'none'
         if (value.drill === undefined) value.drill = null
