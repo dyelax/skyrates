@@ -410,3 +410,53 @@ body:has(.air-duel.is-drill) #toast {
   bottom: 6px;
   z-index: 16;
 }
+
+.air-duel .duel-wind {
+  position: absolute;
+  z-index: 2;
+  left: max(20px, env(safe-area-inset-left));
+  top: 68px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--duel-rule);
+  border-radius: 4px;
+  background: var(--duel-panel);
+}
+.duel-anemoscope {
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid #aaa17f;
+  color: #eed29a;
+}
+.duel-anemoscope i {
+  font: normal 20px/1 system-ui;
+}
+.duel-wind figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 64px;
+  text-transform: capitalize;
+  font-size: 10px;
+  color: #bcd3c5;
+}
+.duel-wind figcaption strong {
+  font-size: 12px;
+  color: #fff0d9;
+}
+.air-duel .duel-wind button {
+  min-height: 29px;
+  padding: 3px 6px;
+}
+@media (max-width: 720px) {
+  .air-duel .duel-wind {
+    top: 51px;
+    left: 9px;
+  }
+}

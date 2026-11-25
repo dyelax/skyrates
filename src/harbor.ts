@@ -1,3 +1,5 @@
+import { portWeather } from './weather'
+import { paintedWeather } from './scene-weather'
 import { cargoUsed, PORTS, type GameState, type PortId } from './model'
 import { CITY_ECONOMY } from './city-economy'
 import { icon } from './icons'
@@ -129,16 +131,18 @@ export function mountHarbor(
 ): () => void {
   const quay = quays[state.port]
   const lit = state.mission === 'lit' && ['sunstep', 'glasshouse'].includes(state.port)
+  const weather = portWeather(state.port,state.day)
   const scenery = 'art/quay-' + state.port + (lit ? '-lit' : '') + '.webp'
   main.innerHTML = `<section class="quay" aria-label="${PORTS[state.port].name} harbor">
     <div class="walk-view"><canvas aria-label="Walkable 3D harbor. Walk with W A S D, drag to look, or tap the paving to walk."></canvas></div>
     <div class="quay-scroll" tabindex="-1"><div class="quay-track"><div class="quay-plate">
       <img class="quay-art" alt="The working docks at ${PORTS[state.port].name}" src="${scenery}" fetchpriority="high">
+      ${paintedWeather(weather)}
       ${places.map((place) => spot(state, place)).join('')}
     </div></div></div>
     <div class="quay-shade" aria-hidden="true"></div>
     <header class="quay-title"><span class="quay-region"><i></i>${quay.region}</span><h1>${PORTS[state.port].name}</h1>
-      <p>${icon(lit ? 'sunset' : 'sun')}<span>Day ${String(state.day).padStart(2, '0')}</span><i></i>${lit ? 'Night watch' : quay.weather}</p></header>
+      <p>${icon(lit ? 'sunset' : 'sun')}<span>Day ${String(state.day).padStart(2, '0')}</span><i></i>${lit ? 'Night watch · ' : ''}${weather.season} · ${weather.summary}</p></header>
     <div class="pocket"><span class="coin-readout" title="Available crowns">${icon('coins')} <b>${state.coins.toLocaleString('en-US')}</b><span>crowns</span></span><button class="scene-tool" type="button" data-tool="settings" aria-label="Game options" title="Game options">${icon('settings-2')}</button></div>
     <div class="field-tools"><button class="chart-tool" type="button" data-go="chart" aria-label="Sky chart"><img src="compass.svg" alt=""><span>Sky chart</span></button>
       <button class="scene-tool journal-tool" type="button" data-go="log" aria-label="Captain’s log" title="Captain’s log">${icon('book-open')}</button></div>
