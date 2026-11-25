@@ -130,7 +130,7 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
   root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause"><kbd>P</kbd> Pause</button></div>
     <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : options.opponent.name, 'enemy')}</div>
     ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div>${options.drill ? '' : paintedWeather(weather)}<div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
-    <div class="duel-console">${battery('port', cannons)}${battery('starboard', cannons)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Steer to contact or push the touching ships apart"><kbd>B</kbd> Close in</button><button type="button" data-action="escape"><kbd>R</kbd> Break away</button></div></div></div>
+    <div class="duel-console">${battery('port', cannons)}${battery('starboard', cannons)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Steer to contact or push the touching ships apart"><kbd>B</kbd> <span data-read="ramOrder">Close in</span></button><button type="button" data-action="escape"><kbd>R</kbd> <span data-read="escapeOrder">Break away</span></button></div></div></div>
     <div class="duel-foot"><span>${options.drill ? 'Watch exercise · Chalk rounds' : '<kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Click raider to fire · Touch to engage crews'}</span><span data-read="crew"></span></div>`
   if (options.drill) {
     root.insertAdjacentHTML(
@@ -139,7 +139,7 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
     )
   }
   if (options.shipName && !options.drill)
-    root.querySelector('[data-read="player"]')!.previousElementSibling!.textContent = options.shipName
+    root.querySelector('.duel-ship-name')!.textContent = options.shipName
   host.replaceChildren(root)
   const container = root.querySelector<HTMLElement>('.duel-canvas')!
   const area = measureSky(root)
@@ -490,7 +490,6 @@ class SkyBattle extends Phaser.Scene {
     } else if (!this.pausedDuel) {
       if (action === 'windage' && !this.drill) {
         this.sightSet = !this.sightSet
-        this.buttons.windage.setAttribute('aria-pressed', String(this.sightSet))
         this.tell(
           this.sightSet
             ? 'Sight set. The gunners allow for wind drift.'
@@ -505,7 +504,6 @@ class SkyBattle extends Phaser.Scene {
       }
       if (action === 'ram') {
         this.escaping = false
-        this.buttons.escape.innerHTML = '<kbd>R</kbd> Break away'
         if (this.touching) {
           const { nx, ny } = hullContact(this.player, this.foe)
           // A short shove from the crew clears the rail without committing to an escape.
@@ -525,7 +523,6 @@ class SkyBattle extends Phaser.Scene {
       if (action === 'escape') {
         this.ramming = false
         this.escaping = !this.escaping
-        this.buttons.escape.innerHTML = this.escaping ? '<kbd>R</kbd> Stand & fight' : '<kbd>R</kbd> Break away'
         if (this.escaping) {
           this.player.throttle = 3
           const exits = [
@@ -655,7 +652,10 @@ class SkyBattle extends Phaser.Scene {
       this.meters[key].style.width = `${100 * strength / max}%`
     }
     this.readings.crew.textContent = this.touching ? 'Rails touching · Crews engaged' : 'Open sky · Crews apart'
-    this.buttons.ram.innerHTML = this.touching ? '<kbd>B</kbd> Push off' : this.ramming ? '<kbd>B</kbd> Belay' : '<kbd>B</kbd> Close in'
+    const ramOrder = this.touching ? 'Push off' : this.ramming ? 'Belay' : 'Close in'
+    const escapeOrder = this.escaping ? 'Stand & fight' : 'Break away'
+    if (this.readings.ramOrder.textContent !== ramOrder) this.readings.ramOrder.textContent = ramOrder
+    if (this.readings.escapeOrder.textContent !== escapeOrder) this.readings.escapeOrder.textContent = escapeOrder
     const locked = !this.ready || this.pausedDuel || this.ended
     this.player.guns.forEach((gun) => {
       const el = this.buttons[`gun${gunKey(gun)}`]
@@ -677,7 +677,10 @@ class SkyBattle extends Phaser.Scene {
       el.classList.toggle('bearing', this.ready && inArc(this.player, side, this.foe))
     }
     const helmLocked = locked || (!!this.drill && !['dodge', 'fire', 'board', 'melee', 'return'].includes(this.drill))
-    if (this.buttons.windage) this.buttons.windage.disabled = locked
+    if (this.buttons.windage) {
+      this.buttons.windage.disabled = locked
+      this.buttons.windage.setAttribute('aria-pressed', String(this.sightSet))
+    }
     this.buttons.faster.disabled = helmLocked || this.player.throttle >= 3
     this.buttons.slower.disabled = helmLocked || this.player.throttle <= 0
     if (this.drill) {
