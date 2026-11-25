@@ -1,3 +1,4 @@
+import { routeWeather, seasonAt, CLIMATES } from './weather'
 import { openPrologue } from './prologue'
 import './interiors.css'
 import { CITY_ECONOMY, nextPosting, RARITY } from './city-economy'
@@ -266,12 +267,15 @@ function chart(state: GameState, ui: Controls) {
     const current = state.port === dest
     const unlocked = isUnlocked(state, dest)
     const days = routeDays(state.port, dest)
+    const forecast = routeWeather(state.port, dest, state.day)
     popover = `<aside class="sk-map-popover" role="dialog" aria-labelledby="sk-selected-port" data-selected="${dest}">
       <img class="sk-port-thumbnail" alt="" src="${artwork(state.mission === 'lit' && (dest === 'sunstep' || dest === 'glasshouse') ? dest + '-lit' : dest)}">
       <button type="button" class="sk-dismiss" aria-label="Close port details" data-action="${ui.register(close)}">×</button>
       <div class="sk-map-copy"><div class="sk-kicker">${current ? 'Moored here' : unlocked ? port.subtitle : 'Outer skyway · locked'}</div>
       <h2 id="sk-selected-port">${port.name}</h2>
       <p>${current ? 'Local exchange' : unlocked ? `${days}-day passage` : 'Relight the beacon to reach this port'} · ${GOODS[port.specialty].name}</p>
+      <p class="sk-forecast">${forecast.summary} · wind toward ${forecast.bearing}, ${forecast.knots} kn</p>
+      <details class="sk-fold"><summary>Climate on arrival</summary><p>${CLIMATES[dest].region}. ${seasonAt(state.day + days)} · day ${state.day + days}.</p></details>
       <details class="sk-fold"><summary>Port trade &amp; services</summary><p>${CITY_ECONOMY[dest].tradeLead}</p><p>${CITY_ECONOMY[dest].institution} requests ${CITY_ECONOMY[dest].order.quantity} × ${GOODS[CITY_ECONOMY[dest].order.good].name}.</p></details>
       <details class="sk-fold"><summary>Recorded prices</summary>${rememberedPrices(state, dest)}</details>
       <div class="sk-actions">${
@@ -303,7 +307,7 @@ function chart(state: GameState, ui: Controls) {
     </div></details>`
   return `<div class="sk-mapstage"><div class="sk-map-scroll"><div class="sk-chart" aria-label="Chart of four skyports">
       <img src="${artwork('sky-chart')}" alt="" class="sk-chart-art"><canvas aria-hidden="true" data-map width="880" height="624"></canvas>${nodes}</div></div>
-      <div class="sk-chart-plaque"><h1>Sky chart</h1><span>${PORTS[state.port].name}</span></div>${orders}${popover}</div>`
+      <div class="sk-chart-plaque"><h1>Sky chart</h1><span>${PORTS[state.port].name} · ${seasonAt(state.day)} · day ${state.day}</span></div>${orders}${popover}</div>`
 }
 
 function freightDesk(state: GameState, ui: Controls) {
