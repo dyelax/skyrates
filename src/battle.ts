@@ -1,4 +1,6 @@
 import Phaser from 'phaser'
+import { mountBattleFx } from './battle-fx'
+import './battle-fx.css'
 import type { WeatherReport } from './weather'
 import { paintedWeather } from './scene-weather'
 import {
@@ -283,6 +285,7 @@ class SkyBattle extends Phaser.Scene {
     this.paths = this.add.graphics().setDepth(2)
     this.playerView = this.makeShip('schooner', 114)
     this.foeView = this.makeShip('opponent', 110)
+    mountBattleFx(this, this.root, { player: this.playerView, enemy: this.foeView }, { player: this.player, enemy: this.foe })
     this.root.dataset.shipRenderer = 'illustrated'
     this.updateShipView(this.playerView, this.player)
     this.updateShipView(this.foeView, this.foe)

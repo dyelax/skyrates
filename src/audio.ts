@@ -83,30 +83,38 @@ export function toggleSound() {
   }
 }
 
-// Short filtered noise transients over a falling pitch give the two hulls a physical response.
-export function battleSound(event: 'cannon' | 'hit' | 'grapple') {
+const battleVoices = {
+  cannon: { duration: 0.48, filter: 'lowpass', from: 1850, to: 140, pitch: 115, tail: 33, level: 0.21 },
+  hit: { duration: 0.26, filter: 'lowpass', from: 2400, to: 140, pitch: 115, tail: 33, level: 0.21 },
+  grapple: { duration: 0.38, filter: 'bandpass', from: 2400, to: 420, pitch: 280, tail: 48, level: 0.21 },
+  impact: { duration: 0.23, filter: 'bandpass', from: 1100, to: 170, pitch: 140, tail: 55, level: 0.19 },
+  wreck: { duration: 0.98, filter: 'lowpass', from: 1750, to: 70, pitch: 196, tail: 29, level: 0.18 },
+} as const
+
+export function battleSound(event: keyof typeof battleVoices, strength = 1) {
   if (!enabled || typeof AudioContext === 'undefined') return
   const ctx = audio()
   const start = ctx.currentTime
-  const duration = event === 'cannon' ? 0.48 : event === 'hit' ? 0.26 : 0.38
+  const voice = battleVoices[event]
+  const duration = voice.duration
   const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * duration), ctx.sampleRate)
   const wave = buffer.getChannelData(0)
   for (let i = 0; i < wave.length; i++) wave[i] = Math.random() * 2 - 1
   const noise = ctx.createBufferSource()
   noise.buffer = buffer
   const filter = ctx.createBiquadFilter()
-  filter.type = event === 'grapple' ? 'bandpass' : 'lowpass'
-  filter.frequency.setValueAtTime(event === 'cannon' ? 1850 : 2400, start)
-  filter.frequency.exponentialRampToValueAtTime(event === 'grapple' ? 420 : 140, start + duration)
+  filter.type = voice.filter
+  filter.frequency.setValueAtTime(voice.from, start)
+  filter.frequency.exponentialRampToValueAtTime(voice.to, start + duration)
   const envelope = ctx.createGain()
   envelope.gain.setValueAtTime(0.0001, start)
-  envelope.gain.exponentialRampToValueAtTime(0.21, start + 0.006)
+  envelope.gain.exponentialRampToValueAtTime(voice.level * Math.max(0.01, Math.min(1, strength)), start + 0.006)
   envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration)
   noise.connect(filter).connect(envelope).connect(ctx.destination)
   const body = ctx.createOscillator()
   body.type = event === 'grapple' ? 'triangle' : 'sine'
-  body.frequency.setValueAtTime(event === 'grapple' ? 280 : 115, start)
-  body.frequency.exponentialRampToValueAtTime(event === 'grapple' ? 48 : 33, start + duration)
+  body.frequency.setValueAtTime(voice.pitch, start)
+  body.frequency.exponentialRampToValueAtTime(voice.tail, start + duration)
   body.connect(envelope)
   noise.start(start)
   body.start(start)
