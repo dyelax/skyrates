@@ -1,3 +1,4 @@
+import { artwork } from './artwork'
 import { seasonalPosting } from './seasonal-trade'
 import { openHandbook } from './handbook'
 import { routeWeather, seasonAt, CLIMATES } from './weather'
@@ -54,7 +55,6 @@ interface InteriorSettings {
 // The shell can replace its content element after any command. Keep the selected
 // commodity side and chart destination across those redraws within the same game tab.
 const settingsByDocument = new WeakMap<Document, InteriorSettings>()
-const artwork = (name: string) => `${import.meta.env.BASE_URL}art/${name}.webp`
 const coins = (value: number) => `${value.toLocaleString('en-US')} cr`
 const safe = (value: string) =>
   value.replace(
