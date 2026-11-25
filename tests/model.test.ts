@@ -374,7 +374,7 @@ test('first sailing orders start the watch drill once and checkpoints survive re
   assert.equal(act(state, { type: 'continueVoyage' }), state)
   assert.equal(act(state, { type: 'endDrill', skip: false }), state)
   assert.equal(advanceDrill(state, 'board'), state)
-  for (const stage of ['dodge', 'fire', 'board', 'melee', 'debrief'] as const) {
+  for (const stage of ['dodge', 'fire', 'board', 'melee', 'return', 'debrief'] as const) {
     state = reload(advanceDrill(state, stage))
     assert.equal(state.drill, stage)
   }

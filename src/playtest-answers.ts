@@ -43,7 +43,7 @@ export function assessPlaytest(text: string, state: GameState, view: string) {
       reply = `You have ${state.ship.cannons} fitted cannon${state.ship.cannons === 1 ? '' : 's'}. Steer out of the incoming fire line, then turn until a fitted gun bears on the other ship. Fire with its numbered control. Copperfall refits add guns. Practice the sequence at a shipyard.`
     if (!reply && /\b(board|boarding|melee|grapple)\b/i.test(question))
       reply =
-        'Use Ram to intercept. On hull contact, the grapples pull the ships together. Your crew fights on deck. Experienced hands and damage dealt before boarding improve your chances.'
+        'Steer alongside or choose Close in. The crew meters drain only while the hulls touch. Steer clear or use Push off to disengage. New hands and veterans increase your starting strength. If the enemy crew yields while its hull is afloat, you can negotiate over the prize.'
     if (!reply && /\b(wind|squall|weather|drift)\b/i.test(question)) {
       const w = voyageWeather(state)
       reply = `${w.summary}. Wind blows toward ${w.bearing} at ${w.knots} knots. It carries ships and shots downwind. The chart shows the route forecast, and V sets the wind sight in battle.`
