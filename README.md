@@ -1,6 +1,6 @@
 # Skyrates
 
-[Play Skyrates](https://dyelax.github.io/skyrates/)
+[Play Skyrates](https://dyelax.github.io/skyrates/) · [Rotate the Wayfarer](https://dyelax.github.io/skyrates/study.html)
 
 ![Exploring the docks at Sunstep Quay in Skyrates](docs/harbor.webp)
 
@@ -11,6 +11,10 @@ Take the helm of the Wayfarer, a wooden schooner that rides a glowing lift keel 
 Point at a person or a building in the harbor painting. The foreground shifts slightly against the distant skyline, and the local speaker turns toward you. Click the market to trade, talk to the porter for a lead, or visit Harbormaster Vale for your commission. **H** reveals place names. On a narrow screen, swipe along the quay or use its pan arrows. Inside a shop, select the person to speak, the counter for business, or the door to go back outside. Select the moored Wayfarer to inspect your hold, hull, and crew.
 
 Open the sky chart with **M** or the compass. Select an island for passage time, recorded prices, and sailing orders. The captain’s log opens with **J**. Decisions, cargo, and completed encounters save automatically in this browser. Sound and fullscreen are available from the small options control at the quay.
+
+## Inspect the Wayfarer
+
+Choose **Inspect 3D model** from the moored ship’s papers or open the model study directly. Drag to orbit, pinch or scroll to zoom, or choose **Turntable**. When the canvas has keyboard focus, use the arrows to rotate, **+ / −** to zoom and **Home** to reset. **Painting** opens the original elevation for comparison. The study loads its model separately from the game.
 
 ## In a fight
 
