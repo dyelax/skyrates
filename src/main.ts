@@ -1,3 +1,5 @@
+import { openVoiceSettings } from './npc-voices'
+import { receiveCaptain } from './edition-transfer'
 import { firstWatchNote } from './handbook'
 import '@fontsource/barlow/latin-400.css'
 import '@fontsource/barlow/latin-500.css'
@@ -188,3 +190,6 @@ if (state.firstWatch === 'new' && !state.voyage && state.day === 1) {
     main.focus({ preventScroll: true })
   })
 }
+
+if (new URLSearchParams(location.search).has('voices')) openVoiceSettings()
+receiveCaptain()
