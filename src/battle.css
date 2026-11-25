@@ -9,6 +9,9 @@ body:has(.air-duel) {
   inset: 0;
   z-index: 15;
   isolation: isolate;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  align-items: start;
   overflow: hidden;
   background: #17343d;
   color: #f6efdc;
@@ -86,10 +89,11 @@ body:has(.air-duel) {
   margin-right: 3px;
 }
 .air-duel .duel-readouts {
-  position: absolute;
+  position: relative;
+  grid-area: 1 / 1;
   z-index: 2;
-  top: max(16px, env(safe-area-inset-top));
-  left: max(20px, env(safe-area-inset-left));
+  margin-top: max(16px, env(safe-area-inset-top));
+  margin-left: max(20px, env(safe-area-inset-left));
   display: flex;
   align-items: center;
   gap: 14px;
@@ -251,8 +255,8 @@ body:has(.air-duel) {
 }
 @media (max-width: 720px) {
   .air-duel .duel-readouts {
-    left: 9px;
-    top: 9px;
+    margin-left: max(9px, env(safe-area-inset-left));
+    margin-top: max(9px, env(safe-area-inset-top));
     gap: 8px;
     width: calc(100% - 98px);
     padding: 7px;
@@ -380,7 +384,13 @@ body:has(.air-duel) {
 }
 @media (max-width: 720px) {
   .drill-coach {
-    top: 60px;
+    position: relative;
+    grid-area: 2 / 1;
+    justify-self: center;
+    top: auto;
+    left: auto;
+    transform: none;
+    margin-top: 6px;
     width: min(460px, 94vw);
     padding: 8px 12px;
   }
@@ -410,14 +420,14 @@ body:has(.air-duel) {
 }
 
 .air-duel .duel-wind {
-  position: absolute;
+  position: relative;
+  grid-area: 2 / 1;
+  justify-self: start;
   z-index: 2;
-  left: max(20px, env(safe-area-inset-left));
-  top: 68px;
   display: flex;
   gap: 8px;
   align-items: center;
-  margin: 0;
+  margin: 6px 0 0 max(20px, env(safe-area-inset-left));
   padding: 5px 8px;
   border: 1px solid var(--duel-rule);
   border-radius: 4px;
@@ -454,8 +464,7 @@ body:has(.air-duel) {
 }
 @media (max-width: 720px) {
   .air-duel .duel-wind {
-    top: 51px;
-    left: 9px;
+    margin-left: max(9px, env(safe-area-inset-left));
   }
 }
 
@@ -467,7 +476,7 @@ body:has(.air-duel) {
 }
 @media (max-width: 720px) {
   .air-duel:not(.is-drill) .duel-banner {
-    top: 99px;
+    top: max(146px, 19%);
   }
 }
 
@@ -480,6 +489,9 @@ body:has(.air-duel) {
     left: var(--instructor-width);
   }
   .air-duel.is-drill .drill-coach {
+    position: absolute;
+    grid-area: auto;
+    margin-top: 0;
     left: 6px;
     top: 6px;
     transform: none;
@@ -498,8 +510,8 @@ body:has(.air-duel) {
     font-size: 21px;
   }
   .air-duel.is-drill .duel-readouts {
-    left: calc(var(--instructor-width) + 6px);
-    top: 6px;
+    margin-left: calc(var(--instructor-width) + 6px);
+    margin-top: 6px;
     width: calc(100% - var(--instructor-width) - 85px);
     max-width: none;
     padding: 6px;
@@ -519,3 +531,14 @@ body:has(.air-duel) {
     display: none;
   }
 }
+
+.air-duel .duel-ship-name {
+  display: block;
+  margin-bottom: 4px;
+  color: #f2ddb7;
+  font: 600 12px/1.1 var(--font-sans, Barlow, system-ui, sans-serif);
+}
+.air-duel .duel-meter-title:not(:first-child) { margin-top: 4px; }
+.air-duel .duel-meter-title b { white-space: nowrap; }
+.air-duel .duel-hull-track { margin-top: 2px; }
+.air-duel .duel-banner { top: max(84px, 13%); }

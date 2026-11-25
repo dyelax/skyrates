@@ -18,7 +18,6 @@ const HULL_DRIFT = 19
 const SHOT_DRIFT = 32
 
 export type Side = 'port' | 'starboard'
-export type DuelOutcome = 'victory' | 'defeat' | 'escaped' | 'boarded'
 export interface Point {
   x: number
   y: number
@@ -218,25 +217,4 @@ function distanceToSegment(p: Point, a: Point, b: Point): number {
 
 export function hitsShip(point: Point, ship: Vessel): boolean {
   return distanceToSegment(point, localPoint(ship, -29, 0), localPoint(ship, 33, 0)) <= 15
-}
-
-export function boardingContact(a: Vessel, b: Vessel): boolean {
-  if (Math.hypot(a.x - b.x, a.y - b.y) > 96) return false
-  // The stations span the projected deck, including a schooner's long bow and narrow beam.
-  return [-33, -17, 0, 17, 35].some((f) => {
-    const station = localPoint(a, f, 0)
-    return distanceToSegment(station, localPoint(b, -29, 0), localPoint(b, 33, 0)) < 24
-  })
-}
-
-export function boardingOdds(
-  crew: number,
-  skill: number,
-  player: Pick<Vessel, 'hull' | 'maxHull'>,
-  enemy: Pick<Vessel, 'hull' | 'maxHull'>,
-  defendingStrength = WATCH_CUTTER.crew,
-): number {
-  const force = Math.max(0.1, crew * skill) * (0.8 + (0.2 * player.hull) / player.maxHull)
-  const raiders = defendingStrength * (0.53 + (0.47 * enemy.hull) / enemy.maxHull)
-  return Math.max(0.05, Math.min(0.95, 0.5 + ((force - raiders) / (force + raiders)) * 1.3))
 }

@@ -31,7 +31,7 @@ export function openHandbook(state: GameState) {
     ],
     [
       'How do I fight and board?',
-      'Your first departure from Sunstep includes a Harbor Watch exercise with chalk rounds. Watch the incoming line, steer clear, turn your port gun toward the other ship and fire. Closing to hull contact starts a boarding action. Crew numbers, experienced hands and prior hull damage change the odds. Replay the drill at the yard.',
+      'Your first departure from Sunstep includes a Harbor Watch exercise with chalk rounds. Watch the incoming line, steer clear, turn your port gun toward the other ship and fire. The first impact costs hull. A square bow into a rail hurts that rail more. Both crews fight while touching and keep their remaining strength when apart. Steer clear or push off. An enemy with an exhausted crew and an intact hull yields. Replay the drill at the yard.',
     ],
     [
       'What changes as people hear of me?',

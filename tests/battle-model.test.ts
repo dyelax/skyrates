@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  armedSide, boardingOdds, buildOpponent, buildShip, discharge, hitsShip,
+  armedSide, buildOpponent, buildShip, discharge, hitsShip,
   inArc, moveShot, steerRaider, STILL_AIR, WATCH_CUTTER, type Shot,
 } from '../src/battle-model'
 import { RAIDER_PROFILES } from '../src/raiders'
@@ -28,19 +28,7 @@ test('raiders bring exactly the hull and firing stations reported by the lookout
   }
 })
 
-test('lookout and battle resolve the same boarding chance for each crew and reward disabling a hull', () => {
-  const captain = buildShip(origin, 0, 0, 0, 80)
-  let previousChance = 1
-  for (const profile of RAIDER_PROFILES) {
-    const foe = buildOpponent(toPort, 0, profile)
-    const lookout = boardingOdds(6, 1.25, captain, { hull: profile.hull, maxHull: profile.hull }, profile.crew)
-    const atContact = boardingOdds(6, 1.25, captain, foe, profile.crew)
-    assert.equal(lookout, atContact)
-    assert.ok(atContact < previousChance)
-    foe.hull /= 2
-    assert.ok(boardingOdds(6, 1.25, captain, foe, profile.crew) > atContact)
-    previousChance = atContact
-  }
+test('the Watch cutter retains its practice hull and firing stations', () => {
   const watch = buildOpponent(toPort, 0, WATCH_CUTTER)
   assert.equal(watch.maxHull, 82)
   assert.equal(watch.guns.length, 4)

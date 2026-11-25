@@ -1,6 +1,6 @@
 import type { Point, Side } from './battle-model'
 
-export const DRILL_STAGES = ['briefing', 'dodge', 'fire', 'board', 'melee', 'debrief'] as const
+export const DRILL_STAGES = ['briefing', 'dodge', 'fire', 'board', 'melee', 'return', 'debrief'] as const
 export type DrillStage = (typeof DRILL_STAGES)[number]
 
 export function nextStage(stage: DrillStage): DrillStage | undefined {
@@ -57,7 +57,7 @@ export const COACH: Record<DrillStage, { chapter: string; title: string; text: s
   briefing: {
     chapter: 'Harbor Watch',
     title: 'Take the helm',
-    text: 'You command the cream-sailed Wayfarer. The cutter marked WATCH · LARK will fire chalk rounds. Your cargo, coins and hull are safe. Move, fire once, then bring a boarding party alongside.',
+    text: 'You command the cream-sailed Wayfarer. The cutter marked WATCH · LARK will fire chalk rounds. Your cargo, coins and hull are safe. Dodge one round, fire your port gun, and feel what happens when the hulls meet.',
   },
   dodge: {
     chapter: '01 / 03 · Helm',
@@ -70,18 +70,23 @@ export const COACH: Record<DrillStage, { chapter: string; title: string; text: s
     text: 'Round clear. Your cannon fires from the left rail. Turn with A / D or use the helm order below. When the fan turns gold, click the cutter or press 1. Watch the reload strip under the gun.',
   },
   board: {
-    chapter: '03 / 03 · Boarding',
+    chapter: '03 / 03 · Close action',
     title: 'Bring the hulls together',
-    text: 'Shot landed. Order a boarding run with B, or steer into the cutter yourself. The grapples catch when the hulls touch.',
+    text: 'Turn your bow into the cutter’s rail. A square hit hurts their hull more than yours. A slow approach preserves the prize. Both crews start fighting the moment the hulls touch.',
   },
   melee: {
-    chapter: '03 / 03 · Boarding',
-    title: 'Your crew takes the deck',
-    text: 'Watch your deckhands cross the lines. They fight on their own. More hands and veteran fighters improve your odds, especially against a damaged enemy.',
+    chapter: '03 / 03 · Close action',
+    title: 'Shear away from the cutter',
+    text: 'The hull blow landed once. Watch both crew bars fall while the rails touch. Push off or steer clear and the crews stop fighting.',
+  },
+  return: {
+    chapter: '03 / 03 · Close action',
+    title: 'Come alongside for their surrender',
+    text: 'The crew bars held at separation. Close gently and stay in contact until the Watch training party yields. Keep the hull afloat.',
   },
   debrief: {
     chapter: 'Watch exercise complete',
     title: 'Cleared for the skyway',
-    text: 'The watch recalls its boarding party. In a real encounter you can also break away at the edge of the engagement. The shipyard can fit more guns for a broadside.',
+    text: 'Their crew yielded with the hull afloat. In a live encounter that leaves a prize to negotiate over. A wreck leaves no ship to command. Use Break away to leave a fight at the edge.',
   },
 }
