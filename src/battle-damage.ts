@@ -28,7 +28,7 @@ export function damagedHull(scene: Phaser.Scene, key: string, stage: number): st
   ctx.save()
   ctx.scale(original.width / 240, original.height / 80)
   ctx.globalCompositeOperation = 'source-atop'
-  ctx.fillStyle = ['transparent', 'rgba(88,51,31,.09)', 'rgba(41,36,35,.22)', 'rgba(25,31,34,.43)'][stage]
+  ctx.fillStyle = ['transparent', 'rgba(25,20,19,.13)', 'rgba(21,20,23,.31)', 'rgba(18,23,25,.5)'][stage]
   ctx.fillRect(0, 0, 240, 80)
 
   function tear(points: Point[]) {
