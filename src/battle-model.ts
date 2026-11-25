@@ -1,5 +1,13 @@
 import { GUN_POSITIONS } from './drill'
-export const RAIDER_CANNONS = GUN_POSITIONS.length
+
+export interface BattleOpponent {
+  name: string
+  cannons: number
+  hull: number
+  crew: number
+}
+
+export const WATCH_CUTTER: BattleOpponent = { name: 'Lark', cannons: 4, hull: 82, crew: 8.3 }
 export const SKY = { width: 940, height: 460 }
 export const GUN_ARC = Math.PI * 0.31
 export const SHOT_SPEED = 310
@@ -57,6 +65,26 @@ export function inArc(ship: Vessel, side: Side, target: Point): boolean {
 
 export function closestSide(ship: Vessel, target: Point): Side {
   return wrapAngle(angleBetween(ship, target) - ship.heading) < 0 ? 'port' : 'starboard'
+}
+
+export function armedSide(ship: Vessel, target: Point): Side {
+  const side = closestSide(ship, target)
+  return ship.guns.some((gun) => gun.side === side) ? side : ship.guns[0]?.side ?? side
+}
+
+export function armamentLabel(cannons: number): string {
+  if (cannons === 1) return '1 port gun'
+  if (cannons === 2) return '2 guns, one on each rail'
+  if (cannons === 4) return '4 guns, two on each rail'
+  const stations = GUN_POSITIONS.slice(0, cannons)
+  const port = stations.filter(gun => gun.side === 'port').length
+  return `${stations.length} guns, ${port} port and ${stations.length - port} starboard`
+}
+
+export function buildOpponent(pos: Point, heading: number, profile: BattleOpponent): Vessel {
+  const ship = buildShip(pos, heading, 0, 0, undefined, false, profile.cannons)
+  ship.maxHull = ship.hull = profile.hull
+  return ship
 }
 
 export function buildShip(
@@ -176,8 +204,14 @@ export function boardingContact(a: Vessel, b: Vessel): boolean {
   })
 }
 
-export function boardingOdds(crew: number, skill: number, player: Vessel, enemy: Vessel): number {
+export function boardingOdds(
+  crew: number,
+  skill: number,
+  player: Pick<Vessel, 'hull' | 'maxHull'>,
+  enemy: Pick<Vessel, 'hull' | 'maxHull'>,
+  defendingStrength = WATCH_CUTTER.crew,
+): number {
   const force = Math.max(0.1, crew * skill) * (0.8 + (0.2 * player.hull) / player.maxHull)
-  const raiders = 8.3 * (0.53 + (0.47 * enemy.hull) / enemy.maxHull)
+  const raiders = defendingStrength * (0.53 + (0.47 * enemy.hull) / enemy.maxHull)
   return Math.max(0.05, Math.min(0.95, 0.5 + ((force - raiders) / (force + raiders)) * 1.3))
 }

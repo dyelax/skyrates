@@ -1,3 +1,5 @@
+import { raiderToll, tollSettlementLabel, type TollSettlement } from './raiders'
+export * from './raiders'
 import { seasonalAdjustment } from './seasonal-trade'
 import { DRILL_STAGES, nextStage, type DrillStage } from './drill'
 import {
@@ -379,31 +381,9 @@ function releaseCargo(lot: CargoLot, quantity: number) {
   return cost
 }
 
-// Raiders use the ordinary home-port list price for a crate. Seasonal quotes, ability
-// discounts and a captain’s purchase history cannot change a demand mid-encounter.
-const cargoHome: Record<GoodId, PortId> = {
-  provisions: 'sunstep', glass: 'glasshouse', machinery: 'copperfall', grafts: 'sunstep',
-  prisms: 'glasshouse', governors: 'copperfall', soundings: 'meridian',
-}
-export const EMPTY_HOLD_TOLL = 5
-export function raiderToll(state: GameState): { good: GoodId | null; crowns: number } {
-  let good: GoodId | null = null
-  let crowns = EMPTY_HOLD_TOLL
-  for (const item of GOOD_IDS) {
-    const value = PORTS[cargoHome[item]].prices[item]
-    if (state.cargo[item].quantity && (good === null || value > crowns)) {
-      good = item
-      crowns = value
-    }
-  }
-  return { good, crowns }
-}
-
-/** Actual loss on surrender, including a captain with less than the empty-hold toll. */
-export function seizureLabel(state: GameState): string {
-  const toll = raiderToll(state)
-  return toll.good ? 'one crate of ' + GOODS[toll.good].name.toLowerCase()
-    : Math.min(state.coins, toll.crowns) + ' crowns'
+function settleToll(state: GameState, settlement: TollSettlement) {
+  for (const { good, quantity } of settlement.cargo) releaseCargo(state.cargo[good], quantity)
+  state.coins += settlement.change - settlement.coins
 }
 
 function trade(state: GameState, action: Extract<Command, { good: GoodId }>): boolean {
@@ -474,9 +454,9 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
       if (voyage.phase !== 'raider' || action.id !== voyage.id) return false
       const toll = raiderToll(state)
       let payment: string
-      if (action.payment === 'cargo' && toll.good) {
-        releaseCargo(state.cargo[toll.good], 1)
-        payment = 'one crate of ' + GOODS[toll.good].name.toLowerCase()
+      if (action.payment === 'cargo' && toll.settlement.cargo.length > 0 && toll.exposedValue >= toll.crowns) {
+        settleToll(state, toll.settlement)
+        payment = tollSettlementLabel(toll.settlement)
       } else if (action.payment === 'crowns' && state.coins >= toll.crowns) {
         state.coins -= toll.crowns
         payment = toll.crowns + ' crowns'
@@ -499,11 +479,9 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
       state.ship.hull = Math.min(state.ship.maxHull, Math.max(1, Math.round(action.hull)))
       if (action.result === 'lost') {
         state.ship.hull = Math.max(state.ship.hull, Math.ceil(state.ship.maxHull * 0.35))
-        const seizure = seizureLabel(state)
-        const toll = raiderToll(state)
-        if (toll.good) releaseCargo(state.cargo[toll.good], 1)
-        else state.coins -= Math.min(state.coins, toll.crowns)
-        record(state, 'Struck colors. The raider seized ' + seizure + ' and let you limp into port.')
+        const { settlement } = raiderToll(state)
+        settleToll(state, settlement)
+        record(state, 'Struck colors. Settled the raider’s claim with ' + tollSettlementLabel(settlement) + '.')
       } else if (action.result === 'escaped') {
         record(state, 'Broke contact with the raider and reached friendly skies.')
       } else {

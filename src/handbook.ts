@@ -1,4 +1,4 @@
-import { EMPTY_HOLD_TOLL, PORTS, type GameState } from './model'
+import { MINIMUM_RAIDER_TOLL, PORTS, type GameState } from './model'
 import { CITY_ECONOMY } from './city-economy'
 import './handbook.css'
 
@@ -23,7 +23,7 @@ export function openHandbook(state: GameState) {
     ],
     [
       'What does a raider demand?',
-      `A raider demands one crate of your highest-valued cargo or its home-port list price in crowns. Empty holds owe ${EMPTY_HOLD_TOLL} crowns. Paying guarantees passage. Refuse and take the helm to fight or order a breakaway and reach an edge. On defeat the raider takes the named crate, or up to ${EMPTY_HOLD_TOLL} of your existing crowns from an empty hold. Commission papers and bonded mail travel safely. The Harbor Watch exercise is free.`,
+      `Lookouts count your purse and each trade crate at its home-port list price. At 140 crowns a cutter takes interest. At 320 a corsair comes looking. The toll is five percent rounded up, with a ${MINIMUM_RAIDER_TOLL}-crown minimum. Pay cash or the exact cargo settlement shown. Raiders return change on whole crates. Refuse and fight or reach an edge to escape. Defeat takes the posted cargo settlement, capped at what you carry. Your papers and bonded mail are safe. The Harbor Watch drill remains free.`,
     ],
     [
       'How do I fight and board?',

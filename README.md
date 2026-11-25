@@ -29,7 +29,11 @@ On your first departure from Sunstep, the Harbor Watch runs a chalk-round exerci
 
 The arrow on the wind gauge points downwind. Watch your heading as the wind carries the hull sideways. Rounds curve downwind in flight. Set the wind sight to allow for drift on long shots. The Harbor Watch runs its exercise in sheltered air.
 
-Each cannon refit adds a gun until all four stations are filled. A side with two fitted guns gains a broadside order. Each cannon reloads separately. Turning brings a fresh battery to bear. Contact brings the crews together, and crew size, experience, and hull condition influence the outcome. A skyway raider demands your most valuable trade crate or its listed value in crowns. An empty hold owes five crowns. Pay for safe passage, or refuse and take the helm to fight or run for the edge. Defeat forfeits the named crate or up to five crowns from an empty hold. Commission papers and bonded mail stay aboard.
+Each cannon refit adds a gun until all four stations are filled. A side with two fitted guns gains a broadside order. Each cannon reloads separately. Turning brings a fresh battery to bear. Contact brings the crews together. Crew size, veterans, leadership, and the damage to each hull affect your chance of taking the other ship.
+
+Open the lookout on a destination’s sky chart to see what your manifest might draw. Raiders count your purse and appraise each trade crate at its home port’s list price. Below 140 crowns, a scout carries one port gun. From 140 crowns, a cutter carries one gun on each rail. From 320 crowns, a corsair carries two on each rail and fields veteran boarders. The first Harbor Watch exercise is free and carries no toll.
+
+When a raider hails you, it demands 5% of your carried wealth, rounded up, with a five-crown minimum. Pay in crowns or hand over the listed crates. The raider returns change on excess cargo value and asks for the balance in crowns when the crates fall short. Refuse and you take the helm. Reaching the edge keeps your manifest intact, and victory pays prize money. Defeat costs the quoted cargo settlement, limited to what you carry. Commission papers and bonded mail stay aboard.
 
 ## Local edition
 
