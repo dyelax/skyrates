@@ -57,7 +57,7 @@ export const COACH: Record<DrillStage, { chapter: string; title: string; text: s
   briefing: {
     chapter: 'Harbor Watch',
     title: 'Take the helm',
-    text: 'The cream sails are yours. The red cutter is flying the watch pennant for a chalk-round exercise. Your cargo, coins and hull are safe. Move, fire once, then bring a boarding party alongside.',
+    text: 'You command the cream-sailed Wayfarer. The cutter marked WATCH · LARK will fire chalk rounds. Your cargo, coins and hull are safe. Move, fire once, then bring a boarding party alongside.',
   },
   dodge: {
     chapter: '01 / 03 · Helm',

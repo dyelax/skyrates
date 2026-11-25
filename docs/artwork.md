@@ -72,6 +72,10 @@ The new 3D harbors use original ImageGen material studies. A panoramic daylight 
 
 ImageGen produced two orthographic atlases for the four ports. One contains Sunstep’s pear-crested guild doorway, the Furnace Choir’s stained glass, Copperfall’s riveted clock, and Meridian’s brass star dial. Each landmark has a color texture and a corresponding relief texture on its modeled wall. The other contains wisteria-strewn cobbles, the glassworkers’ violet paving, weathered timber slips, and the astronomers’ radial inlay. A separate material study supplies the small-scale pigment of limestone, wood, verdigris, and linen. The props and crews on the docks occupy the same 3D space as the captain.
 
+## Fleet sailcloth
+
+ImageGen painted a square, four-panel cloth study with the Wayfarer’s ivory sunburst on teal, the raiders’ vermilion chevron, the Harbor Watch’s indigo diagonal and an amber solar weave. Its pigment and stitching wrap over curved sail geometry that reefs and flexes during battle. The hulls and deck fittings use the harbor’s ImageGen timber and patinated metal. [Fleet sailcloth](../public/art/fleet-sailcloth.webp)
+
 ## Working interiors and character materials
 
 Sixteen ImageGen cabinet studies give each market, public office, shipyard and local institution its own close-range display. They depict the local job from the front so the painted shelves, tools and samples sit inside modeled cabinet joinery. Sunstep’s weighing room holds fruit and folded scions. Glasshouse shows annealing registers and lens stock. Copperfall presents reclaimed parts and winter seedlings. Meridian’s cabinets carry silk, weather drums and brass instruments.
