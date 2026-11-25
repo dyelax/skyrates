@@ -14,8 +14,9 @@ import { mountStationTalk } from './dock-talk'
 import { CITY_ECONOMY, nextPosting, RARITY } from './city-economy'
 import { buyerQuantity, buyerTerms, chartObjectives } from './objectives'
 import {
-  ABILITIES,
-  ABILITY_IDS,
+  CAPTAIN_PERKS, CAPTAIN_XP_PER_LEVEL, LAST_CAPTAIN_LEVEL, NEGOTIATION,
+  canLearnPerk, captainPoints, handRecord, hasCaptainPerk, qualifiedMate,
+  passageEvent, rollPirate, type CaptainPerk, CREW_PROFILES, type SailorId,
   GOODS,
   GOOD_IDS,
   INVOICE_COST,
@@ -270,15 +271,22 @@ function civic(state: GameState, ui: Controls) {
 }
 
 function commandDesk(state: GameState, ui: Controls) {
-  const courses: Preparation[] = state.port === 'copperfall' ? ['hire','train'] : state.port === 'meridian' ? ['terms'] : []
-  if (!courses.length) return ''
-  return `<article class="sk-card"><h2>Command desk</h2>
-    <ul class="sk-offers">${courses.map(course => {
-      const offer = officerOffer(state,course)
-      const label = offer.title + (offer.cost ? ' · ' + coins(offer.cost) : '')
-      return `<li><div><h3>${offer.title}</h3><p>${offer.detail}</p></div>${ui.button(label, () =>
-        ui.act({type:'prepareCommand',course}), {disabled:!offer.eligible || state.coins < offer.cost})}</li>`
-    }).join('')}</ul></article>`
+  if (state.port !== 'copperfall') return ''
+  const button = (course: Preparation, sailor?: SailorId) => {
+    const offer = officerOffer(state,course,sailor)
+    const label = offer.title + (offer.cost ? ' · ' + coins(offer.cost) : '')
+    return ui.button(label, () => ui.act({type:'prepareCommand',course,sailor}),
+      {disabled:!offer.eligible || state.coins < offer.cost})
+  }
+  const crew = state.command.aboard.map(hand => {
+    const job = hand.role === 'deckhand' ? 'appoint' : 'standDown'
+    const course = officerOffer(state,'coach',hand.id)
+    return `<li><div><h3>${CREW_PROFILES[hand.id].name}</h3><p>${handRecord(hand)}</p>${hand.coached ? '<p>Coaching booked for the next job.</p>' : ''}
+      <div class="sk-actions">${button(job,hand.id)} ${course.eligible ? button('coach',hand.id) : ''}</div></div></li>`
+  }).join('')
+  return `<article class="sk-card"><h2>Command desk</h2><p>${officerOffer(state,'hire').detail}</p>${button('hire')}
+    <h3>Wayfarer watch bill</h3><p>Two deck berths · one first-mate berth. Each assigned hand earns 1 service XP per completed freight run, buyer order, civic order, rescue or beacon commission. Paid coaching doubles one sailor’s next award.</p>
+    <ul class="sk-offers">${crew}</ul></article>`
 }
 
 function mooredPrizes(state: GameState, ui: Controls) {
@@ -288,7 +296,7 @@ function mooredPrizes(state: GameState, ui: Controls) {
     const profile = RAIDER_PROFILES.find(p => p.id === ship.class)!
     const load = Math.min(ship.cargo.quantity,state.ship.hold-cargoUsed(state))
     const cargo = ship.cargo.quantity ? `${ship.cargo.quantity} × ${GOODS[ship.cargo.good].name}` : 'Empty hold'
-    return `<li><div><h3>${profile.name} · register ${ship.id}</h3><p>${COMMANDER_NAMES[ship.commander]} · ${ship.hull.toFixed(1)} / ${profile.hull} hull · ${cargo}</p></div>
+    return `<li><div><h3>${profile.name} · register ${ship.id}</h3><p>${ship.captain ? handRecord(ship.captain) : COMMANDER_NAMES[ship.commander]} · ${ship.hull.toFixed(1)} / ${profile.hull} hull · ${cargo}</p></div>
       ${ship.cargo.quantity ? ui.button(load ? 'Transfer ' + load + ' to Wayfarer' : 'Wayfarer hold full',() =>
         ui.act({type:'unloadPrize',id:ship.id,remaining:ship.cargo.quantity}),{disabled:load === 0}) : ''}</li>`
   }).join('')}</ul></article>`
@@ -333,16 +341,25 @@ function missionNote(state: GameState) {
 }
 
 function logbook(state: GameState, ui: Controls) {
-  const ability = state.ability ? ABILITIES[state.ability] : null
   const prizeRegister = state.command.prizes.length
     ? `<article class="sk-card"><h2>Ships under your command</h2><ul>${state.command.prizes.map(prize =>
-      `<li>Prize ${prize.id} · ${prize.class} · ${PORTS[prize.port].name} · ${COMMANDER_NAMES[prize.commander]}</li>`).join('')}</ul><p>Visit its shipyard berth to inspect the hull and transfer cargo.</p></article>` : ''
+      `<li>Prize ${prize.id} · ${prize.class} · ${PORTS[prize.port].name} · ${prize.captain ? CREW_PROFILES[prize.captain.id].name : COMMANDER_NAMES[prize.commander]}</li>`).join('')}</ul><p>Visit its shipyard berth to inspect the hull and transfer cargo.</p></article>` : ''
   const journal = state.log
-  const abilities = ability
-    ? `<h3>${ability.name}</h3><p>${ability.description}</p>`
-    : state.level >= 2
-      ? `<ul class="sk-offers">${ABILITY_IDS.map((id) => `<li><div><h3>${ABILITIES[id].name}</h3><p>${ABILITIES[id].description}</p></div>${ui.button('Learn', () => ui.act({ type: 'chooseAbility', ability: id }))}</li>`).join('')}</ul>`
-      : '<p>Relighting the Skyway Beacon earns your first choice of captain ability.</p>'
+  const points = captainPoints(state)
+  const rank = NEGOTIATION.filter(perk => hasCaptainPerk(state,perk)).length
+  const next = state.level === 1 ? 'Relight the beacon to earn your first perk.' :
+    state.level < LAST_CAPTAIN_LEVEL ? `Next point at ${state.level * CAPTAIN_XP_PER_LEVEL} captain XP.` : ''
+  const talents = (Object.keys(CAPTAIN_PERKS) as CaptainPerk[]).map(perk => {
+    const learned = hasCaptainPerk(state,perk)
+    const info = CAPTAIN_PERKS[perk]
+    const rank = NEGOTIATION.findIndex(id => id === perk)
+    const prerequisite = rank > 0 && !hasCaptainPerk(state,NEGOTIATION[rank-1])
+      ? ' Requires ' + CAPTAIN_PERKS[NEGOTIATION[rank-1]].name + '.' : ''
+    const button = learned ? '<strong>Learned</strong>' : ui.button('Learn ' + info.name, () =>
+      ui.act({type:'chooseAbility',ability:perk}),{disabled:!canLearnPerk(state,perk)})
+    return `<li><div><h3>${info.name}</h3><p>${rank >= 0 ? 'Charisma · Negotiation ' + (rank+1) + '. ' : ''}${info.description}${prerequisite}</p></div>${button}</li>`
+  }).join('')
+  const abilities = `<p>${points} unspent perk point${points === 1 ? '' : 's'}. ${next} Negotiation ${rank}/3.</p><ul class="sk-offers">${talents}</ul>`
   return (
     heading(
       'Captain’s records',
@@ -353,7 +370,8 @@ function logbook(state: GameState, ui: Controls) {
     ${journal.length ? `<ol class="sk-journal">${journal.map((entry) => `<li><span class="sk-date">Day ${entry.day}</span><span>${safe(entry.text)}</span></li>`).join('')}</ol>` : '<p class="sk-empty">Your first voyage awaits.</p>'}</article>
     <aside class="sk-stack"><article class="sk-card"><div class="sk-card-head"><h2>Reputation</h2><span class="sk-tag">${state.notoriety} renown</span></div><h3>${safe(prestigeTitle(state))}</h3>
     <p class="sk-info">${state.tender === 'helped' ? 'The tender skipper remembers your tow. At Copperfall, that friendship opens a freight contract.' : state.tender === 'passed' ? 'You left the stranded tender to hail another ship. Its skipper remembers the sail on the horizon.' : 'Word of your deeds travels with dock crews and freight skippers.'}</p></article>
-    ${prizeRegister}<article class="sk-card"><div class="sk-card-head"><h2>Captain ability</h2></div>${abilities}</article>
+    ${prizeRegister}<article class="sk-card"><div class="sk-card-head"><h2>Captain abilities</h2></div>${abilities}</article>
+    <article class="sk-card"><h2>Wayfarer crew</h2>${state.command.aboard.map(hand => '<p>' + handRecord(hand) + '</p>').join('') || '<p>No named hands remain on the Wayfarer watch bill.</p>'}</article>
     <article class="sk-card"><div class="sk-card-head"><h2>The Skyway Beacon</h2></div><p>${missionNote(state)}</p></article><article class="sk-card"><h2>Your first watch</h2>${ui.button('Open captain’s handbook', () => openHandbook(state))} ${ui.button('Conversation voices', () => openVoiceSettings(), { secondary: true })} ${ui.button('Replay opening cinematic', () => openPrologue(), { secondary: true })}</article></aside></div>`
   )
 }
@@ -555,8 +573,18 @@ function routeLookout(state: GameState): string {
   if (state.voyageCount === 0 && state.port === 'sunstep') {
     return `<details class="sk-fold"><summary>Harbor Watch · free first passage</summary><p>Your escort carries chalk rounds. Training costs nothing and your hold is safe.</p><p>${manifest}</p></details>`
   }
+  const leg = state.voyageCount + 1
+  let intelligence = ''
+  if (hasCaptainPerk(state,'readRoom')) {
+    if (passageEvent(leg,state.tender) === 'raider') {
+      const profile = rollPirate(state.pirateSeed,leg,exposedValue)
+      const cargo = prizeManifest(state,profile.opponent,leg)
+      const skipper = skipperTerms(state,leg)
+      intelligence = `<p><b>Read the Room.</b> Dockside crews have spotted a ${profile.opponent} carrying ${cargo.quantity} crates of ${GOODS[cargo.good].name.toLowerCase()}. ${skipper.motive} ${skipper.evidence} Chance of signing articles: ${Math.round(skipper.chance*100)}%.</p>`
+    } else intelligence = '<p><b>Read the Room.</b> Dockside crews report a clear lane on this passage.</p>'
+  }
   const range = low === high ? String(low) : low + '–' + high
-  return `<details class="sk-fold"><summary>Raider lookout · ${range} crowns if hailed</summary><p>${manifest}</p><p>${forecastText(forecast)}</p><p>${commandReadiness(state)}</p></details>`
+  return `<details class="sk-fold"><summary>Raider lookout · ${range} crowns if hailed</summary><p>${manifest}</p><p>${forecastText(forecast)}</p>${intelligence}<p>${commandReadiness(state)}</p></details>`
 }
 
 function voyage(state: GameState, ui: Controls) {
@@ -591,8 +619,8 @@ function voyage(state: GameState, ui: Controls) {
     copy = `Lookout sights the <strong>${foe.name}</strong> with ${armamentLabel(foe.cannons)}, ${foe.hull} hull and ${crew} (strength ${foe.crew}). Your crew has ${Number(boardingStrength(state).toFixed(2))} fighting strength. While the hulls touch, both crews tire. If theirs yields with both ships afloat, you can take terms. A wreck sinks with its cargo.`
     terms = `<details class="sk-fold"><summary>Toll and surrender terms</summary><p>They count ${state.coins} crowns in your purse and ${toll.cargoValue} in cargo, worth ${toll.exposedValue} together. ${toll.rate !== null && toll.crowns > 0 ? 'Their rate is ' + toll.rate + '%, settled in whole crowns. ' : ''}${canPayCargo ? 'They accept ' + cargoTerms + '. ' : ''}If defeated, you surrender ${cargoTerms}. Commission papers and bonded mail stay aboard.</p></details>`
     terms += `<p><b>Prize command.</b> ${commandReadiness(state)}</p>
-      <details class="sk-fold"><summary>Enemy skipper and cargo</summary><p>${skipper.motive} ${skipper.evidence}
-      ${state.command.terms ? 'Chance of signing the articles: ' + Math.round(skipper.chance*100) + '%.' : ''}</p>
+      <details class="sk-fold"><summary>Enemy skipper and cargo</summary><p>${skipper.motive}
+      ${hasCaptainPerk(state,'readRoom') ? skipper.evidence + ' Chance of signing the articles: ' + Math.round(skipper.chance*100) + '%.' : ''}</p>
       <p>Their manifest lists ${manifest.quantity} × ${GOODS[manifest.good].name}.</p></details>`
     const crates = toll.settlement.cargo.reduce((sum, lot) => sum + lot.quantity, 0)
     const cargoButton = cargoTerms.length <= 62 ? 'Hand over ' + cargoTerms : `Pay with ${crates} ${crates === 1 ? 'crate' : 'crates'}` +
@@ -617,10 +645,11 @@ function voyage(state: GameState, ui: Controls) {
     terms = `<p>${commandReadiness(state)}</p><p>${skipper.motive} ${skipper.evidence}</p>`
     if (decision === 'refused') terms += '<p><b>The skipper declined your offer.</b></p>'
     if (decision === 'accepted') terms += '<p><b>The skipper agreed to serve under your colors.</b></p>'
+    const mate = qualifiedMate(state)
     buttons = (state.command.hired ? command('hired','Assign spare captain') : '') +
-      (state.command.mateTrained ? command('mate','Promote first mate') : '') +
+      (mate ? command('mate','Promote First Mate ' + CREW_PROFILES[mate.id].name) : '') +
       (decision === 'accepted' ? command('skipper','Commission ship with its skipper') : '') +
-      (state.command.terms && decision === 'unasked' ? ui.button(`Offer the skipper command · ${Math.round(skipper.chance*100)}% · one attempt`,
+      (hasCaptainPerk(state,'articles') && decision === 'unasked' ? ui.button(`Offer the skipper command · ${Math.round(skipper.chance*100)}% · one attempt`,
         () => ui.act({type:'offerCommand',id:leg.id})) : '')
     if (max > 0) {
       const options = Array.from({length:max},(_,i) => `<option value="${i+1}" ${i+1 === max ? 'selected' : ''}>${i+1}</option>`).join('')
