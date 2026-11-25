@@ -181,7 +181,8 @@ test('battle rewards, damage and return to port apply once for the active voyage
   const id = next.voyage!.id
   assert.equal(act(next, { type: 'resolveBattle', id: id + 1, result: 'won', hull: 70 }), next)
   const won = act(next, { type: 'resolveBattle', id, result: 'boarded', hull: 64 })
-  assert.equal(won.coins, next.coins + 40)
+  assert.equal(won.coins, next.coins)
+  assert.equal(won.voyage?.phase, 'prize')
   assert.equal(won.ship.hull, 64)
   const resumed = reload(won)
   assert.equal(act(resumed, { type: 'resolveBattle', id, result: 'boarded', hull: 64 }), resumed)
