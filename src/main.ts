@@ -22,6 +22,7 @@ import {
 import { renderInterior, type InteriorView } from './interiors'
 import { mountHarbor } from './harbor'
 import { openPrologue } from './prologue'
+import { voyageWeather } from './weather'
 import { beginAmbience, bell } from './audio'
 
 type View = InteriorView | 'harbor' | 'battle'
@@ -141,6 +142,7 @@ function render() {
           skill: boardingStrength(state) / state.ship.crew,
           gunLevel: state.ship.guns,
           cannons: state.ship.cannons,
+          weather: voyageWeather(state),
           drill: state.drill
             ? {
                 stage: state.drill,

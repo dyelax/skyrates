@@ -3,6 +3,10 @@ export const SKY = { width: 940, height: 460 }
 export const GUN_ARC = Math.PI * 0.31
 export const SHOT_SPEED = 310
 const TAU = Math.PI * 2
+export const STILL_AIR = { x: 0, y: 0 } as const
+// Chart units per second. Wind affects a drifting hull and a fast round on different time scales.
+const HULL_DRIFT = 19
+const SHOT_DRIFT = 32
 
 export type Side = 'port' | 'starboard'
 export type DuelOutcome = 'victory' | 'defeat' | 'escaped' | 'boarded'
@@ -85,15 +89,16 @@ export function buildShip(
   }
 }
 
-export function moveShip(ship: Vessel, helm: number, dt: number): void {
+export function moveShip(ship: Vessel, helm: number, dt: number, wind: Point = STILL_AIR): void {
   const cruiseSpeed = [0, 37, 63, 94][ship.throttle] ?? 0
-  const turnTarget = helm * (ship.throttle === 3 ? 1.04 : 1.32)
+  const across = -Math.sin(ship.heading) * wind.x + Math.cos(ship.heading) * wind.y
+  const turnTarget = helm * (ship.throttle === 3 ? 1.04 : 1.32) + across * 0.065
   const turnResponse = 1 - Math.exp(-dt * 3.3)
   ship.angularSpeed += (turnTarget - ship.angularSpeed) * turnResponse
   ship.heading = wrapAngle(ship.heading + ship.angularSpeed * dt)
   const acceleration = 1 - Math.exp(-dt * 1.12)
-  ship.vx += (Math.cos(ship.heading) * cruiseSpeed - ship.vx) * acceleration
-  ship.vy += (Math.sin(ship.heading) * cruiseSpeed - ship.vy) * acceleration
+  ship.vx += (Math.cos(ship.heading) * cruiseSpeed + wind.x * HULL_DRIFT - ship.vx) * acceleration
+  ship.vy += (Math.sin(ship.heading) * cruiseSpeed + wind.y * HULL_DRIFT - ship.vy) * acceleration
   ship.x += ship.vx * dt
   ship.y += ship.vy * dt
   ship.heel += (ship.angularSpeed * 0.7 - ship.heel) * turnResponse
@@ -108,12 +113,22 @@ export function localPoint(ship: Vessel, forward: number, lateral: number): Poin
   return { x: ship.x + forward * c - lateral * s, y: ship.y + forward * s + lateral * c }
 }
 
-export function discharge(ship: Vessel, gun: Gun, target: Point, tier: number, aimError = 0): Shot | null {
+export function discharge(
+  ship: Vessel,
+  gun: Gun,
+  target: Point,
+  tier: number,
+  aimError = 0,
+  sightWind: Point = STILL_AIR,
+): Shot | null {
   if (gun.cooldown > 0) return null
   gun.cooldown = gun.reload
   const muzzle = localPoint(ship, gun.station === 0 ? 11 : -12, gun.side === 'port' ? -12 : 12)
   const bearing = sideBearing(ship, gun.side)
-  const aim = inArc(ship, gun.side, target) ? angleBetween(muzzle, target) : bearing
+  const timeOfFlight = Math.min(2.05, Math.hypot(target.x - muzzle.x, target.y - muzzle.y) / SHOT_SPEED)
+  const allowance = 0.5 * SHOT_DRIFT * timeOfFlight ** 2
+  const aimPoint = { x: target.x - allowance * sightWind.x, y: target.y - allowance * sightWind.y }
+  const aim = inArc(ship, gun.side, aimPoint) ? angleBetween(muzzle, aimPoint) : bearing
   const direction = aim + aimError
   const vx = Math.cos(direction),
     vy = Math.sin(direction)
@@ -127,6 +142,16 @@ export function discharge(ship: Vessel, gun: Gun, target: Point, tier: number, a
     damage: 15 + tier * 3,
     lifetime: 2.05,
   }
+}
+
+export function moveShot(shot: Shot, dt: number, wind: Point = STILL_AIR): void {
+  const ax = wind.x * SHOT_DRIFT,
+    ay = wind.y * SHOT_DRIFT
+  shot.x += shot.vx * dt + 0.5 * ax * dt * dt
+  shot.y += shot.vy * dt + 0.5 * ay * dt * dt
+  shot.vx += ax * dt
+  shot.vy += ay * dt
+  shot.lifetime -= dt
 }
 
 function distanceToSegment(p: Point, a: Point, b: Point): number {

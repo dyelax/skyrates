@@ -8,6 +8,7 @@ import {
   hitsShip,
   inArc,
   moveShip,
+  moveShot,
 } from '../src/battle-model'
 
 const position = { x: 250, y: 220 }
@@ -66,10 +67,26 @@ test('ramming follows a rotated hull and hiring veterans improves boarding odds'
   assert.ok(boardingOdds(6, 1, a, b) > green)
 })
 
-
 test('fresh hulls have one port gun and shipyard refits open specific independent stations', () => {
-  for (const [level, sides] of ['p','ps','psp','psps'].entries()) {
-    const ship=buildShip(position,0,level,0)
-    assert.equal(ship.guns.map(gun=>gun.side[0]).join(''),sides)
+  for (const [level, sides] of ['p', 'ps', 'psp', 'psps'].entries()) {
+    const ship = buildShip(position, 0, level, 0)
+    assert.equal(ship.guns.map((gun) => gun.side[0]).join(''), sides)
   }
+})
+
+test('wind carries a hove-to hull and bends a live shot; the sight corrects for that wind', () => {
+  const wind = { x: 0, y: 1 }
+  const ship = buildShip({ x: 500, y: 220 }, -Math.PI / 2, 0, 0)
+  const target = { x: 45, y: 220 }
+  const fire = (set: boolean) => {
+    const firingShip = structuredClone(ship)
+    const shot = discharge(firingShip, firingShip.guns[0], target, 0, 0, set ? wind : undefined)!
+    while (shot.x > target.x && shot.lifetime > 0) moveShot(shot, 1 / 120, wind)
+    return Math.abs(shot.y - target.y)
+  }
+  assert.ok(fire(false) > 20)
+  assert.ok(fire(true) < 4)
+  ship.throttle = 0
+  for (let i = 0; i < 240; i++) moveShip(ship, 0, 1 / 60, wind)
+  assert.ok(ship.y > 265)
 })

@@ -1,3 +1,4 @@
+import { seasonPort } from './atmosphere'
 import * as T from 'three'
 import { artTexture, disposeMeshes, dressMaterials, paints, type Place, type V2 } from './blocks'
 import { dressPort } from './surfaces'
@@ -81,6 +82,7 @@ export function mountWorld(root: HTMLElement, state: GameState, activate: (place
   scene.add(rim)
   const set = buildPort(scene, id, materials, night),
     people = buildPeople(scene, id, plan, materials)
+  const weather = seasonPort(state, scene, hemi, sun, materials)
   dressPort(scene, id, plan, textures, night)
   const glow = new T.PointLight(id === 'copperfall' ? '#ff8f48' : '#ffd492', night ? 12 : 0.8, 10, 2)
   glow.position.set(...([plan.authority[0], 2.7, plan.authority[1] + 4.1] as const))
@@ -404,6 +406,7 @@ export function mountWorld(root: HTMLElement, state: GameState, activate: (place
       probeCamera.update(renderer, scene)
       scene.environment = probe.texture
     }
+    weather?.update(reduced.matches ? 0 : dt)
     renderer.render(scene, cam)
   }
   frame = requestAnimationFrame(draw)
@@ -416,6 +419,7 @@ export function mountWorld(root: HTMLElement, state: GameState, activate: (place
       savedCameras.set(clockKey, { x: cameraPos.x, z: cameraPos.z, yaw, pitch, spawn })
       abort.abort()
       ro.disconnect()
+      weather?.dispose()
       probe.dispose()
       disposeMeshes(scene, materials, textures)
       renderer.dispose()
