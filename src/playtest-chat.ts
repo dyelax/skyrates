@@ -1,3 +1,4 @@
+import { assessPlaytest } from './playtest-answers'
 import { icon } from './icons'
 import type { GameState } from './model'
 import { codexDraft, composeReport, describeGame, playtestThread } from './playtest-report'
@@ -51,6 +52,8 @@ export function mountPlaytestChat(read: () => { state: GameState; view: string }
   <form><label for="playtest-question">Ask about the game or describe what went wrong.</label>
   <textarea id="playtest-question" rows="4" maxlength="2000" placeholder="Type here or start in Codex."></textarea>
   <details><summary>Game context</summary><pre data-context></pre><button type="button" class="playtest-forget" data-refresh hidden>Use current game context</button></details>
+  <button class="playtest-check" type="button" data-check>Prepare feedback</button>
+  <section class="playtest-answer" aria-live="polite" hidden><p data-reply></p><small>TODO draft</small><p data-todo></p></section>
   <a class="playtest-open" data-desktop>Open in Codex</a>
   <p class="playtest-destination"></p>
   <details><summary>Use Codex on the web</summary><p>Copy your report, open Codex Web and paste it into a chat for the Skyrates repository.</p><div class="playtest-web"><button type="button" data-copy>Copy report</button><a href="https://chatgpt.com/codex" target="_blank" rel="noopener noreferrer">Open Codex Web ↗</a></div><textarea data-manual rows="6" readonly hidden aria-label="Report to copy"></textarea></details>
@@ -64,10 +67,27 @@ export function mountPlaytestChat(read: () => { state: GameState; view: string }
   const manual = dialog.querySelector<HTMLTextAreaElement>('[data-manual]')!
   const forget = dialog.querySelector<HTMLButtonElement>('[data-forget]')!
   const refresh = dialog.querySelector<HTMLButtonElement>('[data-refresh]')!
-  const report = () => composeReport(text.value, context)
+  const check = dialog.querySelector<HTMLButtonElement>('[data-check]')!
+  const assessment = dialog.querySelector<HTMLElement>('.playtest-answer')!
+  let pendingTodo = ''
+  let snapshot = read()
+  const report = () =>
+    composeReport(text.value, context) + (pendingTodo ? '\n\nProposed tracker item\n- [ ] ' + pendingTodo : '')
+
+  check.addEventListener('click', () => {
+    const { answer, todo } = assessPlaytest(text.value, snapshot.state, snapshot.view)
+    assessment.querySelector('[data-reply]')!.textContent = answer
+    assessment.querySelector('[data-todo]')!.textContent = todo
+    assessment.hidden = false
+    pendingTodo = todo
+    native.href = codexDraft(thread, report())
+  })
 
   function syncDraft() {
     const valid = !!text.value.trim()
+    check.disabled = !valid
+    assessment.hidden = true
+    pendingTodo = ''
     if (!valid) context = current
     dialog.querySelector<HTMLElement>('[data-context]')!.textContent = context
     refresh.hidden = context === current
@@ -90,7 +110,8 @@ export function mountPlaytestChat(read: () => { state: GameState; view: string }
   }
   function open() {
     if (dialog.open) return
-    const { state, view } = read()
+    snapshot = read()
+    const { state, view } = snapshot
     const scene = [...document.querySelectorAll<HTMLElement>('dialog[open],#main [role="dialog"]')].at(-1)
     const place = scene?.getAttribute('aria-label') ?? scene?.querySelector('h1,h2,h3')?.textContent ?? ''
     current = describeGame(state, view, place)

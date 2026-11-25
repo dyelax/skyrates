@@ -30,7 +30,7 @@ export function describeGame(state: GameState, view: string, place: string): str
 }
 
 export function composeReport(question: string, context: string): string {
-  return `Skyrates playtest\n\n${question.trim()}\n\nGame context when opened\n${context}\n\nCheck the current game at https://github.com/dyelax/skyrates and follow the skyrates-playtest skill in the repository. Answer mechanics questions directly. For a reproducible bug or unclear mechanic, check the connected private playtest tracker for duplicates and record the fix or clarity item there when authorized. If this chat has no tracker, return a copyable TODO.`
+  return `Skyrates playtest\n\n${question.trim()}\n\nGame context when opened\n${context}\n\nCheck the current game at https://github.com/dyelax/skyrates and follow the skyrates-playtest skill in the repository. Answer mechanics questions directly. For each mechanics question, add or update a concrete TODO for making the answer clear where the player asked it. For a reported bug, add or update a fix TODO with the evidence and a verification step. Check the designated private tracker for duplicates before writing. If this chat has no tracker, return a copyable TODO.`
 }
 
 export function codexDraft(thread: string | null, report: string): string {
