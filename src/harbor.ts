@@ -2,6 +2,7 @@ import { portWeather } from './weather'
 import { paintedWeather } from './scene-weather'
 import { cargoUsed, PORTS, type GameState, type PortId } from './model'
 import { CITY_ECONOMY } from './city-economy'
+import type { ContactWriter } from './characters'
 import { icon } from './icons'
 import { mountDockTalk } from './dock-talk'
 import type { HarborWorld } from './voxel/harbor-world'
@@ -128,6 +129,7 @@ export function mountHarbor(
   main: HTMLElement,
   state: GameState,
   navigate: (view: InteriorView) => void,
+  recordContact: ContactWriter,
 ): () => void {
   const quay = quays[state.port]
   const lit = state.mission === 'lit' && ['sunstep', 'glasshouse'].includes(state.port)
@@ -237,7 +239,7 @@ export function mountHarbor(
     if (place === 'local') {
       openPanel(button)
       bell('select')
-      mountDockTalk(overlay, state, closePanel)
+      mountDockTalk(overlay, state, closePanel, recordContact)
       return
     }
     if (place === 'ship') {

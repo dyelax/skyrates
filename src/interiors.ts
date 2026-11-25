@@ -6,6 +6,8 @@ import { openPrologue } from './prologue'
 import { voyageWeather } from './weather'
 import { paintedWeather } from './scene-weather'
 import './interiors.css'
+import { characterContext, npcAtPort, npcName, type ContactWriter } from './characters'
+import { mountStationTalk } from './dock-talk'
 import { CITY_ECONOMY, nextPosting, RARITY } from './city-economy'
 import { chartObjectives } from './objectives'
 import {
@@ -383,6 +385,9 @@ function authority(state: GameState, ui: Controls) {
     ? '“Mind the edge, Captain. Three days at the wheel to get that curve. You’ve brought Vale’s letter? Good. I’ll put your name on the crate. Here’s the bill.”'
     : greeting(state)
   const speaker = contact.keeper
+  const npc = characterContext(state, npcAtPort(state.port, 'authority'))
+  const memories = npc.confidences.map((line, i) => `<details class="sk-fold" data-contact-topic><summary>${i === 0 ? 'What matters to you here?' : 'What would you tell me in confidence?'}</summary><p>${safe(line)}</p></details>`).join('')
+  const lastTalk = npc.memories.length ? `<details class="sk-fold"><summary>Our last conversation</summary><p>${safe(npc.memories.at(-1)!)}</p></details>` : ''
   let job = ''
   if (canPay) {
     job = lensInvoice(state, ui)
@@ -402,7 +407,7 @@ function authority(state: GameState, ui: Controls) {
     state.port === 'meridian' ? 'talk-meridian' : null
   return `<header class="sk-dialogue-heading"><div class="sk-kicker">${contact.name} · Port authority</div><div class="sk-identity">
     ${portrait ? `<img src="${artwork(portrait)}" alt="">` : ''}<h1>${speaker}</h1></div></header>
-    <div class="sk-office-dialogue"><blockquote class="sk-quote">${safe(quote)}</blockquote></div>
+    <div class="sk-office-dialogue" data-npc-id="${npc.id}"><p class="sk-kicker" aria-label="Relationship"> ${npc.relationship.label}</p><blockquote class="sk-quote">${safe(quote)}</blockquote><details class="sk-fold" data-contact-topic><summary>How did you come to this work?</summary><p>${safe(npc.publicHistory)}</p></details>${memories}${lastTalk}</div>
     ${job}${canPay && state.coins < INVOICE_COST ? '<details class="sk-fold sk-ledger-fold"><summary>A word from the loading dock</summary><p>A glazier chalks <i>Copperfall</i> on a stack of panes. “Their winter gardens are framed and roofless. I can cut all week and the yard still wants more.”</p></details>' : ''}
     ${freightDesk(state, ui)}`
 }
@@ -455,6 +460,7 @@ export function renderInterior(
   state: GameState,
   dispatch: (command: Command) => void,
   navigate: Navigate,
+  recordContact: ContactWriter,
 ): void {
   let settings = settingsByDocument.get(root.ownerDocument)
   if (!settings || settings.port !== state.port) {
@@ -497,7 +503,7 @@ export function renderInterior(
     settings,
     page,
     register,
-    refresh: () => renderInterior(root, view, state, dispatch, navigate),
+    refresh: () => renderInterior(root, view, state, dispatch, navigate, recordContact),
     button: (label, callback, options = {}) =>
       `<button type="button" class="sk-button ${options.secondary ? 'sk-secondary' : ''}" data-action="${register(callback)}" ${options.disabled ? 'disabled' : ''}>${label}</button>`,
   }
@@ -513,6 +519,34 @@ export function renderInterior(
   page.innerHTML =
     back +
     (insideRoom ? `<div class="sk-room-overlay"><div class="sk-room-ledger">${content}</div></div>` : content)
+  if (view === 'authority') {
+    const npc = npcAtPort(state.port, 'authority')
+    for (const topic of page.querySelectorAll<HTMLDetailsElement>('[data-contact-topic]')) {
+      topic.addEventListener('toggle', () => {
+        if (topic.open) recordContact({type: 'rememberNpc', npc, memory:'You asked me, “'+topic.querySelector('summary')!.textContent+'”'})
+      })
+    }
+  }
+  if (view === 'market' || view === 'shipyard' || view === 'civic') {
+    const npc = npcAtPort(state.port, view)
+    const sheet = page.querySelector<HTMLElement>('.sk-room-ledger')!
+    const talk = document.createElement('button')
+    talk.type = 'button'
+    talk.className = 'sk-button sk-secondary'
+    talk.textContent = 'Speak with ' + npcName(npc)
+    talk.addEventListener('click', () => {
+      const host = document.createElement('div')
+      host.className = 'sk-station-host'
+      page.append(host)
+      sheet.inert = true
+      mountStationTalk(host, state, npc, () => {
+        host.remove()
+        sheet.inert = false
+        talk.focus({preventScroll: true})
+      }, recordContact)
+    })
+    sheet.append(talk)
+  }
   page.addEventListener('click', (event) => {
     if (!(event.target instanceof Element)) return
     const button = event.target.closest<HTMLButtonElement>('button[data-action]')
