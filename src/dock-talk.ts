@@ -174,6 +174,7 @@ export function mountStationTalk(
     name: npc.name, role: npc.role, greeting: work[id],
     topics: [{ask:'What does this port need?', answer:city.order.need},{ask:'Where should I take a trade cargo?',answer:city.tradeLead}],
   }
+  if (npc.paneDocket) local.topics.unshift({ ask:npc.firstPaneOrderOpen ? 'What are the terms for the garden panes?' : 'What happened with the first order for garden panes?', answer:npc.paneDocket, visit: { view:'market' } })
   local.topics.push({ask:'How did you come to this work?',answer:npc.publicHistory})
   if (npc.memories.length) local.topics.push({ ask:'Where did we leave off last time?', answer:npc.memories.at(-1)!, recall:true })
   for (const [index,answer] of npc.confidences.entries()) {
