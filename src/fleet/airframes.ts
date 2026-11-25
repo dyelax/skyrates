@@ -205,12 +205,16 @@ export function buildAirframe(livery: Livery, guns: Pick<Gun, 'side' | 'station'
       b.box(cabinX - 3.4 + n * 3.35, 3.8, sign * 7, 2.5, 2, 0.24, paint('#ffb967', light))
   b.box(cabinX + 1, 7.2, 0, 7, 0.7, 8, deck)
   // Little roofs, gratings and navigation lamps stay legible when the wings fold away.
-  b.quad([cabinX - 2.8, 7.65, -3], [cabinX + 4, 7.65, -3], [cabinX + 4, 7.65, 3],
-    [cabinX - 2.8, 7.65, 3], paint(white, 6))
+  b.quad(
+    [cabinX - 2.8, 7.65, -3],
+    [cabinX + 4, 7.65, -3],
+    [cabinX + 4, 7.65, 3],
+    [cabinX - 2.8, 7.65, 3],
+    paint(white, 6),
+  )
   for (const x of [-22, 2, 26]) {
     b.box(x, 0.96, 0, 5, 1.7, 5.6, dark)
-    for (let grate = -2; grate <= 2; grate += 1)
-      b.box(x + grate, 1.87, 0, 0.31, 0.33, 4.7, brass)
+    for (let grate = -2; grate <= 2; grate += 1) b.box(x + grate, 1.87, 0, 0.31, 0.33, 4.7, brass)
   }
   for (const side of [-1, 1]) {
     b.box(20, 2.1, side * 10, 2.3, 1.5, 1.9, gunmetal)
@@ -282,24 +286,25 @@ export function buildHand(enemy: boolean): Float32Array {
     const sleeve = limb(z * 2.25, false)
     b.box(0.2, 3.78, z * 2.25, 0.79, 1.8, 0.74, sleeve)
     b.box(0.35, 2.79, z * 2.25, 0.66, 0.71, 0.67, paint(skin.color, cloth, sleeve.motion, sleeve.pivot))
-    if (z > 0) b.beam([0.35, 2.78, z * 2.25], [2.3, 3.6, z * 2.45], 0.32,
-      paint('#e8d6ab', metal, sleeve.motion, sleeve.pivot))
-
+    if (z > 0)
+      b.beam(
+        [0.35, 2.78, z * 2.25],
+        [2.3, 3.6, z * 2.45],
+        0.32,
+        paint('#e8d6ab', metal, sleeve.motion, sleeve.pivot),
+      )
   }
   return b.data()
 }
-
 
 export const GANGWAY_LENGTH = 28
 /** Two narrow gangways unfold along the paths already used by the boarding party. */
 export function buildGangway(): Float32Array {
   const b = new Builder()
-  for (const side of [-1, 1])
-    b.box(GANGWAY_LENGTH / 2, 0, side * 2.4, GANGWAY_LENGTH, 0.65, 0.55, gunmetal)
+  for (const side of [-1, 1]) b.box(GANGWAY_LENGTH / 2, 0, side * 2.4, GANGWAY_LENGTH, 0.65, 0.55, gunmetal)
   for (let step = 0; step < 10; step++) {
     const width = GANGWAY_LENGTH / 10
-    b.box((step + 0.5) * width, 0.46, 0, width - 0.19, 0.55, 5.5,
-      paint(step % 2 ? '#c69b68' : '#b98b5a'))
+    b.box((step + 0.5) * width, 0.46, 0, width - 0.19, 0.55, 5.5, paint(step % 2 ? '#c69b68' : '#b98b5a'))
   }
   return b.data()
 }

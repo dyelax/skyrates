@@ -25,7 +25,11 @@ test('fitted deck guns use the same side, station and muzzle as the flight model
 })
 
 test('all three hulls have a solid keel, articulated rotors and individually identifiable folding sails', () => {
-  for (const [fleet, swatch] of [['wayfarer', 3], ['watch', 5], ['wasp', 4]] as const) {
+  for (const [fleet, swatch] of [
+    ['wayfarer', 3],
+    ['watch', 5],
+    ['wasp', 4],
+  ] as const) {
     const mesh = buildAirframe(fleet, GUN_POSITIONS)
     assert.equal(mesh.length % (3 * FLOATS_PER_VERTEX), 0)
     assert.ok(mesh.every(Number.isFinite))
@@ -38,9 +42,13 @@ test('all three hulls have a solid keel, articulated rotors and individually ide
 })
 
 test('boarding meshes have moving arms and legs, opposing coats, and solid gangways', () => {
-  const allied = buildHand(false), rival = buildHand(true)
+  const allied = buildHand(false),
+    rival = buildHand(true)
   assert.notDeepEqual(allied, rival)
-  assert.deepEqual([...values(allied, 12)].sort((a, b) => a - b), [0, 7, 8, 9, 10])
+  assert.deepEqual(
+    [...values(allied, 12)].sort((a, b) => a - b),
+    [0, 7, 8, 9, 10],
+  )
   const planks = buildGangway()
   assert.equal(planks.length % (FLOATS_PER_VERTEX * 3), 0)
   assert.ok(Math.max(...values(planks, 0)) >= 28)

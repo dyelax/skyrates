@@ -296,7 +296,7 @@ class SkyBattle extends Phaser.Scene {
           view.hull.setVisible(!active)
           view.shadow.setVisible(!active)
         }
-        this.grapple?.crew.forEach(hand => hand.setVisible(!active))
+        this.grapple?.crew.forEach((hand) => hand.setVisible(!active))
       })
     } else this.root.dataset.shipRenderer = 'illustrated'
     this.overlays = this.add.graphics().setDepth(7)
@@ -350,7 +350,7 @@ class SkyBattle extends Phaser.Scene {
     }
     if (this.drill) {
       this.drawCoach()
-      if (this.drill === 'melee') this.beginBoarding()
+      if (this.drill === 'melee' || this.drill === 'debrief') this.beginBoarding(this.drill === 'debrief' ? 5.5 : 0)
     } else this.tell('Wind carries both ships and shots. Set the wind sight (V) for a long shot.', 6)
     this.syncHUD()
   }
@@ -566,8 +566,12 @@ class SkyBattle extends Phaser.Scene {
 
   private fleetPose(): FleetPose {
     return {
-      time: this.clock, player: this.player, foe: this.foe, boardSeconds: this.grapple?.elapsed ?? 0,
-      hands: this.grapple?.crew ?? [], weather: this.drill ? 0 : this.opts.weather.severity,
+      time: this.clock,
+      player: this.player,
+      foe: this.foe,
+      boardSeconds: this.grapple?.elapsed ?? 0,
+      hands: this.grapple?.crew ?? [],
+      weather: this.drill ? 0 : this.opts.weather.severity,
     }
   }
 
@@ -834,7 +838,7 @@ class SkyBattle extends Phaser.Scene {
     }
   }
 
-  private beginBoarding() {
+  private beginBoarding(elapsed = 0) {
     const a = this.player,
       b = this.foe
     const center = { x: (a.x + b.x) * 0.5, y: (a.y + b.y) * 0.5 }
@@ -851,9 +855,9 @@ class SkyBattle extends Phaser.Scene {
       crew.push(hand)
     }
     if (this.drill === 'board') this.teach('melee')
-    battleSound('grapple')
+    if (elapsed === 0) battleSound('grapple')
     this.grapple = {
-      elapsed: 0,
+      elapsed,
       center,
       heading: a.heading,
       startA: { x: a.x, y: a.y },
@@ -865,8 +869,10 @@ class SkyBattle extends Phaser.Scene {
     }
     this.shots.length = 0
     this.course = undefined
-    this.tell(`Grapples fast • ${this.opts.crew} hands boarding`, 2.35)
-    this.cameras.main.shake(180, 0.004)
+    if (elapsed === 0) {
+      this.tell(`Grapples fast • ${this.opts.crew} hands boarding`, 2.35)
+      this.cameras.main.shake(180, 0.004)
+    }
     this.syncHUD()
   }
 

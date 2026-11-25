@@ -1,6 +1,13 @@
 import Phaser from 'phaser'
 import { localPoint, type Vessel } from '../battle-model'
-import { buildAirframe, buildGangway, buildHand, FLOATS_PER_VERTEX, GANGWAY_LENGTH, type Livery } from './airframes'
+import {
+  buildAirframe,
+  buildGangway,
+  buildHand,
+  FLOATS_PER_VERTEX,
+  GANGWAY_LENGTH,
+  type Livery,
+} from './airframes'
 
 type CameraMatrix = Phaser.GameObjects.Components.TransformMatrix
 type Renderer = Phaser.Renderer.WebGL.WebGLRenderer
@@ -171,9 +178,18 @@ function createProgram(gl: WebGLRenderingContext, geometry: Float32Array[]): Fle
       gl.getAttribLocation(program!, name),
     )
     const uniform = Object.fromEntries(
-      ['vessel', 'pose', 'recoil', 'spanScale', 'camera', 'viewport', 'movement', 'woodMap', 'metalMap', 'sailsMap'].map(
-        (name) => [name, gl.getUniformLocation(program!, name)],
-      ),
+      [
+        'vessel',
+        'pose',
+        'recoil',
+        'spanScale',
+        'camera',
+        'viewport',
+        'movement',
+        'woodMap',
+        'metalMap',
+        'sailsMap',
+      ].map((name) => [name, gl.getUniformLocation(program!, name)]),
     )
     return { program, buffer, attributes, uniform, ranges }
   } catch (error) {
@@ -295,15 +311,20 @@ export class VoxelFleet {
       }
     }
     if (f.boardSeconds > 0.5) {
-      const side = Math.sign((f.foe.x - f.player.x) * -Math.sin(f.player.heading) +
-        (f.foe.y - f.player.y) * Math.cos(f.player.heading)) || 1
+      const side =
+        Math.sign(
+          (f.foe.x - f.player.x) * -Math.sin(f.player.heading) +
+            (f.foe.y - f.player.y) * Math.cos(f.player.heading),
+        ) || 1
       const deployed = Math.min(1, (f.boardSeconds - 0.5) / 0.45)
       const range = gpu.ranges[4]
       gl.uniform4f(u.pose, 0, 0, 0, 1.55)
       for (const station of [-17, 14]) {
-        const a = localPoint(f.player, station, side * 10), b = localPoint(f.foe, station, -side * 10)
-        const dx = b.x - a.x, dy = b.y - a.y
-        gl.uniform1f(u.spanScale, Math.hypot(dx, dy) * deployed / GANGWAY_LENGTH)
+        const a = localPoint(f.player, station, side * 10),
+          b = localPoint(f.foe, station, -side * 10)
+        const dx = b.x - a.x,
+          dy = b.y - a.y
+        gl.uniform1f(u.spanScale, (Math.hypot(dx, dy) * deployed) / GANGWAY_LENGTH)
         gl.uniform4f(u.vessel, a.x, a.y, Math.atan2(dy, dx), 0)
         gl.drawArrays(gl.TRIANGLES, range.offset, range.count)
       }
