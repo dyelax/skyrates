@@ -34,6 +34,13 @@ const root = document.querySelector<HTMLElement>('#app')!
 root.innerHTML = `<a class="skip" href="#main">Skip to game</a><main id="main" tabindex="-1"></main><aside id="toast" hidden><span role="status" aria-live="polite" aria-atomic="true"></span><button type="button">Acknowledge</button></aside>`
 const main = root.querySelector<HTMLElement>('#main')!
 const toast = root.querySelector<HTMLElement>('#toast')!
+// Reserve the notice's actual wrapped height for the controls below the scene.
+function measureNotice() {
+  const height = toast.hidden ? 0 : toast.offsetHeight + 12
+  root.style.setProperty('--notice-space', height + 'px')
+}
+new ResizeObserver(measureNotice).observe(toast)
+
 let harborUnmount: (() => void) | undefined
 
 let state = loadGame()
@@ -56,6 +63,7 @@ function drawNotice() {
   const remaining = state.pendingNotices.length - 1
   toast.querySelector('button')!.textContent =
     remaining > 0 ? 'Acknowledge · ' + remaining + ' more' : 'Acknowledge'
+  measureNotice()
 }
 
 toast.querySelector('button')!.addEventListener('click', () => {

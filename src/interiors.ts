@@ -595,17 +595,28 @@ function arrangeChart(page: HTMLElement, settings: InteriorSettings) {
   }
   const marker = page.querySelector<HTMLElement>(`[data-port="${settings.destination}"]`)!
   const dismiss = popover.querySelector<HTMLButtonElement>('.sk-dismiss')!
+  const orders = page.querySelector<HTMLDetailsElement>('.sk-chart-orders')!
+  const notice = document.querySelector<HTMLElement>('#toast')
   function place() {
     const bounds = page.getBoundingClientRect()
     const pin = marker.getBoundingClientRect()
     const width = popover!.offsetWidth
+    const ordersBox = orders.getBoundingClientRect()
+    // On a narrow chart, stack the two papers. On a wide one, leave room beside the orders.
+    const beside = ordersBox.left - bounds.left - 8 >= width + 8
+    const topEdge = beside ? 8 : ordersBox.bottom - bounds.top + 8
+    const rightEdge = beside ? ordersBox.left - bounds.left - 8 : bounds.width - 8
+    const bottomEdge = notice && !notice.hidden
+      ? Math.min(bounds.height, notice.getBoundingClientRect().top - bounds.top) - 8
+      : bounds.height - 8
+    popover!.style.maxHeight = Math.max(1, bottomEdge - topEdge) + 'px'
     const height = popover!.offsetHeight
     const cx = pin.left - bounds.left + pin.width / 2
     const cy = pin.top - bounds.top + pin.height / 2
     const left = cx < bounds.width / 2 ? cx + 28 : cx - width - 28
-    popover!.style.left = Math.max(8, Math.min(bounds.width - width - 8, left)) + 'px'
+    popover!.style.left = Math.max(8, Math.min(rightEdge - width, left)) + 'px'
     const top = bounds.width < 560 ? (cy < bounds.height / 2 ? cy + 30 : cy - height - 30) : cy - height / 2
-    popover!.style.top = Math.max(8, Math.min(bounds.height - height - 8, top)) + 'px'
+    popover!.style.top = Math.max(topEdge, Math.min(bottomEdge - height, top)) + 'px'
   }
   place()
   page.querySelector<HTMLElement>('.sk-map-scroll')!.addEventListener('scroll', place, { passive: true })
@@ -615,6 +626,8 @@ function arrangeChart(page: HTMLElement, settings: InteriorSettings) {
     else observer.disconnect()
   })
   observer.observe(page)
+  observer.observe(orders)
+  if (notice) observer.observe(notice)
   page.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       event.preventDefault()

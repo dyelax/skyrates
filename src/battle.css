@@ -406,9 +406,9 @@ body:has(.air-duel) {
     bottom: 72px;
   }
 }
-body:has(.air-duel.is-drill) #toast {
-  bottom: 6px;
-  z-index: 16;
+.air-duel :is(.duel-console, .duel-foot),
+.air-duel.is-drill .duel-banner {
+  margin-bottom: var(--notice-space, 0px);
 }
 
 .air-duel .duel-wind {
