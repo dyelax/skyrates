@@ -1,5 +1,5 @@
 export type PortId = 'sunstep' | 'glasshouse' | 'copperfall' | 'meridian'
-export type GoodId = 'provisions' | 'glass' | 'machinery'
+export type GoodId = 'provisions' | 'glass' | 'machinery' | 'grafts' | 'prisms' | 'governors' | 'soundings'
 export type AbilityId = 'broker' | 'gunner' | 'leader'
 export type UpgradeId = 'hold' | 'hull' | 'guns' | 'crew' | 'veteran' | 'repair'
 
@@ -26,7 +26,7 @@ export const PORTS: Record<PortId, Port> = {
     mailTo: 'glasshouse',
     daysTo: { sunstep: 0, glasshouse: 1, copperfall: 2, meridian: 3 },
     specialty: 'provisions',
-    prices: { provisions: 5, glass: 19, machinery: 32 },
+    prices: { provisions: 5, glass: 19, machinery: 32, grafts: 12, prisms: 23, governors: 38, soundings: 32 },
   },
   glasshouse: {
     name: 'Glasshouse Reach',
@@ -38,7 +38,7 @@ export const PORTS: Record<PortId, Port> = {
     mailTo: 'copperfall',
     daysTo: { sunstep: 1, glasshouse: 0, copperfall: 1, meridian: 2 },
     specialty: 'glass',
-    prices: { provisions: 14, glass: 11, machinery: 25 },
+    prices: { provisions: 14, glass: 11, machinery: 25, grafts: 18, prisms: 25, governors: 29, soundings: 52 },
   },
   copperfall: {
     name: 'Copperfall Yard',
@@ -50,7 +50,7 @@ export const PORTS: Record<PortId, Port> = {
     mailTo: 'sunstep',
     daysTo: { sunstep: 2, glasshouse: 1, copperfall: 0, meridian: 3 },
     specialty: 'machinery',
-    prices: { provisions: 11, glass: 24, machinery: 16 },
+    prices: { provisions: 11, glass: 24, machinery: 16, grafts: 29, prisms: 34, governors: 19, soundings: 34 },
   },
   meridian: {
     name: 'Meridian Spire',
@@ -61,14 +61,18 @@ export const PORTS: Record<PortId, Port> = {
     requiredLevel: 2,
     mailTo: 'glasshouse',
     daysTo: { sunstep: 3, glasshouse: 2, copperfall: 3, meridian: 0 },
-    specialty: 'glass',
-    prices: { provisions: 19, glass: 15, machinery: 29 },
+    specialty: 'soundings',
+    prices: { provisions: 19, glass: 15, machinery: 29, grafts: 26, prisms: 52, governors: 33, soundings: 24 },
   },
 }
 
 export const GOODS: Record<GoodId, { name: string; description: string }> = {
   provisions: { name: 'Provisions', description: 'Orchard fruit and grain, packed for the skyways.' },
   glass: { name: 'Solar glass', description: 'Cut panes that gather sunlight for gardens and sails.' },
+  grafts: {name: 'Pear grafts', description: 'Living orchard scions wrapped in damp moss for Copperfall’s shallow beds.'},
+  prisms: {name: 'Prism blanks', description: 'Flaw-tested pieces from the annealing tunnel, prized by balloon surveyors.'},
+  governors: {name: 'Governor spindles', description: 'Matched proof-bench spindles for the weight cages at Sunstep.'},
+  soundings: {name: 'Sounding folios', description: 'Sealed pressure readings that furnace crews use to time their draw.'},
   machinery: { name: 'Machinery', description: 'Brass gearsets and governors for working keels.' },
 }
 
@@ -99,7 +103,7 @@ export const TENDER_DEED = {
 export const BONDED_MAIL = { basePay: 14, payPerDay: 4, xp: 3 }
 
 export const INVOICE_COST = BEACON_COMMISSION.invoiceCost
-export const GOOD_IDS: GoodId[] = ['provisions', 'glass', 'machinery']
+export const GOOD_IDS: GoodId[] = ['provisions', 'glass', 'machinery', 'grafts', 'prisms', 'governors', 'soundings']
 export const PORT_IDS: PortId[] = ['sunstep', 'glasshouse', 'copperfall', 'meridian']
 export const ABILITY_IDS: AbilityId[] = ['broker', 'gunner', 'leader']
 export const UPGRADE_IDS: UpgradeId[] = ['hold', 'hull', 'guns', 'crew', 'veteran', 'repair']

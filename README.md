@@ -14,6 +14,8 @@ Open the sky chart with **M** or the compass. Select an island for passage time,
 
 ## In a fight
 
+On your first departure from Sunstep, the Harbor Watch runs a chalk-round exercise. Dodge a marked shot, fire your single port cannon, then grapple the watch cutter and watch your crew cross the rail. The exercise saves at each lesson. You can skip it or practice again at a shipyard.
+
 | Order | Control |
 | --- | --- |
 | Turn | A / D or left / right arrows. Click open sky to steer toward it. |
@@ -24,7 +26,7 @@ Open the sky chart with **M** or the compass. Select an island for passage time,
 | Break away | R |
 | Pause | P |
 
-Each cannon reloads separately. Turning brings a fresh battery to bear. Contact brings the crews together, and crew size, experience, and hull condition influence the outcome. Captains can also slip past a raider before engaging.
+Each cannon refit adds a gun until all four stations are filled. A side with two fitted guns gains a broadside order. Each cannon reloads separately. Turning brings a fresh battery to bear. Contact brings the crews together, and crew size, experience, and hull condition influence the outcome. Captains can also slip past a raider before engaging.
 
 ## Run locally
 

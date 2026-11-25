@@ -1,5 +1,6 @@
 import { openPrologue } from './prologue'
 import './interiors.css'
+import { CITY_ECONOMY, nextPosting, RARITY } from './city-economy'
 import { chartObjectives } from './objectives'
 import {
   ABILITIES,
@@ -12,6 +13,9 @@ import {
   boardingStrength,
   cargoUsed,
   freightOffer,
+  stockAt,
+  cityOrder,
+  cityService,
   greeting,
   isUnlocked,
   prestigeTitle,
@@ -25,7 +29,7 @@ import {
   type UpgradeId,
 } from './model'
 
-export type InteriorView = 'market' | 'shipyard' | 'log' | 'chart' | 'authority' | 'voyage'
+export type InteriorView = 'civic' | 'market' | 'shipyard' | 'log' | 'chart' | 'authority' | 'voyage'
 type Navigate = (view: InteriorView | 'harbor') => void
 type Callback = () => void
 type MarketSide = 'buy' | 'sell'
@@ -81,11 +85,14 @@ function details(items: [string, string | number][]) {
 function market(state: GameState, ui: Controls) {
   const { side } = ui.settings
   const used = cargoUsed(state)
-  const rows = GOOD_IDS.map((good) => {
+  const city = CITY_ECONOMY[state.port]
+  const goods = GOOD_IDS.filter(good => side === 'buy' ? !!city.stock[good] : state.cargo[good].quantity > 0)
+  const rows = goods.map((good) => {
     const item = GOODS[good]
     const price = priceAt(state, state.port, good)[side]
     const lot = state.cargo[good]
-    const limit = side === 'buy' ? Math.min(state.ship.hold - used, Math.floor(state.coins / price)) : lot.quantity
+    const stock = stockAt(state, state.port, good)
+    const limit = side === 'buy' ? Math.min(stock, state.ship.hold - used, Math.floor(state.coins / price)) : lot.quantity
     const fieldId = `sk-order-${good}`
     const input = () => ui.page.querySelector<HTMLInputElement>(`#${fieldId}`)!
     const max = ui.register(() => {
@@ -98,7 +105,7 @@ function market(state: GameState, ui: Controls) {
         ui.act({ type: side, good, quantity })
     })
     return `<li><div class="sk-good-top"><div class="sk-sample" aria-hidden="true"><img src="${artwork(good)}" alt="" loading="lazy"></div>
-      <div><h3>${item.name}</h3><p>${item.description}</p></div><span class="sk-price">${coins(price)} <small>/ unit</small></span></div>
+      <div><h3>${item.name}</h3><p>${item.description}</p><small>${RARITY[good]} · ${side === 'buy' ? stock ? stock + ' on the floor' : 'Sold out until day ' + nextPosting(state.day) : lot.quantity + ' aboard'}</small></div><span class="sk-price">${coins(price)} <small>/ unit</small></span></div>
       <div class="sk-order" data-side="${side}" data-price="${price}" data-limit="${limit}">
       <label for="${fieldId}">Qty</label><input class="sk-qty" id="${fieldId}" aria-label="${item.name} quantity" type="number" step="1" min="1" max="${Math.max(limit, 1)}" value="${limit ? 1 : 0}" ${limit ? '' : 'disabled'}>
       <button type="button" class="sk-text-button" data-action="${max}" ${limit ? '' : 'disabled'} aria-label="Select maximum ${item.name}">Max</button>
@@ -113,14 +120,14 @@ function market(state: GameState, ui: Controls) {
   return (
     heading(
       PORTS[state.port].name,
-      'Port market',
+      city.market,
       metric('Purse', coins(state.coins)) + metric('Hold', `${used} / ${state.ship.hold}`),
     ) +
     `<div class="sk-layout"><article class="sk-card"><div class="sk-card-head"><h2>Exchange floor</h2><div class="sk-switch" aria-label="Trade direction">
     <button type="button" data-action="${changeSide('buy')}" aria-pressed="${side === 'buy'}">Buy</button>
     <button type="button" data-action="${changeSide('sell')}" aria-pressed="${side === 'sell'}">Sell</button></div></div>
-    <ul class="sk-goods">${rows}</ul></article>
-    <aside class="sk-stack"><details class="sk-fold sk-ledger-fold"><summary>Cargo manifest · ${used} / ${state.ship.hold}</summary>
+    <ul class="sk-goods">${rows || '<li>Your hold is empty.</li>'}</ul><p>Next exchange posting on day ${nextPosting(state.day)}.</p></article>
+    <aside class="sk-stack"><article class="sk-card"><h2>${city.institution}</h2><p>${city.order.need}</p>${ui.button('Visit ' + city.institution, () => ui.go('civic'), { secondary: true })}</article><details class="sk-fold sk-ledger-fold"><summary>Cargo manifest · ${used} / ${state.ship.hold}</summary>
     ${
       lots.length
         ? `<ul class="sk-cargo">${lots
@@ -132,27 +139,34 @@ function market(state: GameState, ui: Controls) {
         : '<p class="sk-empty">Your hold is empty.</p>'
     }
     ${state.freight ? `<p>Consigned freight aboard for ${PORTS[state.freight.to].name}.</p>` : ''}
-    </details><details class="sk-fold sk-ledger-fold"><summary>Market intelligence</summary><p>${tradeLead(state)}</p>
+    </details><details class="sk-fold sk-ledger-fold"><summary>Market intelligence</summary><p>${city.tradeLead}</p>
     <div class="sk-actions">${ui.button('Compare port quotes', () => ui.go('chart'), { secondary: true })}</div></details></aside></div>`
   )
 }
 
-function tradeLead(state: GameState) {
-  switch (state.port) {
-    case 'sunstep':
-      return 'Provisions come straight off the terraces here. Glasshouse furnace crews buy food by the crate.'
-    case 'glasshouse':
-      return 'Copperfall is glazing its winter gardens. The yard pays a premium for solar glass.'
-    case 'copperfall':
-      return 'Sunstep imports machinery to keep its orchard lifts running. The yards sell gearsets fresh from the foundry.'
-    case 'meridian':
-      return 'Balloon crews pack provisions for long soundings. Sunstep’s orchard crates find eager buyers here.'
+function civic(state: GameState, ui: Controls) {
+  const city = CITY_ECONOMY[state.port]
+  const order = cityOrder(state)
+  const service = cityService(state)
+  const lot = state.cargo[order.good]
+  const source = PORT_IDS.find(id => CITY_ECONOMY[id].specialty === order.good)!
+  const plotSource = () => {
+    ui.settings.destination = source
+    ui.go('chart')
   }
+  return heading(PORTS[state.port].name + ' · ' + city.district, city.institution) +
+    `<p class="sk-quote">${city.practice}</p>
+    <article class="sk-card"><div class="sk-kicker">Local commission · next posting day ${nextPosting(state.day)}</div><h2>${order.name}</h2>
+    <p>${order.need}</p>${details([['Requested', order.quantity + ' × ' + GOODS[order.good].name], ['In your hold', lot.quantity], ['On delivery', coins(order.pay)]])}
+    <div class="sk-actions">${ui.button(order.filled ? 'Commission filled' : 'Deliver cargo · ' + coins(order.pay), () => ui.act({ type: 'fillCityOrder' }), { disabled: !order.ready })}
+    ${!order.filled && !order.ready ? ui.button('Locate ' + PORTS[source].name, plotSource, { secondary: true }) : ''}</div></article>
+    ${service ? `<article class="sk-card"><h2>${service.name}</h2><p>${service.description}</p>${ui.button(service.used ? 'Booked through day ' + (nextPosting(state.day) - 1) : service.name, () => ui.act({ type: 'useCityService' }), { disabled: !service.ready })}</article>` : ''}
+    <div class="sk-actions">${ui.button(city.market, () => ui.go('market'), { secondary: true })}${ui.button(city.yard, () => ui.go('shipyard'), { secondary: true })}</div>`
 }
 
 function shipyard(state: GameState, ui: Controls) {
   const offers = (ids: UpgradeId[]) =>
-    `<ul class="sk-offers">${ids
+    `<ul class="sk-offers">${ids.filter(id => CITY_ECONOMY[state.port].upgrades.includes(id))
       .map((id) => {
         const offer = upgradeOffer(state, id)
         return `<li><div><h3>${offer.name}</h3><p>${offer.description}</p></div>
@@ -162,7 +176,7 @@ function shipyard(state: GameState, ui: Controls) {
   return (
     heading(
       PORTS[state.port].name,
-      'Shipyard',
+      CITY_ECONOMY[state.port].yard,
       metric('Purse', coins(state.coins)) + metric('Hull', `${state.ship.hull} / ${state.ship.maxHull}`),
     ) +
     `<div class="sk-layout"><div class="sk-stack"><article class="sk-card"><div class="sk-card-head"><h2>Refit the schooner</h2></div>${offers(['hold', 'hull', 'guns', 'repair'])}</article>
@@ -170,11 +184,12 @@ function shipyard(state: GameState, ui: Controls) {
     <details class="sk-fold sk-ledger-fold"><summary>Ship’s register</summary>${details([
       ['Hull integrity', `${state.ship.hull} / ${state.ship.maxHull}`],
       ['Hold capacity', `${state.ship.hold} units`],
+      ['Cannons fitted', state.ship.cannons],
       ['Gunnery rating', state.ship.guns],
       ['Crew aboard', state.ship.crew],
       ['Veterans', state.ship.veterans],
       ['Boarding strength', boardingStrength(state)],
-    ])}<p class="sk-info">Ram another airship and your crew will board. Experienced hands carry more of the fight.</p></details></div>`
+    ])}<p>Sunstep fits cargo racks. Copperfall forges armor and cannons. Both Copperfall and Meridian sign on veterans.</p><p class="sk-info">Ram another airship and your crew will board. Experienced hands carry more of the fight.</p></details><div class="sk-actions">${ui.button('Practice helm and gunnery', () => ui.act({type:'practiceDrill'}), {secondary:true})}</div></div>`
   )
 }
 
@@ -217,7 +232,10 @@ function rememberedPrices(state: GameState, dest: PortId) {
   return `<p>${local ? 'Current exchange floor' : `Recorded on day ${visit!.day}`} · buy / sell per unit</p>
     <ul class="sk-prices">${GOOD_IDS.map((good) => {
       const quote = local ? priceAt(state, dest, good) : visit!.prices[good]
-      return `<li><span>${GOODS[good].name}</span><strong>${quote.buy} / ${coins(quote.sell)}</strong></li>`
+      if (!quote) return ''
+      const stock = local ? stockAt(state, dest, good) : visit!.stock?.[good]
+      const buy = CITY_ECONOMY[dest].stock[good] ? (stock === 0 ? 'sold out' : quote.buy + (stock === undefined ? '' : ' × ' + stock)) : '—'
+      return `<li><span>${GOODS[good].name}</span><strong>${buy} / ${coins(quote.sell)}</strong></li>`
     }).join('')}</ul>`
 }
 
@@ -254,6 +272,7 @@ function chart(state: GameState, ui: Controls) {
       <div class="sk-map-copy"><div class="sk-kicker">${current ? 'Moored here' : unlocked ? port.subtitle : 'Outer skyway · locked'}</div>
       <h2 id="sk-selected-port">${port.name}</h2>
       <p>${current ? 'Local exchange' : unlocked ? `${days}-day passage` : 'Relight the beacon to reach this port'} · ${GOODS[port.specialty].name}</p>
+      <details class="sk-fold"><summary>Port trade &amp; services</summary><p>${CITY_ECONOMY[dest].tradeLead}</p><p>${CITY_ECONOMY[dest].institution} requests ${CITY_ECONOMY[dest].order.quantity} × ${GOODS[CITY_ECONOMY[dest].order.good].name}.</p></details>
       <details class="sk-fold"><summary>Recorded prices</summary>${rememberedPrices(state, dest)}</details>
       <div class="sk-actions">${
         current
@@ -444,7 +463,8 @@ export function renderInterior(
     meridian: 'meridian',
   }
   const art = {
-    market: 'market',
+    market: 'civic-' + state.port,
+    civic: 'civic-' + state.port,
     authority: settings.firstLight && state.mission === 'lit' ? null : offices[state.port],
     shipyard: 'yard',
     chart: null,
@@ -474,7 +494,7 @@ export function renderInterior(
           settings.destination = null
           navigate('harbor')
         })}" aria-label="Return to harbor">← Harbor</button>`
-  const content = { market, shipyard, log: logbook, chart, authority, voyage }[view](state, ui)
+  const content = { civic, market, shipyard, log: logbook, chart, authority, voyage }[view](state, ui)
   const insideRoom = !!art
   page.innerHTML =
     back +
@@ -529,7 +549,7 @@ function arrangeChart(page: HTMLElement, settings: InteriorSettings) {
   }
   place()
   page.querySelector<HTMLElement>('.sk-map-scroll')!.addEventListener('scroll', place, { passive: true })
-  popover.querySelector('details')?.addEventListener('toggle', place)
+  popover.querySelectorAll('details').forEach(fold => fold.addEventListener('toggle', place))
   const observer = new ResizeObserver(() => {
     if (page.isConnected) place()
     else observer.disconnect()

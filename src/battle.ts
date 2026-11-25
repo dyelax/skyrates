@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { CloudDeck } from './cloud-deck'
 import {
   SKY,
   GUN_ARC,
@@ -18,6 +19,16 @@ import {
 } from './battle-model'
 import type { DuelOutcome, Gun, Point, Shot, Side, Vessel } from './battle-model'
 import { battleSound } from './audio'
+import {
+  COACH,
+  chalkRun,
+  chalkPoint,
+  evadedRound,
+  gunKey,
+  GUN_POSITIONS,
+  type ChalkRun,
+  type DrillStage,
+} from './drill'
 import './battle.css'
 
 export type BattleOutcome = DuelOutcome
@@ -25,6 +36,8 @@ export interface BattleOptions {
   crew: number
   skill: number
   gunLevel: number
+  cannons: number
+  drill?: { stage: DrillStage; onCheckpoint: (stage: DrillStage) => void; onLeave: (skip: boolean) => void }
   hullLevel: number
   startingHull?: number
   quickGunnery?: boolean
@@ -64,7 +77,6 @@ const FAIR_WIND = 0xa6f3d7,
   GOLD = 0xffcf79,
   COPPER = 0xff9275
 const ENEMY_NAME = 'The Cinder Wasp'
-const BUTTON_KEYS = ['1', '2', '3', '4']
 
 interface FlightArea {
   width: number
@@ -89,20 +101,40 @@ function hullCard(title: string, id: string): string {
   return `<div class="duel-ship-readout"><div class="duel-meter-title"><span>${title}</span><b data-read="${id}"></b></div><div class="duel-hull-track"><i data-fill="${id}"></i></div></div>`
 }
 
-function battery(side: Side, offset: number): string {
-  return `<div class="duel-battery"><div class="duel-battery-title">${side} battery</div><div class="duel-buttons">${[0, 1].map((i) => `<button type="button" data-action="gun${offset + i}" aria-label="Fire ${side} ${i === 0 ? 'bow' : 'aft'} cannon"><kbd>${BUTTON_KEYS[offset + i]}</kbd><span>${i === 0 ? 'Bow' : 'Aft'}</span><i></i></button>`).join('')}<button type="button" class="duel-volley" data-action="${side}"><kbd>${side === 'port' ? 'Q' : 'E'}</kbd> Broadside</button></div></div>`
+function battery(side: Side, count: number): string {
+  const guns = GUN_POSITIONS.slice(0, count).filter((gun) => gun.side === side)
+  if (!guns.length) return ''
+  const stations = guns
+    .map(
+      (gun) =>
+        `<button type="button" data-action="gun${gun.key}" aria-label="Fire ${side} ${gun.station ? 'aft' : 'bow'} cannon"><kbd>${gun.key}</kbd><span>${gun.station ? 'Aft' : 'Bow'} gun</span><i></i></button>`,
+    )
+    .join('')
+  const broadside =
+    guns.length > 1
+      ? `<button type="button" class="duel-volley" data-action="${side}"><kbd>${side === 'port' ? 'Q' : 'E'}</kbd> Broadside</button>`
+      : ''
+  return `<div class="duel-battery"><div class="duel-battery-title">${side} battery</div><div class="duel-buttons">${stations}${broadside}</div></div>`
 }
 
 export function mountBattle(host: HTMLElement, options: BattleOptions): () => void {
   const root = document.createElement('section')
-  root.className = 'air-duel'
+  root.className = options.drill ? 'air-duel is-drill' : 'air-duel'
+  const cannons = options.drill ? 1 : options.cannons
+  root.classList.toggle('single-battery', cannons === 1)
   root.setAttribute('aria-label', 'Airship battle')
   root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause"><kbd>P</kbd> Pause</button></div>
-    <div class="duel-readouts">${hullCard('Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(ENEMY_NAME, 'enemy')}</div>
+    <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : ENEMY_NAME, 'enemy')}</div>
     <div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div><div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
-    <div class="duel-console">${battery('port', 0)}${battery('starboard', 2)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Set an intercept course to board on contact"><kbd>B</kbd> Ram</button><button type="button" data-action="escape"><kbd>R</kbd> Break away</button></div></div></div>
-    <div class="duel-foot"><span><kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Click raider to fire · Ram to board</span><span data-read="crew"></span></div>`
-  if (options.shipName)
+    <div class="duel-console">${battery('port', cannons)}${battery('starboard', cannons)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Set an intercept course to board on contact"><kbd>B</kbd> Ram</button><button type="button" data-action="escape"><kbd>R</kbd> Break away</button></div></div></div>
+    <div class="duel-foot"><span>${options.drill ? 'Watch exercise · Chalk rounds' : '<kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Click raider to fire · Ram to board'}</span><span data-read="crew"></span></div>`
+  if (options.drill) {
+    root.insertAdjacentHTML(
+      'beforeend',
+      `<section class="drill-coach" aria-label="Harbor Watch instruction"><div class="drill-heading"><span class="drill-chapter"></span><button type="button" data-action="skip">Skip exercise</button></div><h1></h1><p class="drill-copy"></p><div class="drill-actions"><button type="button" data-action="coach"></button></div></section>`,
+    )
+  }
+  if (options.shipName && !options.drill)
     root.querySelector('[data-read="player"]')!.previousElementSibling!.textContent = options.shipName
   host.replaceChildren(root)
   const container = root.querySelector<HTMLElement>('.duel-canvas')!
@@ -141,6 +173,11 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
 
 class SkyBattle extends Phaser.Scene {
   private root: HTMLElement
+  private drill?: DrillStage
+  private chalk?: ChalkRun
+  private buoy?: Point
+  private chalkDelay = 0
+  private chartLabels: Phaser.GameObjects.Text[] = []
   private opts: BattleOptions
   private player: Vessel
   private foe: Vessel
@@ -148,7 +185,7 @@ class SkyBattle extends Phaser.Scene {
   private foeView!: ShipView
   private area: FlightArea
   private veil!: Phaser.GameObjects.Rectangle
-  private sky!: Phaser.GameObjects.Image
+  private sky!: CloudDeck
   private overlays!: Phaser.GameObjects.Graphics
   private paths!: Phaser.GameObjects.Graphics
   private shots: Projectile[] = []
@@ -176,6 +213,7 @@ class SkyBattle extends Phaser.Scene {
     super('skyrates-duel')
     this.root = root
     this.opts = options
+    this.drill = options.drill?.stage
     this.area = area
     const flightHeight = area.bottom - area.top
     this.player = buildShip(
@@ -185,8 +223,9 @@ class SkyBattle extends Phaser.Scene {
       options.hullLevel,
       options.startingHull,
       options.quickGunnery,
+      options.drill ? 1 : options.cannons,
     )
-    this.foe = buildShip({ x: 595, y: area.top + flightHeight * 0.51 }, Math.PI * 0.49, 0, 0)
+    this.foe = buildShip({ x: 595, y: area.top + flightHeight * 0.51 }, Math.PI * 0.49, 0, 0, undefined, false, 4)
     this.foe.maxHull = this.foe.hull = 82
     this.foe.throttle = 1
     this.banner = root.querySelector('.duel-banner')!
@@ -199,6 +238,7 @@ class SkyBattle extends Phaser.Scene {
     root.querySelectorAll<HTMLElement>('[data-fill]').forEach((el) => {
       this.meters[el.dataset.fill!] = el
     })
+    if (this.drill) this.setupExercise()
     this.syncHUD()
   }
 
@@ -223,10 +263,7 @@ class SkyBattle extends Phaser.Scene {
         return
       }
     }
-    this.sky = this.add.image(this.area.width / 2, this.area.height / 2, 'sea').setDepth(0)
-    this.sky
-      .setScale(Math.max(this.area.width / this.sky.width, this.area.height / this.sky.height) * 1.14)
-      .setTint(0xcedfdf)
+    this.sky = new CloudDeck(this, this.area.width, this.area.height)
     this.veil = this.add
       .rectangle(0, 0, this.area.width, this.area.height, 0x0a2133, 0.18)
       .setOrigin(0)
@@ -238,9 +275,16 @@ class SkyBattle extends Phaser.Scene {
     this.ready = true
     this.bindControls()
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.ended || this.grapple || this.pausedDuel) return
+      if (
+        this.ended ||
+        this.grapple ||
+        this.pausedDuel ||
+        ['briefing', 'debrief', 'melee'].includes(this.drill ?? '')
+      )
+        return
       const at = { x: pointer.worldX, y: pointer.worldY }
       if (Math.hypot(at.x - this.foe.x, at.y - this.foe.y) < 48) {
+        if (this.drill && this.drill !== 'fire') return
         const side = closestSide(this.player, this.foe)
         if (!inArc(this.player, side, this.foe)) {
           this.tell('Turn to bring a battery to bear.', 1.4)
@@ -248,26 +292,58 @@ class SkyBattle extends Phaser.Scene {
         }
         const gun = this.player.guns.find((g) => g.side === side && g.cooldown <= 0)
         if (gun) this.firePlayer([gun])
-        else this.tell('Gunners are reloading.', 1.1)
+        else
+          this.tell(
+            this.player.guns.some((g) => g.side === side)
+              ? 'Gunners are reloading.'
+              : 'Your gun is on the other side. Turn the schooner.',
+            2,
+          )
       } else {
         this.ramming = false
         this.course = at
+        if (this.drill === 'dodge') this.player.throttle = 2
       }
     })
-    this.tell('Raider to starboard. Bring your guns to bear.', 2.7)
+    for (const label of ['YOU · WAYFARER', this.drill ? 'WATCH · LARK' : 'RAIDER · CINDER WASP']) {
+      this.chartLabels.push(
+        this.add
+          .text(0, 0, label, {
+            fontFamily: 'Barlow, sans-serif',
+            fontSize: this.labelSize(),
+            fontStyle: 'bold',
+            color: '#fff0c9',
+            backgroundColor: '#182a30',
+            padding: { x: 5, y: 2 },
+          })
+          .setOrigin(0.5)
+          .setDepth(9),
+      )
+    }
+    if (this.drill) {
+      this.drawCoach()
+      if (this.drill === 'melee') this.beginBoarding()
+    } else this.tell('Cream sails are yours. The fan shows your gun’s firing arc.', 4.5)
     this.syncHUD()
   }
 
+  private labelSize(): string {
+    return `${Math.max(13, Math.min(23, Math.round((11 * SKY.width) / Math.max(1, this.root.clientWidth))))}px`
+  }
+
   resizeSky(next: FlightArea) {
+    for (const label of this.chartLabels) label.setFontSize(this.labelSize())
     const previous = this.area
     this.area = next
     if (previous.height === next.height && previous.top === next.top && previous.bottom === next.bottom) return
     const objects: Point[] = [this.player, this.foe, ...this.sparks, ...this.shots]
+    if (this.buoy) objects.push(this.buoy)
+    if (this.chalk) this.chalk = undefined
     if (this.course) objects.push(this.course)
     if (this.grapple) objects.push(this.grapple.center, this.grapple.startA, this.grapple.startB)
     const factor = (next.bottom - next.top) / Math.max(1, previous.bottom - previous.top)
     for (const p of objects) p.y = next.top + (p.y - previous.top) * factor
-    if (this.sky) this.sky.setScale(Math.max(next.width / this.sky.width, next.height / this.sky.height) * 1.14)
+    this.sky?.resize(next.width, next.height)
     this.veil?.setSize(next.width, next.height)
   }
 
@@ -294,10 +370,10 @@ class SkyBattle extends Phaser.Scene {
       arrowdown: 'slower',
       q: 'port',
       e: 'starboard',
-      1: 'gun0',
-      2: 'gun1',
-      3: 'gun2',
-      4: 'gun3',
+      1: 'gun1',
+      2: 'gun2',
+      3: 'gun3',
+      4: 'gun4',
       r: 'escape',
       b: 'ram',
       p: 'pause',
@@ -341,9 +417,32 @@ class SkyBattle extends Phaser.Scene {
 
   private order(action: string) {
     if (this.ended) return
+    if (this.drill && action === 'skip') {
+      this.opts.drill!.onLeave(true)
+      return
+    }
     if (!this.ready) {
       if (action === 'escape') this.finish('escaped')
       return
+    }
+    if (this.drill && action === 'coach' && !this.pausedDuel) {
+      if (this.drill === 'briefing') this.teach('dodge')
+      else if (this.drill === 'dodge' && this.buoy) {
+        this.course = { ...this.buoy }
+        this.player.throttle = 2
+      } else if (this.drill === 'fire') {
+        const aim = angleBetween(this.player, this.foe) + Math.PI / 2
+        this.course = localPoint({ ...this.player, heading: aim }, 130, 0)
+        this.player.throttle = 0
+      } else if (this.drill === 'board' && !this.ramming) this.order('ram')
+      else if (this.drill === 'debrief') this.opts.drill!.onLeave(false)
+      return
+    }
+    if (this.drill && action !== 'pause') {
+      if (action === 'escape' || (action === 'ram' && this.drill !== 'board')) return
+      if (['briefing', 'melee', 'debrief'].includes(this.drill)) return
+      if ((action.startsWith('gun') || ['best', 'port', 'starboard'].includes(action)) && this.drill !== 'fire')
+        return
     }
     if (action === 'pause') {
       this.pausedDuel = !this.pausedDuel
@@ -394,7 +493,7 @@ class SkyBattle extends Phaser.Scene {
         this.firePlayer(this.player.guns.filter((g) => g.side === side))
       }
       if (action.startsWith('gun')) {
-        const gun = this.player.guns[Number(action.slice(3))]
+        const gun = this.player.guns.find((g) => gunKey(g) === Number(action.slice(3)))
         if (gun) this.firePlayer([gun])
       }
     }
@@ -430,6 +529,10 @@ class SkyBattle extends Phaser.Scene {
   }
 
   private firePlayer(guns: Gun[]) {
+    if (!guns.length) {
+      this.tell('No cannon is fitted on that side.', 2)
+      return
+    }
     let count = 0
     const range = Math.hypot(this.foe.x - this.player.x, this.foe.y - this.player.y)
     const leadTime = Math.min(1.1, range / SHOT_SPEED)
@@ -481,9 +584,10 @@ class SkyBattle extends Phaser.Scene {
     const odds = Math.round(100 * boardingOdds(this.opts.crew, this.opts.skill, this.player, this.foe))
     this.readings.crew.textContent = `${this.opts.crew} hands · ${odds}% boarding odds`
     const locked = !this.ready || this.pausedDuel || !!this.grapple || this.ended
-    this.player.guns.forEach((gun, i) => {
-      const el = this.buttons[`gun${i}`]
-      el.disabled = locked || gun.cooldown > 0
+    this.player.guns.forEach((gun) => {
+      const el = this.buttons[`gun${gunKey(gun)}`]
+      el.disabled = locked || gun.cooldown > 0 || (!!this.drill && this.drill !== 'fire')
+      el.classList.toggle('bearing', inArc(this.player, gun.side, this.foe) && !el.disabled)
       el.style.setProperty('--gun-ready', `${100 * (1 - gun.cooldown / gun.reload)}%`)
       el.title =
         gun.cooldown > 0
@@ -492,14 +596,131 @@ class SkyBattle extends Phaser.Scene {
     })
     for (const side of ['port', 'starboard'] as const) {
       const el = this.buttons[side]
+      if (!el) continue
       el.disabled = locked || !this.player.guns.some((g) => g.side === side && !g.cooldown)
       el.classList.toggle('bearing', this.ready && inArc(this.player, side, this.foe))
     }
-    this.buttons.faster.disabled = locked || this.player.throttle >= 3
-    this.buttons.slower.disabled = locked || this.player.throttle <= 0
-    this.buttons.escape.disabled = locked
-    this.buttons.ram.disabled = locked
+    const helmLocked = locked || (!!this.drill && !['dodge', 'fire', 'board'].includes(this.drill))
+    this.buttons.faster.disabled = helmLocked || this.player.throttle >= 3
+    this.buttons.slower.disabled = helmLocked || this.player.throttle <= 0
+    if (this.drill) {
+      const runUnderway = this.drill === 'board' && this.ramming
+      this.buttons.coach.disabled = !this.ready || this.pausedDuel || runUnderway
+      if (this.drill === 'board')
+        this.buttons.coach.textContent = runUnderway ? 'Closing with the cutter…' : 'Start boarding run'
+    }
+    this.buttons.escape.disabled = locked || !!this.drill
+    this.buttons.ram.disabled = locked || (!!this.drill && this.drill !== 'board')
     this.buttons.ram.setAttribute('aria-pressed', String(this.ramming))
+  }
+
+  private setupExercise() {
+    const mid = (this.area.top + this.area.bottom) / 2
+    Object.assign(this.foe, { x: 310, y: mid, heading: Math.PI / 2, throttle: 0 })
+    Object.assign(this.player, { x: 625, y: mid, heading: -Math.PI / 2, throttle: 0 })
+    if (this.drill === 'board' || this.drill === 'melee' || this.drill === 'debrief') {
+      this.foe.hull -= 15 + this.opts.gunLevel * 3
+    }
+    if (this.drill === 'melee' || this.drill === 'debrief') this.player.x = this.foe.x + 45
+    if (this.drill === 'dodge') this.startRun()
+    this.drawCoach()
+  }
+
+  private drawCoach() {
+    if (!this.drill) return
+    this.root.dataset.lesson = this.drill
+    const content = COACH[this.drill]
+    this.root.querySelector('.drill-chapter')!.textContent = content.chapter
+    this.root.querySelector('.drill-coach h1')!.textContent = content.title
+    this.root.querySelector('.drill-copy')!.textContent = content.text
+    if (this.drill === 'debrief') {
+      const odds = Math.round(100 * boardingOdds(this.opts.crew, this.opts.skill, this.player, this.foe))
+      this.root.querySelector('.drill-copy')!.textContent =
+        `Your ${this.opts.crew} hands crossed the rail. Their experience and both hulls gave you a ${odds}% chance in a live boarding. Fit more guns at a shipyard for a broadside, or break away at the edge of a fight.`
+    }
+    const coach = this.buttons.coach
+    coach.hidden = this.drill === 'melee'
+    coach.textContent = {
+      briefing: 'Take the helm',
+      dodge: 'Steer to the buoy',
+      fire: 'Line up port gun',
+      board: 'Start boarding run',
+      melee: '',
+      debrief: 'Leave the exercise',
+    }[this.drill]
+    this.buttons.skip.hidden = this.drill === 'debrief'
+    this.banner.classList.remove('visible')
+    this.banner.textContent = ''
+    this.bannerTTL = 0
+  }
+
+  private teach(stage: DrillStage) {
+    if (stage === this.drill) return
+    this.drill = stage
+    this.opts.drill!.onCheckpoint(stage)
+    this.player.throttle = 0
+    this.player.vx = this.player.vy = this.player.angularSpeed = 0
+    this.course = undefined
+    this.ramming = false
+    this.chalk = undefined
+    this.shots.length = 0
+    if (stage === 'dodge') this.startRun()
+    this.drawCoach()
+    this.syncHUD()
+  }
+
+  private startRun() {
+    this.chalk = chalkRun(localPoint(this.foe, 0, -12), this.player)
+    const dir = this.player.y > (this.area.top + this.area.bottom) / 2 - 5 ? -1 : 1
+    this.buoy = {
+      x: clamp(this.player.x + 80, 30, this.area.width - 30),
+      y: clamp(this.player.y + dir * 94, this.area.top + 25, this.area.bottom - 25),
+    }
+  }
+
+  private exerciseHelm(dt: number) {
+    if (this.drill !== 'dodge') return
+    if (!this.chalk) {
+      this.chalkDelay -= dt
+      if (this.chalkDelay <= 0) this.startRun()
+      return
+    }
+    const run = this.chalk
+    const gfx = this.paths
+    const end = { x: run.aim.x + run.direction.x * 150, y: run.aim.y + run.direction.y * 150 }
+    gfx.lineStyle(17, 0xff865d, 0.16).lineBetween(run.origin.x, run.origin.y, end.x, end.y)
+    for (let n = 0; n < run.length + 150; n += 21) {
+      gfx
+        .lineStyle(2, 0xff9a6e, 0.85)
+        .lineBetween(
+          run.origin.x + n * run.direction.x,
+          run.origin.y + n * run.direction.y,
+          run.origin.x + (n + 12) * run.direction.x,
+          run.origin.y + (n + 12) * run.direction.y,
+        )
+    }
+    if (this.buoy)
+      gfx
+        .lineStyle(2, FAIR_WIND, 0.9)
+        .strokeCircle(this.buoy.x, this.buoy.y, 12)
+        .strokeCircle(this.buoy.x, this.buoy.y, 6)
+    if (run.cue > 0) {
+      run.cue -= dt
+      return
+    }
+    if (!run.traveled) {
+      battleSound('cannon')
+      this.burst(run.origin, COPPER, 10, 28)
+    }
+    run.traveled += dt * 92
+    const pos = chalkPoint(run)
+    gfx.fillStyle(0xff975c, 1).fillCircle(pos.x, pos.y, 6).fillStyle(0xfff2cb, 1).fillCircle(pos.x, pos.y, 3)
+    if (hitsShip(pos, this.player) || run.traveled > run.length + 170) {
+      this.chalk = undefined
+      this.chalkDelay = 1.7
+      this.burst(pos, COPPER, 14, 33)
+      this.tell('Chalk on the rail. Watch the line and move across it. Try again.', 2.8)
+    } else if (evadedRound(run, this.player)) this.teach('fire')
   }
 
   private enemyHelm(dt: number) {
@@ -548,6 +769,7 @@ class SkyBattle extends Phaser.Scene {
       if (i >= visibleCrew) hand.setTint(0xff9680)
       crew.push(hand)
     }
+    if (this.drill === 'board') this.teach('melee')
     battleSound('grapple')
     this.grapple = {
       elapsed: 0,
@@ -618,7 +840,10 @@ class SkyBattle extends Phaser.Scene {
       )
     if (g.elapsed > 2.4 && g.elapsed < 4.5 && this.bannerTTL <= 0)
       this.tell('Deckhands are fighting across the rail.', 1.85)
-    if (g.elapsed > 5.5) this.finish(Math.random() < g.odds ? 'boarded' : 'defeat')
+    if (g.elapsed > 5.5) {
+      if (this.drill === 'melee') this.teach('debrief')
+      else if (!this.drill) this.finish(Math.random() < g.odds ? 'boarded' : 'defeat')
+    }
   }
 
   private finish(outcome: DuelOutcome) {
@@ -658,9 +883,15 @@ class SkyBattle extends Phaser.Scene {
       g.lineStyle(3, tint, 0.62 * pulse).lineBetween(aft.x, aft.y, end.x, end.y)
     }
     for (const side of ['port', 'starboard'] as const) {
+      if (!p.guns.some((gun) => gun.side === side)) continue
       const hot = inArc(p, side, this.foe),
         angle = sideBearing(p, side),
-        r = hot ? 112 : 83
+        r =
+          this.drill === 'fire'
+            ? Math.min(450, Math.hypot(this.foe.x - p.x, this.foe.y - p.y) + 36)
+            : hot
+              ? 112
+              : 83
       const tint = hot ? GOLD : FAIR_WIND
       g.fillStyle(tint, hot ? 0.085 : 0.028)
         .beginPath()
@@ -778,10 +1009,7 @@ class SkyBattle extends Phaser.Scene {
     this.clock += dt
     this.bannerTTL -= dt
     if (this.bannerTTL <= 0) this.banner.classList.remove('visible')
-    this.sky.setPosition(
-      this.area.width / 2 + Math.sin(this.clock * 0.037) * 16,
-      this.area.height / 2 + Math.cos(this.clock * 0.044) * 11,
-    )
+    this.sky.update(dt, this.player, this.foe)
     this.paths.clear()
     if (this.grapple) this.boardingTick(dt)
     else {
@@ -796,8 +1024,9 @@ class SkyBattle extends Phaser.Scene {
         if (Math.hypot(this.player.x - this.course.x, this.player.y - this.course.y) < 12) this.course = undefined
         else helm = clamp(wrapAngle(angleBetween(this.player, this.course) - this.player.heading) * 2.2, -1, 1)
       }
-      moveShip(this.player, helm, dt)
-      this.enemyHelm(dt)
+      if (this.drill !== 'briefing' && this.drill !== 'debrief') moveShip(this.player, helm, dt)
+      if (this.drill) this.exerciseHelm(dt)
+      else this.enemyHelm(dt)
       const p = this.player
       if (
         this.escaping &&
@@ -822,6 +1051,10 @@ class SkyBattle extends Phaser.Scene {
           this.burst(s, s.enemy ? COPPER : GOLD, 18, 70)
           battleSound('hit')
           this.cameras.main.shake(100, 0.002)
+          if (this.drill === 'fire' && !s.enemy) {
+            this.teach('board')
+            break
+          }
           if (target.hull <= 0) {
             this.finish(s.enemy ? 'defeat' : 'victory')
             return
@@ -835,8 +1068,11 @@ class SkyBattle extends Phaser.Scene {
         )
           this.shots.splice(i, 1)
       }
-      if (boardingContact(p, this.foe)) this.beginBoarding()
+      if ((!this.drill || this.drill === 'board') && boardingContact(p, this.foe)) this.beginBoarding()
       this.traceCourse()
+    }
+    for (const [i, ship] of [this.player, this.foe].entries()) {
+      this.chartLabels[i].setPosition(ship.x, ship.y - 52).setVisible(!this.grapple)
     }
     this.updateShipView(this.playerView, this.player, 0)
     this.updateShipView(this.foeView, this.foe, 1.75)

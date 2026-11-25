@@ -14,7 +14,7 @@ const position = { x: 250, y: 220 }
 const broadside = { x: 250, y: 50 }
 
 test('schooner cannons track independent reload times and a broadside shoots only loaded guns', () => {
-  const ship = buildShip(position, 0, 0, 0)
+  const ship = buildShip(position, 0, 3, 0)
   const port = ship.guns.filter((gun) => gun.side === 'port')
   assert.equal(port.length, 2)
   assert.ok(inArc(ship, 'port', broadside))
@@ -64,4 +64,12 @@ test('ramming follows a rotated hull and hiring veterans improves boarding odds'
   assert.ok(veterans > green + 0.3)
   b.hull = 18
   assert.ok(boardingOdds(6, 1, a, b) > green)
+})
+
+
+test('fresh hulls have one port gun and shipyard refits open specific independent stations', () => {
+  for (const [level, sides] of ['p','ps','psp','psps'].entries()) {
+    const ship=buildShip(position,0,level,0)
+    assert.equal(ship.guns.map(gun=>gun.side[0]).join(''),sides)
+  }
 })
