@@ -68,3 +68,5 @@ The TypeScript game simulation is independent of the interface. Port definitions
 The public game is served from the root of the `gh-pages` branch. Publish the contents of a tested `dist/` build to that branch with a `.nojekyll` file. The `main` branch contains the source and editable game data.
 
 [Design research and first-voyage playtests](docs/design/merchant-and-pirate-games.md)
+
+[The first voyage: training, trade, pirate tolls and captain progression](docs/design/first-voyage-decisions.md)
