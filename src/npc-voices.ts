@@ -428,7 +428,7 @@ export function openConversation(npc: ConversationPartner) {
         ).reply
       lifetime.signal.throwIfAborted()
       if (!answer) throw Error('The character gave no reply. Please try again.')
-      if (clause && !answer.includes(clause)) answer = clause
+      if (clause && (!answer.includes(clause) || /[0-9]|crowns|rations?|fuel|provisions|certificate/i.test(answer.replace(clause, '')))) answer = clause
       draft.remove()
       line('You', question)
       line(npc.name, answer)
