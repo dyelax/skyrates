@@ -457,9 +457,9 @@ function voyage(state: GameState, ui: Controls) {
     title = 'A toll on the skyway'
     line = `“${toll.crowns} crowns for passage, Captain.”`
     copy = `Lookout sights the <strong>${foe.name}</strong> with ${armamentLabel(foe.cannons)}, ${foe.hull} hull and ${crew} (strength ${foe.crew}). Your ${state.ship.crew} hands have a ${odds}% boarding chance at the current hulls. Refuse and you must fight or reach the edge of the skyway.`
-    terms = `<details class="sk-fold"><summary>Toll and surrender terms</summary><p>They count ${state.coins} crowns in your purse and ${toll.cargoValue} in cargo, worth ${toll.exposedValue} together. ${canPayCargo ? 'Cargo payment: ' + cargoTerms + '. ' : ''}If defeated, you surrender ${cargoTerms}. Commission papers and bonded mail stay aboard.</p></details>`
+    terms = `<details class="sk-fold"><summary>Toll and surrender terms</summary><p>They count ${state.coins} crowns in your purse and ${toll.cargoValue} in cargo, worth ${toll.exposedValue} together. ${canPayCargo ? 'They accept ' + cargoTerms + '. ' : ''}If defeated, you surrender ${cargoTerms}. Commission papers and bonded mail stay aboard.</p></details>`
     const crates = toll.settlement.cargo.reduce((sum, lot) => sum + lot.quantity, 0)
-    const cargoButton = cargoTerms.length <= 62 ? 'Hand over ' + cargoTerms : `Pay with ${crates} crates` +
+    const cargoButton = cargoTerms.length <= 62 ? 'Hand over ' + cargoTerms : `Pay with ${crates} ${crates === 1 ? 'crate' : 'crates'}` +
       (toll.settlement.coins ? ` + ${toll.settlement.coins} crowns` : '') +
       (toll.settlement.change ? ` · receive ${toll.settlement.change} in change` : '')
     buttons = ui.button('Pay ' + toll.crowns + ' crowns', () => ui.act({ type: 'payToll', id: leg.id, payment: 'crowns' }), { disabled: !canPayCash }) +

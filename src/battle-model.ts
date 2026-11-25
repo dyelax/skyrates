@@ -136,6 +136,31 @@ export function moveShip(ship: Vessel, helm: number, dt: number, wind: Point = S
   })
 }
 
+export function steerRaider(
+  enemy: Vessel,
+  player: Point,
+  area: { width: number; height: number; top: number; bottom: number },
+  pursuing: boolean,
+  dt: number,
+  wind: Point,
+): Side {
+  const range = Math.hypot(enemy.x - player.x, enemy.y - player.y)
+  const bearing = angleBetween(enemy, player)
+  const side = armedSide(enemy, player)
+  const rail = side === 'port' ? -1 : 1
+  let desired = bearing - rail * Math.PI / 2
+  if (range > 325 || pursuing) desired = bearing - rail * 0.35
+  if (range < 110) desired = bearing + Math.PI
+  if (enemy.x < 68 || enemy.x > area.width - 68 || enemy.y < area.top + 43 || enemy.y > area.bottom - 43)
+    desired = angleBetween(enemy, { x: area.width / 2, y: area.height / 2 })
+  enemy.throttle = range > 330 || pursuing ? 2 : 1
+  const helm = Math.max(-1, Math.min(1, wrapAngle(desired - enemy.heading) * 1.7))
+  moveShip(enemy, helm, dt, wind)
+  enemy.x = Math.max(30, Math.min(area.width - 30, enemy.x))
+  enemy.y = Math.max(area.top + 20, Math.min(area.bottom - 20, enemy.y))
+  return side
+}
+
 export function localPoint(ship: Vessel, forward: number, lateral: number): Point {
   const c = Math.cos(ship.heading),
     s = Math.sin(ship.heading)

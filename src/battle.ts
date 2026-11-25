@@ -8,7 +8,6 @@ import {
   STILL_AIR,
   moveShot,
   angleBetween,
-  armedSide,
   boardingContact,
   boardingOdds,
   buildOpponent,
@@ -20,6 +19,7 @@ import {
   localPoint,
   moveShip,
   sideBearing,
+  steerRaider,
   wrapAngle,
 } from './battle-model'
 import type { BattleOpponent, DuelOutcome, Gun, Point, Shot, Side, Vessel } from './battle-model'
@@ -787,23 +787,7 @@ class SkyBattle extends Phaser.Scene {
     const enemy = this.foe,
       player = this.player
     const range = Math.hypot(enemy.x - player.x, enemy.y - player.y)
-    const bearing = angleBetween(enemy, player)
-    const side = armedSide(enemy, player)
-    let desired = bearing - (side === 'port' ? -Math.PI / 2 : Math.PI / 2)
-    if (range > 325 || this.escaping) desired = bearing - (side === 'port' ? -0.35 : 0.35)
-    if (range < 110) desired = bearing + Math.PI
-    if (
-      enemy.x < 68 ||
-      enemy.y < this.area.top + 43 ||
-      enemy.x > this.area.width - 68 ||
-      enemy.y > this.area.bottom - 43
-    ) {
-      desired = angleBetween(enemy, { x: this.area.width / 2, y: this.area.height / 2 })
-    }
-    enemy.throttle = range > 330 || this.escaping ? 2 : 1
-    moveShip(enemy, clamp(wrapAngle(desired - enemy.heading) * 1.7, -1, 1), dt, this.wind)
-    enemy.x = clamp(enemy.x, 30, this.area.width - 30)
-    enemy.y = clamp(enemy.y, this.area.top + 20, this.area.bottom - 20)
+    const side = steerRaider(enemy, player, this.area, this.escaping, dt, this.wind)
     this.aiDelay -= dt
     if (this.aiDelay > 0 || range > 520) return
     const gun = enemy.guns.find((g) => g.side === side && !g.cooldown && inArc(enemy, g.side, player))
