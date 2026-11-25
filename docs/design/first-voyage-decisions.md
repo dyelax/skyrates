@@ -4,13 +4,13 @@ A good first encounter gives the captain two things they care about and enough i
 
 ## What a raider can see
 
-The game values the captain’s purse and every commercial crate at its home port’s ordinary list price. The sky chart previews that exposure. Weather, yesterday’s sale price and a captain’s trading discount do not change a raider’s appraisal. The raider quotes 5% of the total, rounded up, with a five-crown minimum. The same exposure determines who gives chase. These thresholds and equipment levels are starting values for playtesting.
+The game values the captain’s purse and every commercial crate at its home port’s ordinary list price. The sky chart previews that exposure. Weather, yesterday’s sale price and a captain’s trading discount do not change a raider’s appraisal. Most raiders ask 5–12% of the exposed value. The steepest band, 36–50%, accounts for 2% of hails. A heavier manifest increases the chance of better-armed pirates. The chart shows the full range, the usual demand and the most likely ship.
 
-| Same three crates of prism blanks | Appraised cargo | Purse | Exposure | Toll | Opposition |
-| --- | ---: | ---: | ---: | ---: | --- |
-| Returning to port with little cash | 75 | 0 | 75 | 5 | Scout, one gun |
-| Carrying a buyer’s advance | 75 | 125 | 200 | 10 | Cutter, two guns |
-| Carrying the proceeds of a sale | 75 | 245 | 320 | 16 | Corsair, four guns |
+| Same three crates of prism blanks | Appraised cargo | Purse | Exposure | Usual toll | Possible toll | Most likely opposition |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Returning to port with little cash | 75 | 0 | 75 | 4–9 | 4–37 | Scout, one gun |
+| Carrying a buyer’s advance | 75 | 125 | 200 | 10–24 | 10–100 | Cutter, two guns |
+| Carrying the proceeds of a sale | 75 | 245 | 320 | 16–38 | 16–160 | Cutter, two guns |
 
 The lookout gives the actual terms. Pay in cash to keep a delivery intact. Tender the quoted goods to preserve working cash, with change for excess appraisal. Refuse and take the helm to escape, disable the enemy or board. Defeat costs the enforceable toll plus any hull damage sustained. Commission papers and bonded mail stay with the captain. The free Harbor Watch drill is separate.
 
@@ -26,7 +26,7 @@ Keep attack strength tied to what the target can yield. Ship refits and well-tra
 
 ## Trading when the captain has a deadline
 
-**In the game.** The first sailing circuit already pays for most of the beacon. A fresh captain starts with 78 crowns. Twelve provisions bought at 4 and sold at 11 leave 162 at Glasshouse. Twelve panes bought at 12 and sold at 19 leave 246 at Copperfall on day three, assuming the captain passes the tender. An empty ship carrying those 246 crowns still attracts a cutter demanding 13. Paying leaves 233, seven short of the 240-crown lens. The 18-crown bonded letter from Sunstep to Glasshouse can travel with the original provisions. Its proceeds are enough to pay the higher toll and advance the invoice on day four. Pilot Sen settles the certificate for 300 at Meridian. The captain earns 60 on the advance and opens the outer route.
+**In the game.** The first sailing circuit already pays for most of the beacon. A fresh captain starts with 78 crowns. Twelve provisions bought at 4 and sold at 11 leave 162 at Glasshouse. Twelve panes bought at 12 and sold at 19 leave 246 at Copperfall on day three, assuming the captain passes the tender. An empty ship carrying those 246 crowns can be hailed for 13–123. Even the cheapest passage leaves it seven short of the 240-crown lens. The 18-crown bonded letter from Sunstep to Glasshouse can travel with the original provisions. With 264 crowns the captain can pay a demand of up to 24 and still underwrite the lens on day four. A higher demand gives them a reason to run, fight or make another trade. Pilot Sen settles the certificate for 300 at Meridian. The captain earns 60 on the advance and opens the outer route.
 
 **Next experiment.** Give Copperfall’s night-shift gardener one dated public order: four glass panes at 26 crowns each through day four. Post the remaining quantity and deadline at Glasshouse before the player buys. The first four delivered earn the signed price. Extra panes, or late arrivals, sell at the regular exchange. A captain who hears of a second buyer can reserve four slots, split the rest between goods and keep cash for safe passage. Another captain can sail full for the ordinary margin. A dated market observation and a price guarantee should look and read differently on the chart.
 
@@ -34,7 +34,7 @@ Keep attack strength tied to what the target can yield. Ship refits and well-tra
 
 ## A fight worth taking
 
-**In the game.** A richer target draws a ship with more guns, a tougher hull and a stronger boarding crew. A scout has a single port cannon. A cutter can fire to either side. A corsair can bring two guns to bear on one side. After refusal, the captain can order a breakaway and reach open sky, turn to bring a loaded gun to bear, or grapple. The displayed boarding chance concerns the melee. Gunfire and flight have their own outcomes.
+**In the game.** Richer targets are more likely to draw a ship with more guns, a tougher hull and a stronger boarding crew. A four-gun corsair accounts for about 3%, 12% or 26% of hails across the three wealth brackets. A scout has a single port cannon. A cutter can fire to either side. A corsair can bring two guns to bear on one side. After refusal, the captain can order a breakaway and reach open sky, turn to bring a loaded gun to bear, or grapple. The displayed boarding chance concerns the melee. Gunfire and flight have their own outcomes.
 
 **Next experiment.** Teach the player to approach a scout’s unarmed rail. Put the same captain opposite a cutter and see whether they still try it. Require a grapple order to start melee, letting an ordinary collision separate the hulls. Have the boarding crew call the advantage that changed after a hit or a veteran hire. Try moving the current 25-crown gunnery and 40-crown boarding prizes to **named bounties**. A hired hunter then has a reason to pursue a named ship, while an ordinary merchant can have a profitable day paying an extortionist. Compare whether captains still board every ordinary raider when prize money is removed.
 
@@ -56,6 +56,6 @@ Recruit four touch players and four mouse players who have never sailed the Wayf
 | --- | --- | --- |
 | A mirrored Watch approach without steering assistance | At least six dodge an aimed round, point to their gun’s side and land a shot. | Improve the firing cue and recovery time before adjusting damage. |
 | Two intercepts with the same purse, cargo, wind and toll. Vary only hull condition in the test save. Swap their order for half the group. | At least six correctly name what payment preserves and what refusal can cost. Hear a reason grounded in the hull, the delivery or their ability to escape. Record when paying both times is a deliberate choice. | Check whether the captain could see the gun coverage, hull and actual offer before making enemies stronger. |
-| Three otherwise identical manifests with progressively larger purses | At least six predict which attracts the strongest raider and can explain why. Record any surprise at a tier boundary or change paid on cargo. | Improve the chart’s risk forecast first. Tune the thresholds if captains who understand them still avoid carrying their earnings. |
+| Three otherwise identical manifests with progressively larger purses | At least six predict which is most likely to attract a corsair and can explain why. Record any surprise at a tier boundary or change paid on cargo. | Improve the chart’s risk forecast first. Tune the thresholds if captains who understand them still avoid carrying their earnings. |
 | Four reserved panes, twelve hold slots and a dated market quote | At least six distinguish posted demand from the observed price and explain how much cash they kept back. | Put the quantity, expiry and beneficiary together at the point of purchase. |
 | A completed commission and a choice of next voyage | At least six name an earned option, a person or port that offers it and a reason to go. | Make the new privilege usable on that next sailing. |

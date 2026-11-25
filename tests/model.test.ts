@@ -48,8 +48,8 @@ function reload(state: GameState): GameState {
   return loadGame({ getItem: (key) => database.get(key) ?? null })
 }
 
-test('a merchant can pay the first raider and fund the beacon with two trade legs and the opening bonded letter', () => {
-  let state = act(initialState(), { type: 'acceptMission' })
+test('a merchant can pay a mild first raider and fund the beacon with two trade legs and the opening bonded letter', () => {
+  let state = act(initialState(7), { type: 'acceptMission' })
   state = act(state, { type: 'takeFreight' })
   state = shippingRun(state, 'glasshouse', 'provisions')
   state = act(state, { type: 'presentCommission' })
@@ -216,16 +216,15 @@ test('missing, corrupt, and unavailable storage start a fresh voyage log', () =>
     '{"version":1,"cargo":{}}',
     JSON.stringify({ ...initialState(), cargo: { provisions: null } }),
   ]) {
-    assert.deepEqual(loadGame({ getItem: () => value }), initialState())
+    const result = loadGame({ getItem: () => value })
+    assert.deepEqual(result, initialState(result.pirateSeed))
   }
-  assert.deepEqual(
-    loadGame({
-      getItem: () => {
-        throw Error('blocked')
-      },
-    }),
-    initialState(),
-  )
+  const result = loadGame({
+    getItem: () => {
+      throw Error('blocked')
+    },
+  })
+  assert.deepEqual(result, initialState(result.pirateSeed))
   assert.equal(
     saveGame(initialState(), {
       setItem: () => {
@@ -277,7 +276,8 @@ test('inconsistent chapter progression and unknown save versions cannot strand a
     { voyageCount: 1, voyage: { id: 1, from: 'sunstep', to: 'glasshouse', phase: ['raider'] } },
   ]) {
     const invalid = JSON.stringify({ ...fresh, ...patch })
-    assert.deepEqual(loadGame({ getItem: () => invalid }), fresh)
+    const result = loadGame({ getItem: () => invalid })
+    assert.deepEqual(result, initialState(result.pirateSeed))
   }
 })
 

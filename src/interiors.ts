@@ -22,6 +22,8 @@ import {
   PORTS,
   PORT_IDS,
   boardingStrength,
+  forecastText,
+  raiderForecast,
   raiderToll,
   tollSettlementLabel,
   cargoUsed,
@@ -419,12 +421,14 @@ function authority(state: GameState, ui: Controls) {
 }
 
 function routeLookout(state: GameState): string {
-  const { exposedValue, cargoValue, crowns, profile } = raiderToll(state)
+  const forecast = raiderForecast(state)
+  const { exposedValue, cargoValue, low, high } = forecast
   const manifest = `Carried wealth ${exposedValue} crowns · ${state.coins} in your purse + ${cargoValue} in appraised trade cargo.`
   if (state.voyageCount === 0 && state.port === 'sunstep') {
     return `<details class="sk-fold"><summary>Harbor Watch · free first passage</summary><p>Your escort carries chalk rounds. Training costs nothing and your hold is safe.</p><p>${manifest}</p></details>`
   }
-  return `<details class="sk-fold"><summary>Raider lookout · ${crowns} crowns if hailed</summary><p>${manifest}</p><p>If intercepted, expect a ${profile.id} with ${armamentLabel(profile.cannons)} and ${profile.hull} hull. Its toll on this manifest is ${crowns} crowns.</p></details>`
+  const range = low === high ? String(low) : low + '–' + high
+  return `<details class="sk-fold"><summary>Raider lookout · ${range} crowns if hailed</summary><p>${manifest}</p><p>${forecastText(forecast)}</p></details>`
 }
 
 function voyage(state: GameState, ui: Controls) {
@@ -455,14 +459,15 @@ function voyage(state: GameState, ui: Controls) {
     const cargoTerms = tollSettlementLabel(toll.settlement)
     const canPayCash = state.coins >= toll.crowns
     title = 'A toll on the skyway'
-    line = `“${toll.crowns} crowns for passage, Captain.”`
+    line = toll.crowns === 0 ? '“Nothing to levy. On your way, Captain.”' : `“${toll.crowns} ${toll.crowns === 1 ? 'crown' : 'crowns'} for passage, Captain.”`
     copy = `Lookout sights the <strong>${foe.name}</strong> with ${armamentLabel(foe.cannons)}, ${foe.hull} hull and ${crew} (strength ${foe.crew}). Your ${state.ship.crew} hands have a ${odds}% boarding chance at the current hulls. Refuse and you must fight or reach the edge of the skyway.`
-    terms = `<details class="sk-fold"><summary>Toll and surrender terms</summary><p>They count ${state.coins} crowns in your purse and ${toll.cargoValue} in cargo, worth ${toll.exposedValue} together. ${canPayCargo ? 'They accept ' + cargoTerms + '. ' : ''}If defeated, you surrender ${cargoTerms}. Commission papers and bonded mail stay aboard.</p></details>`
+    terms = `<details class="sk-fold"><summary>Toll and surrender terms</summary><p>They count ${state.coins} crowns in your purse and ${toll.cargoValue} in cargo, worth ${toll.exposedValue} together. ${toll.rate !== null && toll.crowns > 0 ? 'Their rate is ' + toll.rate + '%, settled in whole crowns. ' : ''}${canPayCargo ? 'They accept ' + cargoTerms + '. ' : ''}If defeated, you surrender ${cargoTerms}. Commission papers and bonded mail stay aboard.</p></details>`
     const crates = toll.settlement.cargo.reduce((sum, lot) => sum + lot.quantity, 0)
     const cargoButton = cargoTerms.length <= 62 ? 'Hand over ' + cargoTerms : `Pay with ${crates} ${crates === 1 ? 'crate' : 'crates'}` +
       (toll.settlement.coins ? ` + ${toll.settlement.coins} crowns` : '') +
       (toll.settlement.change ? ` · receive ${toll.settlement.change} in change` : '')
-    buttons = ui.button('Pay ' + toll.crowns + ' crowns', () => ui.act({ type: 'payToll', id: leg.id, payment: 'crowns' }), { disabled: !canPayCash }) +
+    const paymentLabel = toll.crowns === 0 ? 'Accept clear passage' : 'Pay ' + toll.crowns + (toll.crowns === 1 ? ' crown' : ' crowns')
+    buttons = ui.button(paymentLabel, () => ui.act({ type: 'payToll', id: leg.id, payment: 'crowns' }), { disabled: !canPayCash }) +
       (canPayCargo ? ui.button(cargoButton, () => ui.act({ type: 'payToll', id: leg.id, payment: 'cargo' }), {secondary: canPayCash}) : '') +
       ui.button('Refuse · take the helm', () => ui.act({ type: 'engage' }), { secondary: canPayCash || canPayCargo })
     if (!canPayCargo && !canPayCash) copy += ' Your manifest cannot cover the toll.'
