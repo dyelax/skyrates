@@ -33,6 +33,7 @@ interface InteriorSettings {
   port: PortId
   destination: PortId | null
   focusPort: PortId | null
+  firstLight?: boolean
   lastView?: InteriorView
   side: MarketSide
 }
@@ -168,19 +169,21 @@ function shipyard(state: GameState, ui: Controls) {
     <details class="sk-fold sk-ledger-fold"><summary>Ship’s register</summary>${details([
       ['Hull integrity', `${state.ship.hull} / ${state.ship.maxHull}`],
       ['Hold capacity', `${state.ship.hold} units`],
+      ['Cannons fitted', state.ship.cannons],
       ['Gunnery rating', state.ship.guns],
       ['Crew aboard', state.ship.crew],
       ['Veterans', state.ship.veterans],
       ['Boarding strength', boardingStrength(state)],
-    ])}<p class="sk-info">Ram another airship and your crew will board. Experienced hands carry more of the fight.</p></details></div>`
+    ])}<p class="sk-info">Ram another airship and your crew will board. Experienced hands carry more of the fight.</p></details><div class="sk-actions">${ui.button('Practice helm and gunnery', () => ui.act({type:'practiceDrill'}), {secondary:true})}</div></div>`
   )
 }
 
 function missionNote(state: GameState) {
-  if (state.mission === 'offered') return 'Speak with Harbormaster Vale at Sunstep Quay about the dark beacon.'
-  if (state.mission === 'accepted') return 'Visit Keeper Iona at Glasshouse Reach to collect the replacement lens.'
+  if (state.mission === 'offered') return 'Advance the cost of a new lens and the crew can carry mail through the outer lane again. The Compact grants the first ship a charter, promotion with a captain ability, and repayment plus a 60-crown premium when Pilot Sen certifies the light.'
+  if (state.mission === 'accepted') return 'Visit Keeper Iona at Glasshouse Reach to present Vale’s sealed commission.'
   if (state.mission === 'invoice')
     return `Raise ${coins(INVOICE_COST)} and pay Keeper Iona at Glasshouse Reach for the lens.`
+  if (state.certificate === 'aboard') return 'Iona’s relighting certificate is in your mail locker. Bring it to Pilot Sen at Meridian Spire to reclaim your 240 crowns and earn the 60-crown premium.'
   return 'The Skyway Beacon is lit. Meridian Spire is open to your schooner.'
 }
 
@@ -319,7 +322,7 @@ function lensInvoice(state: GameState, ui: Controls) {
       <tr><td>Fitting and alignment</td><td>1</td><td>Included</td></tr></tbody>
       <tfoot><tr><th scope="row" colspan="2">Total due</th><td>${coins(INVOICE_COST)}</td></tr></tfoot></table>
     <div class="sk-invoice-funds">${metric('Cash on hand', coins(state.coins))}${metric(shortfall ? 'Still to earn' : 'After payment', coins(shortfall || state.coins - INVOICE_COST))}</div>
-    <div class="sk-actions">${ui.button(`Pay invoice · ${coins(INVOICE_COST)}`, () => ui.act({ type: 'payInvoice' }), { disabled: shortfall > 0 })}
+    <div class="sk-actions">${ui.button(`Pay invoice · ${coins(INVOICE_COST)}`, () => { ui.settings.firstLight = true; ui.act({ type: 'payInvoice' }) }, { disabled: shortfall > 0 })}
       ${ui.button('Visit market', () => ui.go('market'), { secondary: true })}</div></article>`
 }
 
@@ -331,7 +334,7 @@ function firstLight(state: GameState, ui: Controls) {
   return `<article class="sk-first-light"><div class="sk-scene">
     <img src="${artwork('glasshouse-lit')}" alt="The relit Skyway Beacon casting a gold beam over Glasshouse Reach at night">
     <header><div class="sk-kicker">The Skyway Beacon · Commission complete</div><h1>First light</h1></header>
-    </div><div class="sk-layout"><section class="sk-card sk-light-copy"><blockquote class="sk-quote">Six weeks of dark. Then, from beyond the banks, a far-off pilot flashes a lamp in answer.</blockquote>
+    </div><div class="sk-layout"><section class="sk-card sk-light-copy"><blockquote class="sk-quote">Six weeks of dark. Then, from beyond the banks, a far-off pilot flashes a lamp in answer.</blockquote><p>Iona folds the certificate around a splinter of the old lens. “Carry that to Sen. He holds your 300 crowns.”</p>
     <div class="sk-rewards">${metric('Captain rank', 'Level II')}${metric('Skyway opened', 'Meridian Spire')}</div>
     <div class="sk-actions">${state.ability ? ui.button('Open captain’s log', () => ui.go('log'), { secondary: true }) : ui.button('Choose captain ability', () => ui.go('log'))}
     ${ui.button('Chart Meridian Spire →', openOuterChart, { secondary: !state.ability })}</div></section>${freightDesk(state, ui)}</div></article>`
@@ -339,7 +342,7 @@ function firstLight(state: GameState, ui: Controls) {
 
 function authority(state: GameState, ui: Controls) {
   const contact = PORTS[state.port]
-  const wasRelitHere = state.port === 'glasshouse' && state.mission === 'lit'
+  const wasRelitHere = ui.settings.firstLight && state.mission === 'lit'
   if (wasRelitHere) return firstLight(state, ui)
 
   const canAccept = state.port === 'sunstep' && state.mission === 'offered'
@@ -354,6 +357,10 @@ function authority(state: GameState, ui: Controls) {
   } else {
     const jobAction = canAccept
       ? ui.button('Accept commission', () => ui.act({ type: 'acceptMission' }))
+      : state.port === 'glasshouse' && state.mission === 'accepted'
+        ? ui.button('Hand Iona Vale’s commission', () => ui.act({ type: 'presentCommission' }))
+      : state.port === 'meridian' && state.certificate === 'aboard'
+        ? ui.button('Present certificate · collect 300 cr', () => ui.act({ type: 'deliverCertificate' }))
       : state.mission === 'lit' && !state.ability
         ? ui.button('Choose captain ability', () => ui.go('log'))
         : ui.button('Open sky chart', () => ui.go('chart'), { secondary: true })
@@ -425,6 +432,7 @@ export function renderInterior(
     settings.destination = null
     settings.focusPort = null
   }
+  if (view !== 'authority') settings.firstLight = false
   settings.lastView = view
   const page = document.createElement('section')
   page.className = 'sk-interior'
@@ -437,7 +445,7 @@ export function renderInterior(
   }
   const art = {
     market: 'market',
-    authority: state.port === 'glasshouse' && state.mission === 'lit' ? null : offices[state.port],
+    authority: settings.firstLight && state.mission === 'lit' ? null : offices[state.port],
     shipyard: 'yard',
     chart: null,
     voyage: null,

@@ -21,6 +21,10 @@ export function chartObjectives(state: GameState): Objective[] {
         : 'Your purse covers the lens. Pay Keeper Iona at Glasshouse Reach.',
     })
   }
+  if (state.certificate === 'aboard') jobs.push({
+    title: 'The lightkeeper’s certificate', destination: BEACON_COMMISSION.opens,
+    detail: `Have Pilot Sen countersign at Meridian Spire for ${INVOICE_COST + BEACON_COMMISSION.premium} crowns.`,
+  })
   if (state.freight) jobs.push({ title: state.freight.special ? 'Neri’s consignment' : 'Bonded freight', destination: state.freight.to,
     detail: `Deliver to ${PORTS[state.freight.to].name}. Collect ${state.freight.pay} crowns on arrival.` })
   return jobs
