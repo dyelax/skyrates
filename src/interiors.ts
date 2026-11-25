@@ -347,7 +347,7 @@ function authority(state: GameState, ui: Controls) {
   const quote = canPay
     ? '“Mind the edge, Captain. Three days at the wheel to get that curve. You’ve brought Vale’s letter? Good. I’ll put your name on the crate. Here’s the bill.”'
     : greeting(state)
-  const speaker = state.port === 'copperfall' && state.tender === 'helped' ? 'Skipper Neri' : contact.keeper
+  const speaker = contact.keeper
   let job = ''
   if (canPay) {
     job = lensInvoice(state, ui)
@@ -360,7 +360,7 @@ function authority(state: GameState, ui: Controls) {
     job = `<article class="sk-card"><div class="sk-card-head"><h2>The Skyway Beacon</h2>${state.mission === 'lit' ? '<span class="sk-tag">Completed</span>' : ''}</div><p>${missionNote(state)}</p><div class="sk-actions">${jobAction}</div></article>`
   }
   const portrait =
-    state.port === 'meridian' ? 'talk-meridian' : speaker === 'Skipper Neri' ? 'talk-copperfall' : null
+    state.port === 'meridian' ? 'talk-meridian' : null
   return `<header class="sk-dialogue-heading"><div class="sk-kicker">${contact.name} · Port authority</div><div class="sk-identity">
     ${portrait ? `<img src="${artwork(portrait)}" alt="">` : ''}<h1>${speaker}</h1></div></header>
     <div class="sk-office-dialogue"><blockquote class="sk-quote">${safe(quote)}</blockquote></div>

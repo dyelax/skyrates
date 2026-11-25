@@ -209,7 +209,7 @@ export function mountHarbor(
     if (place === 'local') {
       openPanel(button)
       bell('select')
-      mountDockTalk(overlay, state, navigate, closePanel)
+      mountDockTalk(overlay, state, closePanel)
       return
     }
     if (place === 'ship') {

@@ -5,7 +5,7 @@ type Destination = 'authority' | 'market' | 'shipyard' | 'chart' | 'log'
 interface Topic {
   ask: string
   answer: string
-  visit: { label: string; view: Destination }
+  visit: { view: Destination }
 }
 interface Conversation {
   name: string
@@ -28,7 +28,7 @@ function conversation(state: GameState): Conversation {
           {
             ask: 'Where would you take a hold full of pears?',
             answer: `Glasshouse Reach. All those mouths at the furnaces and hardly a pear tree between them. Provisions buy here for ${priceAt(state, 'sunstep', 'provisions').buy} crowns a crate today.`,
-            visit: { label: 'Buy provisions at the market', view: 'market' },
+            visit: { view: 'market' },
           },
           {
             ask: state.mission === 'lit' ? 'Who’s sailing the outer route?' : 'Where can a new captain find work?',
@@ -38,8 +38,8 @@ function conversation(state: GameState): Conversation {
                 : 'Vale’s office. Mind the pear skins on her steps. She also has bonded mail for captains whose pockets have worn clean through.',
             visit:
               state.mission === 'lit'
-                ? { label: 'Find Meridian on the chart', view: 'chart' }
-                : { label: 'Call on Harbormaster Vale', view: 'authority' },
+                ? { view: 'chart' }
+                : { view: 'authority' },
           },
         ],
       }
@@ -55,7 +55,7 @@ function conversation(state: GameState): Conversation {
           {
             ask: 'Who buys all this glass?',
             answer: `Copperfall’s fitting out winter gardens. They’ll buy panes faster than I can anneal them. A crate of ${GOODS.glass.name.toLowerCase()} goes for ${priceAt(state, 'glasshouse', 'glass').buy} crowns here today.`,
-            visit: { label: 'Look at the glass stalls', view: 'market' },
+            visit: { view: 'market' },
           },
           {
             ask: state.mission === 'lit' ? 'How far does that light carry?' : 'What’s keeping the beacon dark?',
@@ -67,8 +67,8 @@ function conversation(state: GameState): Conversation {
                   : 'I finished the replacement. Iona minds the lamp and the bill. She’s in the port office, counting the hours till a captain comes through with Vale’s commission.',
             visit:
               state.mission === 'lit'
-                ? { label: 'Examine the outer passage', view: 'chart' }
-                : { label: 'Speak with Keeper Iona', view: 'authority' },
+                ? { view: 'chart' }
+                : { view: 'authority' },
           },
         ],
       }
@@ -92,13 +92,13 @@ function conversation(state: GameState): Conversation {
               : helped
                 ? 'Better every day. I put my name down beside yours in the freight ledger. Ask the clerk what’s headed out next.'
                 : 'There’s ordinary bonded mail at the office. Take it to the port on the docket and the receiver pays you there.',
-            visit: { label: 'Check the freight desk', view: 'authority' },
+            visit: { view: 'authority' },
           },
           {
             ask: 'What leaves Copperfall in those crates?',
             answer:
               'Machinery. Listen close and you can hear the gears knock together. Sunstep’s orchard lifts chew through the stuff. I’ve hauled enough to rebuild the whole hillside.',
-            visit: { label: 'Price a crate of machinery', view: 'market' },
+            visit: { view: 'market' },
           },
         ],
       }
@@ -113,13 +113,13 @@ function conversation(state: GameState): Conversation {
           {
             ask: 'What do your crews run short of?',
             answer: `Food. One tin of peaches gets six grown pilots arguing over a spoon. Today our market pays ${priceAt(state, 'meridian', 'provisions').sell} crowns per crate of provisions.`,
-            visit: { label: 'Visit the provisions buyers', view: 'market' },
+            visit: { view: 'market' },
           },
           {
             ask: 'How do I find my way back?',
             answer:
               'Lay a course for Glasshouse Reach. Two days on that bearing and you’ll see Iona’s lamp across the bow. From there, Sunstep’s only another day.',
-            visit: { label: 'Spread out the sky chart', view: 'chart' },
+            visit: { view: 'chart' },
           },
         ],
       }
@@ -130,7 +130,6 @@ function conversation(state: GameState): Conversation {
 export function mountDockTalk(
   host: HTMLElement,
   state: GameState,
-  navigate: (view: Destination) => void,
   onClose: () => void,
 ): void {
   const local = conversation(state)
@@ -179,9 +178,19 @@ export function mountDockTalk(
     speech.textContent = topic?.answer ?? local.greeting
     replies.replaceChildren()
     if (topic) {
-      addReply(topic.visit.label, () => {
-        leave()
-        navigate(topic.visit.view)
+      addReply('Where can I find that?', () => {
+        const directions: Record<Destination, string> = {
+          authority: `Look for the port authority sign. ${PORTS[state.port].keeper} receives captains inside.`,
+          market: 'Follow the buyers to the market stalls. The exchange clerk has today’s prices.',
+          chart: 'Your chart is aboard the Wayfarer. The compass at your belt opens it too.',
+          shipyard: 'Look for the workshop by the rigging. Ask the shipwright there.',
+          log: 'It’s written in your captain’s log. Look for the book at your belt.',
+        }
+        speech.textContent = directions[topic.visit.view]
+        replies.replaceChildren()
+        addReply('Ask something else', () => speak())
+        addReply('Take your leave', leave)
+        speech.focus({ preventScroll: true })
       })
     }
     for (const next of local.topics) {
