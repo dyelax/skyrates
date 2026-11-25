@@ -186,9 +186,9 @@ export function greeting(state: GameState): string {
       return 'The keeper polishes a lens beside the cold lamp. “Vale at Sunstep is still looking for a captain.”'
     case 'copperfall':
       if (state.tender === 'helped' && !state.specialFreightTaken)
-        return '“That’s the captain who towed me in!” Skipper Neri waves from the freight desk. “I’ve a good run reserved for you.”'
+        return '“Neri says you towed her in. She left you a freight docket. I put it aside on my desk.”'
       if (state.tender === 'helped')
-        return 'Neri greets you by name. The freight hands shift a bench over to make room for you.'
+        return '“Neri vouches for you. Pull up a chair, Captain.”'
       if (state.tender === 'passed')
         return 'Neri has lashed a spare towline to the tender. At the desk, the yardmaster points you to the ordinary freight board.'
       return '“Our furnace crews can make a keel in a week,” Orr says. “But every pane in our new greenhouses has to be shipped in.”'

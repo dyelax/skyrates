@@ -128,7 +128,7 @@ test('giving the tender a tow costs a day, changes a later greeting and reserves
   let helped = act(atTender, { type: 'tender', help: true })
   assert.equal(helped.day, passed.day + 1)
   assert.equal(helped.notoriety, passed.notoriety + 1)
-  assert.match(greeting(helped), /towed me/)
+  assert.match(greeting(helped), /towed her/)
   assert.match(greeting(passed), /ordinary freight/)
   assert.equal(freightOffer(passed)?.special, false)
   assert.equal(freightOffer(helped)?.special, true)
