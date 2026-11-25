@@ -1,6 +1,7 @@
 import { BEACON_COMMISSION, GOODS, GOOD_IDS, PORTS, type PortId } from './data'
 import { CITY_ECONOMY } from './city-economy'
 import type { GameState } from './model'
+import { FEN_PANES, buyerOrders, buyerOffers, firstPaneOrderOpen, fenPaneDocket } from './buyer-orders'
 import { portWeather } from './weather'
 
 export type NpcId = keyof typeof PEOPLE
@@ -333,6 +334,8 @@ export function characterContext(state: GameState, npc: NpcId) {
     deeds.push(text)
   }
   if (entry.helpedCity) deed(3, 'The captain fulfilled our local commission, “' + city.order.name + '”.')
+  if (npc === 'fen' && state.buyers.orders.some(order => order.id === FEN_PANES.id && order.status === 'filled'))
+    deed(3, 'The captain delivered the four panes for our night-shift garden. The seedlings under the new roof survived their first cold watch.')
   if (npc === 'vale' && state.mission !== 'offered') deed(1, 'The captain signed my underwriting agreement.')
   if (npc === 'iona' && (state.mission === 'invoice' || state.mission === 'lit'))
     deed(1, 'The captain brought Vale’s letter to my office.')
@@ -361,6 +364,14 @@ export function characterContext(state: GameState, npc: NpcId) {
       GOODS[city.order.good].name +
       '.',
   ]
+  const paneDocket = ['fen', 'neri', 'sella'].includes(npc) ? fenPaneDocket(state) : undefined
+  for (const ticket of [...buyerOrders(state), ...buyerOffers(state)]) {
+    if (ticket.id === FEN_PANES.id || (ticket.buyer !== person.name && npc !== npcAtPort(person.port, 'market'))) continue
+    if (ticket.source !== person.port && ticket.destination !== person.port) continue
+    const delivered = 'delivered' in ticket ? Number(ticket.delivered) : 0
+    knowledge.push(`${ticket.buyer} at ${PORTS[ticket.destination].name} needs ${ticket.quantity - delivered} more × ${GOODS[ticket.good].name} at ${ticket.rate} crowns each through day ${ticket.dueDay}. ` +
+      (ticket.kind === 'delivery' ? `Have ${PORTS[ticket.source].name} stamp the shipment after signing.` : 'Existing stock qualifies.'))
+  }
   const weather = portWeather(person.port, state.day)
   knowledge.push(
     'Local weather on day ' + state.day + ' of the voyage: ' + weather.season + ', ' + weather.summary + '.',
@@ -412,6 +423,8 @@ export function characterContext(state: GameState, npc: NpcId) {
     voice: person.voice,
     publicHistory: person.background,
     knowledge,
+    paneDocket,
+    firstPaneOrderOpen: !!paneDocket && firstPaneOrderOpen(state),
     relationship: { score, tier, label: labels[tier] },
     deeds,
     confidences: [...(score >= 3 ? [person.personal] : []), ...(score >= 5 ? [person.confidence] : [])],

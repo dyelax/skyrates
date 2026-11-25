@@ -1,10 +1,21 @@
-import { BEACON_COMMISSION, INVOICE_COST, PORTS, type GameState, type PortId } from './model'
+import { BEACON_COMMISSION, GOODS, INVOICE_COST, PORTS, buyerLoadedQuantity, buyerOrders, type BuyerOffer, type GameState, type GoodId, type PortId } from './model'
 
 export interface Objective {
   title: string
   detail: string
   destination: PortId
   offered?: boolean
+  buyerId?: string
+}
+
+export function buyerQuantity(good: GoodId, quantity: number): string {
+  if (good === 'glass') return `${quantity} solar glass ${quantity === 1 ? 'pane' : 'panes'}`
+  return `${quantity} × ${GOODS[good].name}`
+}
+
+export function buyerTerms(offer: BuyerOffer & { delivered?: number }): string {
+  const remaining = offer.quantity - (offer.delivered ?? 0)
+  return `${buyerQuantity(offer.good, remaining)} needed · ${offer.rate} cr per ${offer.good === 'glass' ? 'pane' : 'crate'} · due day ${offer.dueDay}`
 }
 
 export function chartObjectives(state: GameState): Objective[] {
@@ -27,5 +38,15 @@ export function chartObjectives(state: GameState): Objective[] {
   })
   if (state.freight) jobs.push({ title: state.freight.special ? 'Neri’s consignment' : 'Bonded freight', destination: state.freight.to,
     detail: `Deliver to ${PORTS[state.freight.to].name}. Collect ${state.freight.pay} crowns on arrival.` })
+  for (const order of buyerOrders(state)) {
+    const left = order.quantity - order.delivered
+    const loaded = buyerLoadedQuantity(state, order)
+    const unload = loaded >= left || (state.port === order.destination && loaded > 0)
+    jobs.push({
+      title: order.title, buyerId: order.id, destination: unload ? order.destination : order.source,
+      detail: `${order.buyer} at ${PORTS[order.destination].name} pays ${order.rate} crowns each through day ${order.dueDay}. ${buyerQuantity(order.good, left)} still due · ${loaded} aboard.` +
+        (unload ? ' Hand in your cargo at the market counter.' : ` ${order.kind === 'delivery' ? 'Buy stamped cargo' : 'Find stock'} at ${PORTS[order.source].name}.`),
+    })
+  }
   return jobs
 }

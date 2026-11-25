@@ -22,6 +22,9 @@ import {
 } from './data'
 import { allotment, CITY_ECONOMY, exchangeCycle } from './city-economy'
 import { changeContact, validContacts, witnessCityOrder, type Contacts, type ContactCommand } from './characters'
+import { buyerOffers, buyerOrders, deliverableQuantity, expireBuyerOrders, reconcileBuyerCargo, validBuyerLedger,
+  type BuyerCommand, type BuyerLedger } from './buyer-orders'
+export * from './buyer-orders'
 export * from './data'
 
 export interface Quote {
@@ -91,6 +94,7 @@ export interface GameState {
   voyage: Voyage | null
   drill: DrillStage | null
   exchange: Exchange
+  buyers: BuyerLedger
   contacts: Contacts
   pricesSeen: Partial<Record<PortId, MarketVisit>>
   freight: Freight | null
@@ -102,6 +106,7 @@ export interface GameState {
 export type BattleResult = 'won' | 'boarded' | 'escaped' | 'lost'
 export type Command =
   | ContactCommand
+  | BuyerCommand
   | { type: 'acceptMission' | 'presentCommission' | 'deliverCertificate' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' | 'practiceDrill' | 'fillCityOrder' | 'useCityService' }
   | { type: 'payToll'; id: number; payment: 'cargo' | 'crowns' }
   | { type: 'endDrill'; skip: boolean }
@@ -153,6 +158,7 @@ export function initialState(pirateSeed = globalThis.crypto.getRandomValues(new 
     voyage: null,
     drill: null,
     exchange: freshExchange(1),
+    buyers: { seed: 0, orders: [] },
     contacts: {},
     pricesSeen: {},
     freight: null,
@@ -549,8 +555,61 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
   }
 }
 
+export function pickupQuantity(state: GameState, id: string): number {
+  const order = buyerOrders(state).find(ticket => ticket.id === id)
+  if (!order || order.kind !== 'delivery' || state.port !== order.source) return 0
+  const unitPrice = priceAt(state, state.port, order.good).buy
+  return Math.min(order.quantity - order.delivered - order.loaded, state.ship.hold - cargoUsed(state),
+    stockAt(state, state.port, order.good), Math.floor(state.coins / unitPrice))
+}
+
+function applyBuyerCommand(state: GameState, action: BuyerCommand): boolean {
+  if (action.type === 'acceptBuyerOrder') {
+    const offer = buyerOffers(state).find(ticket => ticket.id === action.id)
+    if (!offer) return false
+    state.buyers.orders.push({ ...offer, status: 'signed', delivered: 0, loaded: 0 })
+    record(state, `Signed “${offer.title}” for ${offer.buyer}. Deliver to ${PORTS[offer.destination].name} by day ${offer.dueDay}.`)
+    return true
+  }
+  const order = buyerOrders(state).find(ticket => ticket.id === action.id)
+  if (!order) return false
+  if (action.type === 'cancelBuyerOrder') {
+    order.status = 'released'
+    order.loaded = 0
+    record(state, `Released “${order.title}”. Any cargo aboard stays in your hold.`)
+    return true
+  }
+  if (action.type === 'pickupBuyerOrder') {
+    const quantity = pickupQuantity(state, order.id)
+    if (!quantity || action.delivered !== order.delivered || action.loaded !== order.loaded) return false
+    if (!trade(state, { type: 'buy', good: order.good, quantity })) return false
+    order.loaded += quantity
+    state.log[0].text += ` The clerk stamped the shipment for ${order.buyer}.`
+    state.notice = state.log[0].text
+    return true
+  }
+  const quantity = deliverableQuantity(state, order.id)
+  if (action.type !== 'deliverBuyerOrder' || !quantity || action.delivered !== order.delivered) return false
+  const cost = releaseCargo(state.cargo[order.good], quantity)
+  const proceeds = quantity * order.rate
+  state.coins += proceeds
+  awardTradeExperience(state, proceeds - cost)
+  order.delivered += quantity
+  if (order.kind === 'delivery') order.loaded -= quantity
+  const remaining = order.quantity - order.delivered
+  if (!remaining) order.status = 'filled'
+  record(state, `Delivered ${quantity} × ${GOODS[order.good].name} for ${order.buyer} at ${order.rate} crowns each. Received ${proceeds} crowns against ${cost} in cargo costs. ` +
+    (remaining ? `${remaining} still due through day ${order.dueDay}.` : 'Order filled.'))
+  return true
+}
+
 function applyDockCommand(state: GameState, action: Command): boolean {
   switch (action.type) {
+    case 'acceptBuyerOrder':
+    case 'cancelBuyerOrder':
+    case 'pickupBuyerOrder':
+    case 'deliverBuyerOrder':
+      return applyBuyerCommand(state, action)
     case 'buy':
     case 'sell':
       return trade(state, action)
@@ -606,6 +665,7 @@ function applyDockCommand(state: GameState, action: Command): boolean {
         return false
       state.coins -= INVOICE_COST
       state.mission = 'lit'
+      state.buyers.seed = Math.floor(Math.random() * 65536)
       state.certificate = 'aboard'
       state.level = charterLevel
       state.xp += BEACON_COMMISSION.xp
@@ -711,6 +771,13 @@ export function act(state: GameState, command: Command): GameState {
   const changed = state.voyage ? applyVoyageCommand(next, command) : applyDockCommand(next, command)
   if (!changed) return state
   if (next.notice) next.pendingNotices.push(next.notice)
+  if (state.day !== next.day) {
+    for (const notice of expireBuyerOrders(next)) {
+      record(next, notice)
+      next.pendingNotices.push(notice)
+    }
+  }
+  reconcileBuyerCargo(next)
   return next
 }
 
@@ -859,6 +926,7 @@ function validSave(value: unknown): value is GameState {
     quantity += lot.quantity
   }
   return (
+    validBuyerLedger(value.buyers, cargo as Record<GoodId, CargoLot>, value.day) &&
     quantity <= value.ship.hold &&
     validVisit(value.pricesSeen[value.port]) &&
     Object.entries(value.pricesSeen).every(([key, snapshot]) => isPort(key) && validVisit(snapshot))
@@ -883,6 +951,7 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
       if (object(value) && value.version === 1) {
         if (value.tradeProfitRemainder === undefined) value.tradeProfitRemainder = 0
         if (value.pirateSeed === undefined) value.pirateSeed = legacyPirateSeed(serialized)
+        if (value.buyers === undefined) value.buyers = { seed: 0, orders: [] }
         if (value.firstWatch === undefined) value.firstWatch = 'briefed'
         if (value.pendingNotices === undefined) value.pendingNotices = []
         if (value.certificate === undefined) value.certificate = value.mission === 'lit' ? 'aboard' : 'none'

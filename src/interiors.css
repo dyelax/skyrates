@@ -1213,6 +1213,45 @@
 .sk-chart-orders p {font-size:13px;margin:5px 0 8px;}
 .sk-interior .sk-map-popover {z-index:4;}
 
+.sk-interior .sk-buyer-book summary small {
+  display: block;
+  margin: 3px 0 0 14px;
+  color: #c5d8c8;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.sk-interior .sk-buyer-ticket {
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--sk-line);
+}
+.sk-interior .sk-buyer-heading span {
+  color: #d9bb83;
+  font: 600 10px/1.4 var(--font-sans);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.sk-interior .sk-buyer-heading h3 {
+  margin: 3px 0 5px;
+  font: 600 22px/1.1 var(--font-serif);
+}
+.sk-interior .sk-buyer-ticket p {
+  margin: 5px 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.sk-interior .sk-buyer-ticket .sk-buyer-terms { color: #f1dbac; }
+.sk-interior .sk-buyer-ticket .sk-buyer-progress { color: #c5dcc9; }
+.sk-interior .sk-buyer-ticket .sk-actions { margin-top: 8px; }
+.sk-interior .sk-release { flex-basis: 100%; }
+.sk-interior .sk-release > summary {
+  display: list-item;
+  cursor: pointer;
+  color: var(--sk-muted);
+  font-size: 12px;
+  padding: 4px 0;
+}
+
 .sk-station-host { position: fixed; inset: 0 0 var(--notice-space, 0px); z-index: 14; background: #08182166; }
 
 .sk-map-copy .sk-departure-supplies {

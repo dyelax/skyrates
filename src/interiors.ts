@@ -12,7 +12,7 @@ import { startDialogue } from './character-dialogue'
 import { characterContext, npcAtPort, npcName, type ContactWriter } from './characters'
 import { mountStationTalk } from './dock-talk'
 import { CITY_ECONOMY, nextPosting, RARITY } from './city-economy'
-import { chartObjectives } from './objectives'
+import { buyerQuantity, buyerTerms, chartObjectives } from './objectives'
 import {
   ABILITIES,
   ABILITY_IDS,
@@ -24,6 +24,12 @@ import {
   boardingStrength,
   forecastText,
   raiderForecast,
+  buyerLoadedQuantity,
+  buyerOffers,
+  buyerOrders,
+  deliverableQuantity,
+  pickupQuantity,
+  stampedQuantity,
   raiderToll,
   tollSettlementLabel,
   cargoUsed,
@@ -38,6 +44,8 @@ import {
   routeDays,
   upgradeOffer,
   type Command,
+  type BuyerOffer,
+  type BuyerOrder,
   type GameState,
   type GoodId,
   type PortId,
@@ -56,6 +64,8 @@ interface InteriorSettings {
   firstLight?: boolean
   lastView?: InteriorView
   side: MarketSide
+  buyerBookOpen?: boolean
+  chartOrdersOpen?: boolean
 }
 // The shell can replace its content element after any command. Keep the selected
 // commodity side and chart destination across those redraws within the same game tab.
@@ -100,6 +110,59 @@ function marketOutlook(port:PortId,day:number) {
   return seasonalPosting(port,day).map(post => `<p><b>${GOODS[post.good].name} · ${post.adjustment>0?'+':''}${post.adjustment} cr</b><br>${post.reason}</p>`).join('')
 }
 
+function buyerCard(state: GameState, ui: Controls, offer: BuyerOffer, atMarket: boolean, order?: BuyerOrder) {
+  const source = PORTS[offer.source].name
+  const destination = PORTS[offer.destination].name
+  const buyer = safe(offer.buyer)
+  let controls = ''
+  let progress = ''
+  const ticket = `<div class="sk-buyer-heading"><span>${order ? 'Signed' : 'Open'} · ${offer.kind === 'delivery' ? 'Stamped delivery' : 'Collection'}</span><h3>${safe(offer.title)}</h3></div>`
+  if (order) {
+    const loaded = buyerLoadedQuantity(state, order)
+    const remaining = order.quantity - order.delivered
+    progress = `<p class="sk-buyer-progress">Handed in ${order.delivered} of ${order.quantity} · ${loaded} ${order.kind === 'delivery' ? 'stamped ' : ''}aboard · ${remaining} still due.</p>`
+    if (atMarket && state.port === order.destination && deliverableQuantity(state, order.id) > 0) {
+      const count = deliverableQuantity(state, order.id)
+      controls += ui.button(`Hand in ${buyerQuantity(order.good, count)} · collect ${coins(count * order.rate)}`, () =>
+        ui.act({ type: 'deliverBuyerOrder', id: order.id, delivered: order.delivered }))
+    } else if (atMarket && state.port === order.source && order.kind === 'delivery' && loaded < remaining) {
+      const count = pickupQuantity(state, order.id)
+      controls += count > 0
+        ? ui.button(`Buy &amp; stamp ${count} · ${coins(priceAt(state, order.source, order.good).buy * count)}`, () =>
+          ui.act({ type: 'pickupBuyerOrder', id: order.id, loaded: order.loaded, delivered: order.delivered }))
+        : '<p>Your purse, hold or local stock limits this pickup.</p>'
+    }
+    if (atMarket) {
+      controls += `<details class="sk-release"><summary>Release this order</summary><p>Your cargo and earlier payments stay with you. This posting closes when released.</p>${ui.button('Release signed order', () => ui.act({ type: 'cancelBuyerOrder', id: order.id }), { secondary: true })}</details>`
+    }
+  } else {
+    controls = ui.button('Sign buyer order', () => ui.act({ type: 'acceptBuyerOrder', id: offer.id }))
+  }
+  const terms = offer.kind === 'delivery'
+    ? `Buy the shipment at ${source} after signing so the clerk can stamp it.`
+    : `Cargo already aboard qualifies. ${source} supplies ${GOODS[offer.good].name.toLowerCase()}.`
+  return `<article class="sk-buyer-ticket" data-buyer-id="${safe(offer.id)}">${ticket}
+    <p class="sk-buyer-terms">${buyerTerms(order ?? offer)}</p>
+    <p>${buyer} pays up to <strong>${coins(offer.quantity * offer.rate)}</strong> at the ${CITY_ECONOMY[offer.destination].market} counter in ${destination}. ${terms}</p>
+    ${progress}<div class="sk-actions">${controls}</div></article>`
+}
+
+function buyerBook(state: GameState, ui: Controls) {
+  const signed = buyerOrders(state)
+  const offers = buyerOffers(state)
+  if (!signed.length && !offers.length) return ''
+  const ready = signed.filter(order => deliverableQuantity(state, order.id) > 0)
+  const local = signed.filter(order => !ready.includes(order) && order.source === state.port)
+  const rest = signed.filter(order => !ready.includes(order) && !local.includes(order))
+  const first = ready[0] ?? local[0] ?? rest[0] ?? offers[0]
+  const tickets = [...ready, ...local, ...rest].map(order => buyerCard(state, ui, order, true, order))
+    .concat(offers.map(offer => buyerCard(state, ui, offer, true)))
+  const status = ready.length ? 'Cargo ready to hand in' : `${signed.length} signed · ${offers.length} open`
+  const expanded = ui.settings.buyerBookOpen ?? ready.length > 0
+  return `<details class="sk-fold sk-buyer-book" data-buyer-book ${expanded ? 'open' : ''}>
+    <summary><b>Buyer orders</b> · ${status}<small>${safe(first.buyer)} · ${buyerTerms(first)}</small></summary>${tickets.join('')}</details>`
+}
+
 function market(state: GameState, ui: Controls) {
   const { side } = ui.settings
   const used = cargoUsed(state)
@@ -110,6 +173,7 @@ function market(state: GameState, ui: Controls) {
     const price = priceAt(state, state.port, good)[side]
     const lot = state.cargo[good]
     const stock = stockAt(state, state.port, good)
+    const stamps = side === 'sell' ? stampedQuantity(state, good) : 0
     const limit = side === 'buy' ? Math.min(stock, state.ship.hold - used, Math.floor(state.coins / price)) : lot.quantity
     const fieldId = `sk-order-${good}`
     const input = () => ui.page.querySelector<HTMLInputElement>(`#${fieldId}`)!
@@ -123,7 +187,7 @@ function market(state: GameState, ui: Controls) {
         ui.act({ type: side, good, quantity })
     })
     return `<li><div class="sk-good-top"><div class="sk-sample" aria-hidden="true"><img src="${artwork(good)}" alt="" loading="lazy"></div>
-      <div><h3>${item.name}</h3><p>${item.description}</p><small>${RARITY[good]} · ${side === 'buy' ? stock ? stock + ' on the floor' : 'Sold out until day ' + nextPosting(state.day) : lot.quantity + ' aboard'}</small></div><span class="sk-price">${coins(price)} <small>/ unit</small></span></div>
+      <div><h3>${item.name}</h3><p>${item.description}</p><small>${RARITY[good]} · ${side === 'buy' ? stock ? stock + ' on the floor' : 'Sold out until day ' + nextPosting(state.day) : lot.quantity + ' aboard'}${stamps ? ` · ${stamps} stamped for delivery. Selling uses unstamped crates first.` : ''}</small></div><span class="sk-price">${coins(price)} <small>/ unit</small></span></div>
       <div class="sk-order" data-side="${side}" data-price="${price}" data-limit="${limit}">
       <label for="${fieldId}">Qty</label><input class="sk-qty" id="${fieldId}" aria-label="${item.name} quantity" type="number" step="1" min="1" max="${Math.max(limit, 1)}" value="${limit ? 1 : 0}" ${limit ? '' : 'disabled'}>
       <button type="button" class="sk-text-button" data-action="${max}" ${limit ? '' : 'disabled'} aria-label="Select maximum ${item.name}">Max</button>
@@ -144,7 +208,7 @@ function market(state: GameState, ui: Controls) {
     `<div class="sk-layout"><article class="sk-card"><div class="sk-card-head"><h2>Exchange floor</h2><div class="sk-switch" aria-label="Trade direction">
     <button type="button" data-action="${changeSide('buy')}" aria-pressed="${side === 'buy'}">Buy</button>
     <button type="button" data-action="${changeSide('sell')}" aria-pressed="${side === 'sell'}">Sell</button></div></div>
-    <details class="sk-fold"><summary>Seasonal market · ${seasonAt(state.day)}</summary>${marketOutlook(state.port,state.day)}</details><ul class="sk-goods">${rows || '<li>Your hold is empty.</li>'}</ul><p>Next exchange posting on day ${nextPosting(state.day)}.</p></article>
+    ${buyerBook(state, ui)}<details class="sk-fold"><summary>Seasonal market · ${seasonAt(state.day)}</summary>${marketOutlook(state.port,state.day)}</details><ul class="sk-goods">${rows || '<li>Your hold is empty.</li>'}</ul><p>Next exchange posting on day ${nextPosting(state.day)}.</p></article>
     <aside class="sk-stack"><article class="sk-card"><h2>${city.institution}</h2><p>${city.order.need}</p>${ui.button('Visit ' + city.institution, () => ui.go('civic'), { secondary: true })}</article><details class="sk-fold sk-ledger-fold"><summary>Cargo manifest · ${used} / ${state.ship.hold}</summary>
     ${
       lots.length
@@ -259,6 +323,8 @@ function rememberedPrices(state: GameState, dest: PortId) {
 
 function chart(state: GameState, ui: Controls) {
   const dest = ui.settings.destination
+  const offers = buyerOffers(state)
+  const signed = buyerOrders(state)
   const close = () => {
     ui.settings.focusPort = dest
     ui.settings.destination = null
@@ -285,6 +351,13 @@ function chart(state: GameState, ui: Controls) {
     const unlocked = isUnlocked(state, dest)
     const days = routeDays(state.port, dest)
     const forecast = routeWeather(state.port, dest, state.day)
+    const related = (offer: BuyerOffer) => offer.source === dest || offer.destination === dest
+    const localOrders = signed.filter(related)
+    const postings = offers.filter(related)
+    const leading = localOrders[0] ?? postings[0]
+    const buyerNotes = leading
+      ? `<details class="sk-fold sk-buyer-book"><summary><b>${leading.destination === dest ? 'Buyer at this port' : 'Cargo sourced here'}</b><small>${safe(leading.buyer)} · ${buyerTerms(leading)}</small></summary>
+        ${localOrders.map(order => buyerCard(state, ui, order, false, order)).join('')}${postings.map(offer => buyerCard(state, ui, offer, false)).join('')}</details>` : ''
     popover = `<aside class="sk-map-popover" role="dialog" aria-labelledby="sk-selected-port" data-selected="${dest}">
       <img class="sk-port-thumbnail" alt="" src="${artwork(state.mission === 'lit' && (dest === 'sunstep' || dest === 'glasshouse') ? dest + '-lit' : dest)}">
       <button type="button" class="sk-dismiss" aria-label="Close port details" data-action="${ui.register(close)}">×</button>
@@ -292,6 +365,7 @@ function chart(state: GameState, ui: Controls) {
       <h2 id="sk-selected-port">${port.name}</h2>
       <p>${current ? 'Local exchange' : unlocked ? `${days}-day passage` : 'Relight the beacon to reach this port'} · ${GOODS[port.specialty].name}</p>
       <p class="sk-forecast">${forecast.summary} · wind toward ${forecast.bearing}, ${forecast.knots} kn</p>
+      ${buyerNotes}
       ${!current && unlocked ? routeLookout(state) : ''}
       <details class="sk-fold"><summary>Climate and trade on arrival</summary><p>${CLIMATES[dest].region}. ${seasonAt(state.day + days)} · day ${state.day + days}.</p>${marketOutlook(dest,state.day+days)}</details>
       <details class="sk-fold"><summary>Port trade &amp; services</summary><p>${CITY_ECONOMY[dest].tradeLead}</p><p>${CITY_ECONOMY[dest].institution} requests ${CITY_ECONOMY[dest].order.quantity} × ${GOODS[CITY_ECONOMY[dest].order.good].name}.</p></details>
@@ -318,11 +392,14 @@ function chart(state: GameState, ui: Controls) {
       }</div></div></aside>`
   }
   const objectives = chartObjectives(state)
-  const orders = `<details class="sk-chart-orders"><summary>Captain’s orders · ${objectives.length}</summary><div>
-    ${objectives.map(job => `<article><small>${job.offered ? 'Available commission' : 'Active order'}</small><h2>${job.title}</h2><p>${safe(job.detail)}</p>${ui.button('Locate ' + PORTS[job.destination].name, () => {
+  const orders = `<details class="sk-chart-orders" ${ui.settings.chartOrdersOpen ? 'open' : ''}><summary>Captain’s orders · ${objectives.length}${offers.length ? ` · ${offers.length} buyer posting${offers.length === 1 ? '' : 's'}` : ''}</summary><div>
+    ${objectives.map(job => `<article><small>${job.offered ? 'Available commission' : job.buyerId ? 'Signed buyer order' : 'Active order'}</small><h2>${safe(job.title)}</h2><p>${safe(job.detail)}</p>${ui.button('Locate ' + PORTS[job.destination].name, () => {
+      ui.settings.chartOrdersOpen = false
       ui.settings.destination = job.destination
       ui.refresh()
-    }, { secondary: true })}</article>`).join('') || '<p>Your docket is clear. Visit a freight desk for another contract.</p>'}
+    }, { secondary: true })}</article>`).join('')}
+    ${offers.map(offer => buyerCard(state, ui, offer, false)).join('')}
+    ${!objectives.length && !offers.length ? '<p>Your docket is clear. Visit a freight desk for another contract.</p>' : ''}
     </div></details>`
   return `<div class="sk-mapstage"><div class="sk-map-scroll"><div class="sk-chart" aria-label="Chart of four skyports">
       <img src="${artwork('sky-chart')}" alt="" class="sk-chart-art"><canvas aria-hidden="true" data-map width="880" height="624"></canvas>${nodes}</div></div>
@@ -555,6 +632,14 @@ export function renderInterior(
   page.innerHTML =
     back +
     (insideRoom ? `<div class="sk-room-overlay"><div class="sk-room-ledger">${content}</div></div>` : content)
+  const buyerSheet = page.querySelector<HTMLDetailsElement>('[data-buyer-book]')
+  buyerSheet?.addEventListener('toggle', () => {
+    if (buyerSheet.isConnected) settings.buyerBookOpen = buyerSheet.open
+  })
+  const orders = page.querySelector<HTMLDetailsElement>('.sk-chart-orders')
+  orders?.addEventListener('toggle', () => {
+    if (orders.isConnected) settings.chartOrdersOpen = orders.open
+  })
   if (view === 'authority') {
     const npc = npcAtPort(state.port, 'authority')
     const speaker = page.querySelector<HTMLElement>('.sk-office-dialogue')
