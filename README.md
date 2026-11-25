@@ -20,14 +20,13 @@ On your first departure from Sunstep, the Harbor Watch runs a chalk-round exerci
 | --- | --- |
 | Turn | A / D or left / right arrows. Click open sky to steer toward it. |
 | Change throttle | W / S or up / down arrows |
-| Fire a single cannon | 1–4, click its station, or click the raider to fire an available gun |
+| Fire a single cannon | 1–4 or tap a gun. Tapping the raider fires one ready gun on its side of your ship. |
 | Port or starboard broadside | Q / E |
 | Close in, or push off if the hulls touch | B |
-| Set the wind sight | V or click the wind gauge |
 | Break away | R |
 | Pause | P |
 
-The arrow on the wind gauge points downwind. Watch your heading as the wind carries the hull sideways. Rounds curve downwind in flight. Set the wind sight to allow for drift on long shots. The Harbor Watch runs its exercise in sheltered air.
+Each cannon fires at a right angle to its rail. Its short dotted line shows the direction the round leaves the ship. Turn the hull to line up a shot or fire into open sky. Wind carries the hull sideways and curves rounds downwind after they leave the gun. The arrow on the wind gauge points downwind. The Harbor Watch runs its exercise in sheltered air.
 
 Each cannon refit adds a gun until all four stations are filled. A side with two fitted guns gains a broadside order. Each cannon reloads separately. Turning brings a fresh battery to bear. An impact costs hull on both ships. A bow striking a rail squarely inflicts more damage on the rail. Close gently to keep a prize afloat. Crews exchange strength for as long as the hulls touch. Steer clear or push off to disengage. Both crew bars retain their remaining strength. Crew size, veterans and leadership increase the strength you bring to the fight. An enemy with zero crew strength and a surviving hull strikes colors.
 

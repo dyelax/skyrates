@@ -46,7 +46,7 @@ export function assessPlaytest(text: string, state: GameState, view: string) {
         'Steer alongside or choose Close in. The crew meters drain only while the hulls touch. Steer clear or use Push off to disengage. New hands and veterans increase your starting strength. If the enemy crew yields while its hull is afloat, you can negotiate over the prize.'
     if (!reply && /\b(wind|squall|weather|drift)\b/i.test(question)) {
       const w = voyageWeather(state)
-      reply = `${w.summary}. Wind blows toward ${w.bearing} at ${w.knots} knots. It carries ships and shots downwind. The chart shows the route forecast, and V sets the wind sight in battle.`
+      reply = `${w.summary}. Wind blows toward ${w.bearing} at ${w.knots} knots. The chart shows the route forecast. In battle, each gun fires straight out from its rail. Wind carries both ships and rounds downwind.`
     }
     if (!reply && /\b(trust|relationship|secret)\b/i.test(question))
       reply =

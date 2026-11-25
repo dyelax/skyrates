@@ -5,8 +5,6 @@ import type { WeatherReport } from './weather'
 import { CloudDeck } from './cloud-deck'
 import {
   SKY,
-  GUN_ARC,
-  SHOT_SPEED,
   STILL_AIR,
   moveShot,
   angleBetween,
@@ -15,7 +13,10 @@ import {
   closestSide,
   discharge,
   hitsShip,
-  inArc,
+  gunBearsOn,
+  gunMuzzle,
+  headingForBroadside,
+  raiderLookout,
   localPoint,
   moveShip,
   sideBearing,
@@ -130,12 +131,12 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
   const windAngle = (Math.atan2(weather.wind.y, weather.wind.x) * 180) / Math.PI
   const windStation = options.drill
     ? ''
-    : `<figure class="duel-wind"><div class="duel-anemoscope" aria-hidden="true"><i style="transform:rotate(${windAngle}deg)">➜</i></div><figcaption><strong>${weather.knots} kn · ${weather.bearing}</strong><span>${weather.kind} · ${weather.season}</span></figcaption><button data-action="windage" aria-pressed="false" title="Aim upwind to counter shot drift (V)"><kbd>V</kbd> Wind sight</button>${options.onExit ? '<button type="button" data-exit-test>Leave test</button>' : ''}</figure>`
+    : `<figure class="duel-wind"><div class="duel-anemoscope" aria-hidden="true"><i style="transform:rotate(${windAngle}deg)">➜</i></div><figcaption><strong>${weather.knots} kn · ${weather.bearing}</strong><span>${weather.kind} · ${weather.season}</span></figcaption>${options.onExit ? '<button type="button" data-exit-test>Leave test</button>' : ''}</figure>`
   root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause"><kbd>P</kbd> Pause</button></div>
     <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : options.opponent.name, 'enemy')}</div>
     ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div><div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
     <div class="duel-console">${battery('port', cannons)}${battery('starboard', cannons)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Steer to contact or push the touching ships apart"><kbd>B</kbd> <span data-read="ramOrder">Close in</span></button><button type="button" data-action="escape"><kbd>R</kbd> <span data-read="escapeOrder">Break away</span></button></div></div></div>
-    <div class="duel-foot"><span>${options.drill ? 'Watch exercise · Chalk rounds' : '<kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Click raider to fire · Touch to engage crews'}</span><span data-read="crew"></span></div>`
+    <div class="duel-foot"><span>${options.drill ? 'Watch exercise · Chalk rounds' : '<kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Fire along the rail marks · Touch to engage crews'}</span><span data-read="crew"></span></div>`
   if (options.drill) {
     root.insertAdjacentHTML(
       'beforeend',
@@ -203,7 +204,6 @@ class SkyBattle extends Phaser.Scene {
   private bannerTTL = 3
   private pressed = new Set<string>()
   private course?: Point
-  private sightSet = false
   private wind: Point
   private escaping = false
   private ramming = false
@@ -301,10 +301,6 @@ class SkyBattle extends Phaser.Scene {
       if (Math.hypot(at.x - this.foe.x, at.y - this.foe.y) < 48) {
         if (this.drill && this.drill !== 'fire') return
         const side = closestSide(this.player, this.foe)
-        if (!inArc(this.player, side, this.foe)) {
-          this.tell('Turn to bring a battery to bear.', 1.4)
-          return
-        }
         const gun = this.player.guns.find((g) => g.side === side && g.cooldown <= 0)
         if (gun) this.firePlayer([gun])
         else
@@ -340,8 +336,8 @@ class SkyBattle extends Phaser.Scene {
 
     } else {
       const hint = this.opts.weather.knots
-        ? 'Wind carries both ships and shots. Set the wind sight (V) for a long shot.'
-        : 'Calm skies. Tap open sky to steer, or close in to bring your crews alongside.'
+        ? 'Guns fire straight out from each rail. Wind carries rounds downwind after firing.'
+        : 'Tap open sky to turn. Your guns fire straight out from the rails.'
       this.tell(hint, 6)
     }
     this.syncHUD()
@@ -401,7 +397,6 @@ class SkyBattle extends Phaser.Scene {
       { signal },
     )
     const keyActions: Record<string, string> = {
-      v: 'windage',
       w: 'faster',
       arrowup: 'faster',
       s: 'slower',
@@ -462,13 +457,19 @@ class SkyBattle extends Phaser.Scene {
     if (!this.ready) return
     if (this.drill && action === 'coach' && !this.pausedDuel) {
       if (this.drill === 'briefing') this.teach('dodge')
-      else if (this.drill === 'dodge' && this.buoy) {
+      else if (this.drill === 'dodge') {
+        if (!this.chalk || this.chalk.traveled > 0) this.startRun()
+        if (!this.buoy) return
         this.course = { ...this.buoy }
         this.player.throttle = 2
       } else if (this.drill === 'fire') {
-        const aim = angleBetween(this.player, this.foe) + Math.PI / 2
-        this.course = localPoint({ ...this.player, heading: aim }, 130, 0)
-        this.player.throttle = 0
+        const gun = this.player.guns[0]
+        if (gunBearsOn(this.player, gun, this.foe)) this.firePlayer([gun])
+        else {
+          const heading = headingForBroadside(this.player, gun, this.foe)
+          this.course = localPoint({ ...this.player, heading }, 130, 0)
+          this.player.throttle = 0
+        }
       } else if (['board', 'melee', 'return'].includes(this.drill)) this.order('ram')
       else if (this.drill === 'debrief') this.opts.drill!.onLeave(false)
       return
@@ -487,15 +488,6 @@ class SkyBattle extends Phaser.Scene {
         this.pausedDuel ? Infinity : 1.1,
       )
     } else if (!this.pausedDuel) {
-      if (action === 'windage' && !this.drill) {
-        this.sightSet = !this.sightSet
-        this.tell(
-          this.sightSet
-            ? 'Sight set. The gunners allow for wind drift.'
-            : 'Open sights. Rounds will drift downwind.',
-          2.8,
-        )
-      }
       if (action === 'faster') this.player.throttle = Math.min(3, this.player.throttle + 1)
       if (action === 'slower') {
         this.ramming = false
@@ -582,33 +574,18 @@ class SkyBattle extends Phaser.Scene {
   }
 
   private firePlayer(guns: Gun[]) {
-    if (this.drill === 'fire' && !inArc(this.player, 'port', this.foe)) {
-      this.tell('Turn until the fan is gold, or use Line up port gun.', 2.2)
-      return
-    }
     if (!guns.length) {
       this.tell('No cannon is fitted on that side.', 2)
       return
     }
     let count = 0
-    const range = Math.hypot(this.foe.x - this.player.x, this.foe.y - this.player.y)
-    const leadTime = Math.min(1.1, range / SHOT_SPEED)
-    let target: Point = { x: this.foe.x + this.foe.vx * leadTime, y: this.foe.y + this.foe.vy * leadTime }
-    if (!inArc(this.player, guns[0].side, target)) target = this.foe
-    for (const gun of guns) if (this.shoot(this.player, gun, target, this.opts.gunLevel, false)) count++
+    for (const gun of guns) if (this.shoot(this.player, gun, this.opts.gunLevel, false)) count++
     if (!count) this.tell('Gunners are reloading.', 1)
     else if (count > 1) this.tell(`${guns[0].side === 'port' ? 'Port' : 'Starboard'} broadside!`, 1.15)
   }
 
-  private shoot(ship: Vessel, gun: Gun, target: Point, tier: number, enemy: boolean): boolean {
-    const shot = discharge(
-      ship,
-      gun,
-      target,
-      tier,
-      enemy ? ((this.opts.combatRandom ?? Math.random)() - 0.5) * 0.13 : 0,
-      enemy || this.sightSet ? this.wind : STILL_AIR,
-    )
+  private shoot(ship: Vessel, gun: Gun, tier: number, enemy: boolean): boolean {
+    const shot = discharge(ship, gun, tier)
     if (!shot) return false
     if (enemy) shot.damage = 8
     this.shots.push({ ...shot, enemy })
@@ -661,8 +638,8 @@ class SkyBattle extends Phaser.Scene {
       el.disabled =
         locked ||
         gun.cooldown > 0 ||
-        (!!this.drill && (this.drill !== 'fire' || !inArc(this.player, gun.side, this.foe)))
-      el.classList.toggle('bearing', inArc(this.player, gun.side, this.foe) && !el.disabled)
+        (!!this.drill && this.drill !== 'fire')
+      el.classList.toggle('bearing', this.drill === 'fire' && gunBearsOn(this.player, gun, this.foe) && !el.disabled)
       el.style.setProperty('--gun-ready', `${100 * (1 - gun.cooldown / gun.reload)}%`)
       el.title =
         gun.cooldown > 0
@@ -673,13 +650,8 @@ class SkyBattle extends Phaser.Scene {
       const el = this.buttons[side]
       if (!el) continue
       el.disabled = locked || !this.player.guns.some((g) => g.side === side && !g.cooldown)
-      el.classList.toggle('bearing', this.ready && inArc(this.player, side, this.foe))
     }
     const helmLocked = locked || (!!this.drill && !['dodge', 'fire', 'board', 'melee', 'return'].includes(this.drill))
-    if (this.buttons.windage) {
-      this.buttons.windage.disabled = locked
-      this.buttons.windage.setAttribute('aria-pressed', String(this.sightSet))
-    }
     this.buttons.faster.disabled = helmLocked || this.player.throttle >= 3
     this.buttons.slower.disabled = helmLocked || this.player.throttle <= 0
     if (this.drill) {
@@ -687,6 +659,12 @@ class SkyBattle extends Phaser.Scene {
       this.buttons.coach.disabled = !this.ready || this.pausedDuel || runUnderway
       if (this.drill === 'board' || this.drill === 'return')
         this.buttons.coach.textContent = runUnderway ? 'Closing with the cutter…' : 'Close alongside'
+      if (this.drill === 'fire') {
+        const gun = this.player.guns[0]
+        const linedUp = gunBearsOn(this.player, gun, this.foe)
+        this.buttons.coach.disabled ||= linedUp && gun.cooldown > 0
+        this.buttons.coach.textContent = linedUp ? (gun.cooldown ? 'Reloading…' : 'Fire port gun') : 'Line up port gun'
+      }
     }
     this.buttons.escape.disabled = locked || !!this.drill
     this.buttons.ram.disabled = locked || (!!this.drill && !['board', 'melee', 'return'].includes(this.drill))
@@ -757,10 +735,17 @@ class SkyBattle extends Phaser.Scene {
   }
 
   private startRun() {
-    this.chalk = chalkRun(localPoint(this.foe, 0, -12), this.player)
+    // The Watch lines its hull up while laying out the practice lane, then
+    // holds that heading through the warning and chalk shot.
+    const gun = this.foe.guns[0]
+    this.foe.heading = headingForBroadside(this.foe, gun, this.player)
+    const muzzle = gunMuzzle(this.foe, gun)
+    const bearing = sideBearing(this.foe, gun.side)
+    const range = Math.hypot(this.player.x - muzzle.x, this.player.y - muzzle.y)
+    this.chalk = chalkRun(muzzle, { x: muzzle.x + range * Math.cos(bearing), y: muzzle.y + range * Math.sin(bearing) })
     const dir = this.player.y > (this.area.top + this.area.bottom) / 2 - 5 ? -1 : 1
     this.buoy = {
-      x: clamp(this.player.x + 80, 30, this.area.width - 30),
+      x: this.player.x > 680 ? this.player.x - 80 : this.player.x + 80,
       y: clamp(this.player.y + dir * 94, this.area.top + 25, this.area.bottom - 25),
     }
   }
@@ -817,10 +802,10 @@ class SkyBattle extends Phaser.Scene {
     const side = steerRaider(enemy, player, this.area, this.escaping, dt, this.wind)
     this.aiDelay -= dt
     if (this.aiDelay > 0 || range > 520) return
-    const gun = enemy.guns.find((g) => g.side === side && !g.cooldown && inArc(enemy, g.side, player))
+    const target = raiderLookout(enemy, player)
+    const gun = enemy.guns.find(g => g.side === side && !g.cooldown && gunBearsOn(enemy, g, target))
     if (gun) {
-      const t = (range / SHOT_SPEED) * 0.72
-      this.shoot(enemy, gun, { x: player.x + player.vx * t, y: player.y + player.vy * t }, 0, true)
+      this.shoot(enemy, gun, 0, true)
       this.aiDelay = 1.6 + (this.opts.combatRandom ?? Math.random)() * 0.5
     }
   }
@@ -836,7 +821,6 @@ class SkyBattle extends Phaser.Scene {
     this.course = save.course ?? undefined
     this.escaping = save.escaping
     this.ramming = save.intercepting
-    this.sightSet = save.windSight
     this.terminal = save.terminal
     const factor = (this.area.bottom - this.area.top) / (save.area.bottom - save.area.top)
     for (const p of [this.player, this.foe, ...this.shots, ...(this.course ? [this.course] : [])]) {
@@ -854,7 +838,7 @@ class SkyBattle extends Phaser.Scene {
       area: { top: this.area.top, bottom: this.area.bottom },
       contact: this.contact, projectiles: this.shots, course: this.course ?? null,
       aiDelay: this.aiDelay, escaping: this.escaping, intercepting: this.ramming,
-      windSight: this.sightSet, terminal: this.terminal,
+      terminal: this.terminal,
     }))
   }
 
@@ -909,31 +893,17 @@ class SkyBattle extends Phaser.Scene {
       const end = localPoint(ship, -43 - ship.throttle * 4, 0)
       g.lineStyle(3, tint, 0.56).lineBetween(aft.x, aft.y, end.x, end.y)
     }
-    for (const side of ['port', 'starboard'] as const) {
-      if (!p.guns.some((gun) => gun.side === side)) continue
-      const hot = inArc(p, side, this.foe),
-        angle = sideBearing(p, side),
-        r =
-          this.drill === 'fire'
-            ? Math.min(450, Math.hypot(this.foe.x - p.x, this.foe.y - p.y) + 36)
-            : hot
-              ? 112
-              : 83
-      const tint = hot ? GOLD : FAIR_WIND
-      g.fillStyle(tint, hot ? 0.085 : 0.028)
-        .beginPath()
-        .moveTo(p.x, p.y)
-        .arc(p.x, p.y, r, angle - GUN_ARC, angle + GUN_ARC, false)
-        .closePath()
-        .fillPath()
-      g.lineStyle(0.9, tint, hot ? 0.65 : 0.35)
-        .beginPath()
-        .arc(p.x, p.y, r, angle - GUN_ARC, angle + GUN_ARC, false)
-        .strokePath()
-      for (const edge of [-GUN_ARC, GUN_ARC]) {
-        const x = Math.cos(angle + edge),
-          y = Math.sin(angle + edge)
-        g.lineBetween(p.x + x * 26, p.y + y * 26, p.x + x * r, p.y + y * r)
+    for (const gun of p.guns) {
+      const muzzle = gunMuzzle(p, gun)
+      const bearing = sideBearing(p, gun.side)
+      const teaching = this.drill === 'fire'
+      const linedUp = teaching && gunBearsOn(p, gun, this.foe)
+      const range = teaching ? Math.min(640, Math.hypot(this.foe.x - p.x, this.foe.y - p.y) + 28) : 62
+      const dx = Math.cos(bearing), dy = Math.sin(bearing)
+      g.lineStyle(linedUp ? 2.5 : 2, linedUp ? GOLD : FAIR_WIND, teaching ? .9 : .7)
+      for (let n = 7; n < range; n += 15) {
+        const end = Math.min(n + 9, range)
+        g.lineBetween(muzzle.x + n * dx, muzzle.y + n * dy, muzzle.x + end * dx, muzzle.y + end * dy)
       }
     }
     if (this.course) {
