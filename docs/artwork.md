@@ -71,3 +71,9 @@ Four transparent cargo objects and four illustrated interiors generated with Ima
 The new 3D harbors use original ImageGen material studies. A panoramic daylight cloud sea in peach, teal, and lilac surrounds the floating terraces. A separate nocturnal study supplies the moon, cloud shadows, and stars after the beacon is rekindled. The sky and the harbor geometry appear in the local reflection probe.
 
 ImageGen produced two orthographic atlases for the four ports. One contains Sunstep’s pear-crested guild doorway, the Furnace Choir’s stained glass, Copperfall’s riveted clock, and Meridian’s brass star dial. Each landmark has a color texture and a corresponding relief texture on its modeled wall. The other contains wisteria-strewn cobbles, the glassworkers’ violet paving, weathered timber slips, and the astronomers’ radial inlay. A separate material study supplies the small-scale pigment of limestone, wood, verdigris, and linen. The props and crews on the docks occupy the same 3D space as the captain.
+
+## Working interiors and character materials
+
+Sixteen ImageGen cabinet studies give each market, public office, shipyard and local institution its own close-range display. They depict the local job from the front so the painted shelves, tools and samples sit inside modeled cabinet joinery. Sunstep’s weighing room holds fruit and folded scions. Glasshouse shows annealing registers and lens stock. Copperfall presents reclaimed parts and winter seedlings. Meridian’s cabinets carry silk, weather drums and brass instruments.
+
+A separate ImageGen sheet supplies sixteen front-facing character materials in the four cities. Facial pigment follows the brow, cheek and nose geometry on the animated head. The same worker uses the same face on the quay and indoors.

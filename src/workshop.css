@@ -1,0 +1,267 @@
+.atelier {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  overflow: clip;
+  isolation: isolate;
+  background: #182426 var(--arrival-art) center/cover;
+}
+.atelier::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(180deg, #12181b70, transparent 20%, transparent 88%, #12181b68);
+}
+.atelier-view,
+.atelier-view canvas,
+.atelier-places,
+.atelier-conversation,
+.atelier-paper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.atelier-view {
+  opacity: 0;
+}
+.atelier-ready .atelier-view {
+  opacity: 1;
+}
+.atelier-view canvas {
+  display: block;
+  cursor: grab;
+  touch-action: none;
+  image-rendering: pixelated;
+}
+.atelier-caption {
+  position: absolute;
+  top: clamp(19px, 4vh, 44px);
+  left: clamp(20px, 3.5vw, 62px);
+  z-index: 2;
+  pointer-events: none;
+  color: #f9f0d9;
+  text-shadow: 0 2px 12px #142027;
+}
+.atelier-caption small {
+  font: 600 11px/1.3 var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.17em;
+  color: #ecdaa8;
+}
+.atelier-caption h1 {
+  font: 600 clamp(32px, 4.4vw, 64px)/0.98 var(--font-serif);
+  margin: 0.12em 0 0;
+}
+.atelier-places {
+  pointer-events: none;
+  z-index: 3;
+  visibility: hidden;
+}
+.atelier-ready .atelier-places,
+.atelier-illustrated .atelier-places {
+  visibility: visible;
+}
+.station-pin {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transform: translate(-12px, -50%);
+  padding: 0;
+  border: 0;
+  background: none;
+  white-space: nowrap;
+  line-height: 1;
+  pointer-events: auto;
+  color: #f4e2b5;
+  text-shadow: 0 1px 3px #131a20;
+}
+.station-pin i,
+.atelier-home,
+.atelier-back {
+  display: grid;
+  place-items: center;
+  background: #192b2be8;
+  border: 1px solid #ddc795b3;
+  color: #f7e8c8;
+  box-shadow: 0 2px 8px #101a1b60;
+}
+.station-pin i {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+.station-pin i svg {
+  width: 14px;
+  height: 14px;
+}
+.station-pin span {
+  font: 600 13px/1.15 var(--font-sans);
+  padding: 5px 7px;
+  background: #1b2925df;
+  border-radius: 2px;
+  opacity: 0;
+}
+.station-pin:is(:hover, :focus-visible, .world-hover) span,
+.atelier-illustrated .station-pin span {
+  opacity: 1;
+}
+.station-pin.pin-outside {
+  opacity: 0;
+  pointer-events: none;
+}
+.atelier-home,
+.atelier-back {
+  position: absolute;
+  z-index: 4;
+  border-radius: 20px;
+  padding: 7px 12px;
+  line-height: 1;
+}
+.atelier-home {
+  bottom: 18px;
+  right: 20px;
+  width: 33px;
+  height: 33px;
+  font-size: 18px;
+}
+.atelier-back {
+  top: clamp(17px, 3vh, 35px);
+  right: clamp(18px, 2.7vw, 43px);
+  display: flex;
+  gap: 6px;
+  font: 600 12px var(--font-sans);
+}
+.atelier-back svg {
+  width: 14px;
+  height: 14px;
+}
+.atelier-paper,
+.atelier-conversation {
+  z-index: 8;
+}
+.atelier-paper[hidden],
+.atelier-conversation[hidden] {
+  display: none;
+}
+.atelier-paper {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: clamp(12px, 3vw, 40px);
+  background: #0e19232b;
+}
+.atelier-tray {
+  width: clamp(360px, 38vw, 570px);
+  max-width: 100%;
+  max-height: 100%;
+  position: relative;
+}
+.atelier-tray .sk-interior {
+  position: static;
+  height: auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow: visible;
+  background: transparent !important;
+  isolation: auto;
+}
+.atelier-tray .sk-room-overlay {
+  display: block;
+  height: auto;
+  padding: 0;
+  background: none;
+}
+.atelier-tray .sk-room-ledger {
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100dvh - 72px);
+  padding-top: 38px;
+}
+.atelier-tray .sk-crumb {
+  display: none;
+}
+.atelier-tray .sk-first-light {
+  max-height: calc(100dvh - 50px);
+  overflow: auto;
+  background: #14232b;
+}
+.stow-register {
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  color: #eddfbf;
+  background: #243834;
+  border: 1px solid #aa9a71;
+  border-radius: 50%;
+  font: 20px/1 var(--font-sans);
+}
+.atelier.reading .atelier-places,
+.atelier.reading .atelier-home,
+.atelier.reading .atelier-back {
+  visibility: hidden;
+}
+.atelier-illustrated .atelier-places {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
+  padding: 45px;
+  flex-wrap: wrap;
+}
+.atelier-illustrated .station-pin {
+  position: static;
+  transform: none;
+}
+.atelier-illustrated .atelier-home {
+  display: none;
+}
+@media (max-width: 620px) {
+  .atelier-paper {
+    padding: 9px;
+    align-items: flex-end;
+  }
+  .atelier-tray {
+    width: 100%;
+  }
+  .atelier-tray .sk-room-ledger {
+    max-height: 73dvh;
+  }
+  .atelier-caption {
+    max-width: 68%;
+  }
+  .atelier-caption h1 {
+    font-size: 34px;
+  }
+  .atelier-back {
+    top: 18px;
+    right: 12px;
+  }
+  .station-pin span {
+    font-size: 11px;
+  }
+}
+
+.atelier-ready .station-pin:not(:hover):not(:focus-visible):not(.world-hover) span {
+  animation: station-arrival 6s both;
+}
+@keyframes station-arrival {
+  0%,
+  65% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atelier-ready .station-pin:not(:hover):not(:focus-visible):not(.world-hover) span {
+    animation: none;
+  }
+}
