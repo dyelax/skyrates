@@ -264,3 +264,13 @@ test('sale receipts report realized gain or loss on the allocated share of a mix
   assert.match(state.log[0].text, new RegExp(initialCost - firstCost - restProceeds + '-crown loss'))
   assert.deepEqual(state.cargo.provisions, { quantity: 0, cost: 0 })
 })
+
+test('unacknowledged notices survive later actions, travel, and reload in order', () => {
+  const signed = act(initialState(), { type: 'acceptMission' })
+  const sailing = act(signed, { type: 'sail', to: 'glasshouse' })
+  assert.deepEqual(reload(sailing).pendingNotices, [signed.notice, sailing.notice])
+  assert.deepEqual(reload({ ...sailing, pendingNotices: sailing.pendingNotices.slice(1) }).pendingNotices, [sailing.notice])
+  const old = JSON.parse(JSON.stringify(signed))
+  delete old.pendingNotices
+  assert.equal(loadGame({ getItem: () => JSON.stringify(old) }).mission, 'accepted')
+})

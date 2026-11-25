@@ -70,6 +70,7 @@ export interface GameState {
   freight: Freight | null
   log: { day: number; text: string }[]
   notice: string
+  pendingNotices: string[]
 }
 
 export type BattleResult = 'won' | 'boarded' | 'escaped' | 'lost'
@@ -117,6 +118,7 @@ export function initialState(): GameState {
     freight: null,
     log: [{ day: 1, text: 'Took the helm at Sunstep Quay. Harbormaster Vale has a commission waiting.' }],
     notice: '',
+    pendingNotices: [],
   }
   rememberMarket(state)
   return state
@@ -502,7 +504,9 @@ function applyDockCommand(state: GameState, action: Command): boolean {
 export function act(state: GameState, command: Command): GameState {
   const next = structuredClone(state)
   const changed = state.voyage ? applyVoyageCommand(next, command) : applyDockCommand(next, command)
-  return changed ? next : state
+  if (!changed) return state
+  if (next.notice) next.pendingNotices.push(next.notice)
+  return next
 }
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -584,6 +588,7 @@ function validSave(value: unknown): value is GameState {
     !['unseen', 'helped', 'passed'].includes(value.tender) ||
     typeof value.specialFreightTaken !== 'boolean' ||
     typeof value.notice !== 'string' ||
+    !Array.isArray(value.pendingNotices) || !value.pendingNotices.every(n => typeof n === 'string') ||
     !Array.isArray(value.log)
   )
     return false
@@ -633,6 +638,7 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
     const serialized = (storage ?? globalThis.localStorage).getItem(SAVE_KEY)
     if (serialized) {
       const value: unknown = JSON.parse(serialized)
+      if (object(value) && value.version === 1 && value.pendingNotices === undefined) value.pendingNotices = []
       if (validSave(value)) return value
     }
   } catch {
