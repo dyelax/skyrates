@@ -61,7 +61,7 @@ test('Fen signs from the chart, pays four panes at 26 through day four and remem
   assert.equal(sign(s), s)
   assert.equal(handIn(s), s)
   assert.equal(buyerOrders(s).length, 0)
-  assert.equal(buyerOffers(s).length, 0)
+  assert.ok(!buyerOffers(s).some(offer => offer.id === FEN_PANES.id))
   const ordinary = act(s, { type: 'sell', good: 'glass', quantity: 1 })
   assert.equal(ordinary.coins, s.coins + priceAt(s, 'copperfall', 'glass').sell)
 })

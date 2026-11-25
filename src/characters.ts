@@ -1,6 +1,7 @@
 import { BEACON_COMMISSION, GOODS, GOOD_IDS, PORTS, type PortId } from './data'
 import { CITY_ECONOMY } from './city-economy'
 import type { GameState } from './model'
+import { FEN_CONFIDENCE_JOBS, harvestTerms } from './winter-garden'
 import { FEN_PANES, buyerOrders, buyerOffers, firstPaneOrderOpen, fenPaneDocket } from './buyer-orders'
 import { portWeather } from './weather'
 
@@ -334,8 +335,12 @@ export function characterContext(state: GameState, npc: NpcId) {
     deeds.push(text)
   }
   if (entry.helpedCity) deed(3, 'The captain fulfilled our local commission, “' + city.order.name + '”.')
-  if (npc === 'fen' && state.buyers.orders.some(order => order.id === FEN_PANES.id && order.status === 'filled'))
+  const garden = state.garden
+  const fenConfides = npc === 'fen' && garden?.jobs.length === FEN_CONFIDENCE_JOBS
+  if (npc === 'fen' && garden) {
     deed(3, 'The captain delivered the four panes for our night-shift garden. The seedlings under the new roof survived their first cold watch.')
+    if (garden.jobs.length) deed(garden.jobs.length, 'Since the roof repair, the captain has finished our garden work: ' + garden.jobs.map(job => job.title).join(', ') + '.')
+  }
   if (npc === 'vale' && state.mission !== 'offered') deed(1, 'The captain signed my underwriting agreement.')
   if (npc === 'iona' && (state.mission === 'invoice' || state.mission === 'lit'))
     deed(1, 'The captain brought Vale’s letter to my office.')
@@ -346,7 +351,8 @@ export function characterContext(state: GameState, npc: NpcId) {
     deed(3, 'I countersigned the certificate and settled the captain’s claim.')
   if (npc === 'vale' && state.certificate === 'paid')
     deed(3, 'Meridian returned the receipt for our captain’s settled certificate.')
-  const tier = score >= 5 ? 'confidant' : score >= 3 ? 'trusted' : score >= 1 ? 'acquainted' : 'stranger'
+  const confidant = npc === 'fen' ? fenConfides : score >= 5
+  const tier = confidant ? 'confidant' : score >= 3 ? 'trusted' : score >= 1 ? 'acquainted' : 'stranger'
   const labels = {
     stranger: 'First meeting',
     acquainted: 'Acquainted',
@@ -372,6 +378,7 @@ export function characterContext(state: GameState, npc: NpcId) {
     knowledge.push(`${ticket.buyer} at ${PORTS[ticket.destination].name} needs ${ticket.quantity - delivered} more × ${GOODS[ticket.good].name} at ${ticket.rate} crowns each through day ${ticket.dueDay}. ` +
       (ticket.kind === 'delivery' ? `Have ${PORTS[ticket.source].name} stamp the shipment after signing.` : 'Existing stock qualifies.'))
   }
+  const harvestDocket = (npc === 'fen' || npc === 'neri') && garden ? harvestTerms(state) : undefined
   const weather = portWeather(person.port, state.day)
   knowledge.push(
     'Local weather on day ' + state.day + ' of the voyage: ' + weather.season + ', ' + weather.summary + '.',
@@ -424,11 +431,12 @@ export function characterContext(state: GameState, npc: NpcId) {
     publicHistory: person.background,
     knowledge,
     paneDocket,
+    harvestDocket,
     firstPaneOrderOpen: !!paneDocket && firstPaneOrderOpen(state),
     relationship: { score, tier, label: labels[tier] },
     deeds,
-    confidences: [...(score >= 3 ? [person.personal] : []), ...(score >= 5 ? [person.confidence] : [])],
-    memories: [...entry.memories],
+    confidences: [...(score >= 3 && (npc !== 'fen' || fenConfides) ? [person.personal] : []), ...(confidant ? [person.confidence] : [])],
+    memories: npc === 'fen' && !fenConfides ? entry.memories.filter(note => !privateSubjects.fen.test(note)) : [...entry.memories],
   }
 }
 
@@ -470,7 +478,7 @@ const privateSubjects: Record<NpcId, RegExp> = {
   neri: /retired pilot|rescue roll|pilot.*off the roll/i,
   orr: /delegate.s reserved|changed the docket|garden.*crane slot/i,
   rada: /sister.s.*carriage|second test|pin walked/i,
-  fen: /brother.*(?:roster|badge)|missing.*roster|lunch pail/i,
+  fen: /brother|missing.*roster|roster.*(?:name|missing)|lost.*(?:badge|yard papers)|lunch pail/i,
   sen: /storm shelter|unchartered crews|hid.*return line/i,
   uma: /spoiled roll|sponsors stopped|blue silk.*flag/i,
   lask: /cut the return rope|clean.cut end|blame the storm/i,

@@ -24,6 +24,8 @@ import { allotment, CITY_ECONOMY, exchangeCycle } from './city-economy'
 import { changeContact, validContacts, witnessCityOrder, type Contacts, type ContactCommand } from './characters'
 import { buyerOffers, buyerOrders, deliverableQuantity, expireBuyerOrders, reconcileBuyerCargo, validBuyerLedger,
   type BuyerCommand, type BuyerLedger } from './buyer-orders'
+import { gardenWorkReceipt, harvestLot, validGarden, type WinterGarden } from './winter-garden'
+export * from './winter-garden'
 export * from './buyer-orders'
 export * from './data'
 
@@ -95,6 +97,7 @@ export interface GameState {
   drill: DrillStage | null
   exchange: Exchange
   buyers: BuyerLedger
+  garden: WinterGarden | null
   contacts: Contacts
   pricesSeen: Partial<Record<PortId, MarketVisit>>
   freight: Freight | null
@@ -107,6 +110,7 @@ export type BattleResult = 'won' | 'boarded' | 'escaped' | 'lost'
 export type Command =
   | ContactCommand
   | BuyerCommand
+  | { type: 'chooseHarvest'; day: number; decision: 'buy' | 'pass' }
   | { type: 'acceptMission' | 'presentCommission' | 'deliverCertificate' | 'payInvoice' | 'continueVoyage' | 'engage' | 'evade' | 'takeFreight' | 'practiceDrill' | 'fillCityOrder' | 'useCityService' }
   | { type: 'payToll'; id: number; payment: 'cargo' | 'crowns' }
   | { type: 'endDrill'; skip: boolean }
@@ -159,6 +163,7 @@ export function initialState(pirateSeed = globalThis.crypto.getRandomValues(new 
     drill: null,
     exchange: freshExchange(1),
     buyers: { seed: 0, orders: [] },
+    garden: null,
     contacts: {},
     pricesSeen: {},
     freight: null,
@@ -597,9 +602,16 @@ function applyBuyerCommand(state: GameState, action: BuyerCommand): boolean {
   order.delivered += quantity
   if (order.kind === 'delivery') order.loaded -= quantity
   const remaining = order.quantity - order.delivered
-  if (!remaining) order.status = 'filled'
+  let gardenReceipt = ''
+  if (!remaining) {
+    order.status = 'filled'
+    if (!state.garden && (order.id === 'fen-first-panes' || /^fen-garden-\d+-repair$/.test(order.id))) {
+      state.garden = { repairedDay: state.day, jobs: [], lastLot: null }
+      gardenReceipt = ' Four solar panes seal the greenhouse roof. Fen has set aside the first picking of winter pears for you. Visit the Winter Garden counter in Copperfall Yard.'
+    } else if (order.buyer === 'Fen Alder') gardenReceipt = gardenWorkReceipt(state, order.id, order.title)
+  }
   record(state, `Delivered ${quantity} × ${GOODS[order.good].name} for ${order.buyer} at ${order.rate} crowns each. Received ${proceeds} crowns against ${cost} in cargo costs. ` +
-    (remaining ? `${remaining} still due through day ${order.dueDay}.` : 'Order filled.'))
+    (remaining ? `${remaining} still due through day ${order.dueDay}.` : 'Order filled.') + gardenReceipt)
   return true
 }
 
@@ -613,6 +625,22 @@ function applyDockCommand(state: GameState, action: Command): boolean {
     case 'buy':
     case 'sell':
       return trade(state, action)
+    case 'chooseHarvest': {
+      const lot = harvestLot(state)
+      if (state.port !== 'copperfall' || !state.garden || !lot || lot.day !== action.day || lot.decision) return false
+      const cost = lot.quantity * lot.rate
+      if (action.decision === 'buy') {
+        if (state.coins < cost || cargoUsed(state) + lot.quantity > state.ship.hold) return false
+        state.coins -= cost
+        addCargo(state.cargo.provisions, lot.quantity, cost)
+        state.garden.lastLot = { day: lot.day, decision: 'bought' }
+        record(state, `Bought Fen’s picking of ${lot.quantity} crates of winter pears for ${cost} crowns. The purser entered them as provisions.`)
+      } else if (action.decision === 'pass') {
+        state.garden.lastLot = { day: lot.day, decision: 'passed' }
+        record(state, 'Passed on the winter pears. Fen waved the kitchen porter over for this picking.')
+      } else return false
+      return true
+    }
     case 'fillCityOrder': {
       const order = cityOrder(state)
       if (!order.ready) return false
@@ -622,7 +650,8 @@ function applyDockCommand(state: GameState, action: Command): boolean {
       witnessCityOrder(state, state.port)
       state.coins += order.pay
       experience(state, 6)
-      record(state, `Filled “${order.name}” for ${order.pay} crowns. Cargo cost ${cost} crowns. The receipt bears the seal of the ${CITY_ECONOMY[state.port].institution}.`)
+      const gardenReceipt = state.port === 'copperfall' ? gardenWorkReceipt(state, `garden-civic-${exchangeCycle(state.day)}`, order.name) : ''
+      record(state, `Filled “${order.name}” for ${order.pay} crowns. Cargo cost ${cost} crowns. The receipt bears the seal of the ${CITY_ECONOMY[state.port].institution}.` + gardenReceipt)
       return true
     }
     case 'useCityService': {
@@ -926,6 +955,7 @@ function validSave(value: unknown): value is GameState {
     quantity += lot.quantity
   }
   return (
+    validGarden(value.garden, value.day) &&
     validBuyerLedger(value.buyers, cargo as Record<GoodId, CargoLot>, value.day) &&
     quantity <= value.ship.hold &&
     validVisit(value.pricesSeen[value.port]) &&
@@ -952,6 +982,15 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
         if (value.tradeProfitRemainder === undefined) value.tradeProfitRemainder = 0
         if (value.pirateSeed === undefined) value.pirateSeed = legacyPirateSeed(serialized)
         if (value.buyers === undefined) value.buyers = { seed: 0, orders: [] }
+        if (value.garden === undefined) {
+          const repaired = object(value.buyers) && Array.isArray(value.buyers.orders) &&
+            value.buyers.orders.some(order => object(order) && order.id === 'fen-first-panes' &&
+              order.status === 'filled' && order.delivered === 4 && order.quantity === 4)
+          const receipt = repaired && Array.isArray(value.log) && value.log.find(entry => object(entry) &&
+            integer(entry.day, 1) && entry.day <= 4 && typeof entry.text === 'string' &&
+            entry.text.includes('Solar glass for Fen Alder at 26 crowns each.') && entry.text.includes('Order filled.'))
+          value.garden = repaired ? { repairedDay: receipt ? receipt.day : value.day, jobs: [], lastLot: null } : null
+        }
         if (value.firstWatch === undefined) value.firstWatch = 'briefed'
         if (value.pendingNotices === undefined) value.pendingNotices = []
         if (value.certificate === undefined) value.certificate = value.mission === 'lit' ? 'aboard' : 'none'

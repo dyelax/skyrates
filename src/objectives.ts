@@ -1,10 +1,11 @@
-import { BEACON_COMMISSION, GOODS, INVOICE_COST, PORTS, buyerLoadedQuantity, buyerOrders, type BuyerOffer, type GameState, type GoodId, type PortId } from './model'
+import { BEACON_COMMISSION, GOODS, INVOICE_COST, PORTS, harvestLot, harvestTerms, buyerLoadedQuantity, buyerOrders, type BuyerOffer, type GameState, type GoodId, type PortId } from './model'
 
 export interface Objective {
   title: string
   detail: string
   destination: PortId
   offered?: boolean
+  privilege?: boolean
   buyerId?: string
 }
 
@@ -48,5 +49,7 @@ export function chartObjectives(state: GameState): Objective[] {
         (unload ? ' Hand in your cargo at the market counter.' : ` ${order.kind === 'delivery' ? 'Buy stamped cargo' : 'Find stock'} at ${PORTS[order.source].name}.`),
     })
   }
+  const harvest = harvestLot(state)
+  if (harvest && !harvest.decision) jobs.push({ title: 'First picking of winter pears', destination: 'copperfall', privilege: true, detail: harvestTerms(state) })
   return jobs
 }

@@ -1,5 +1,6 @@
 import { allotment, EXCHANGE_DAYS, exchangeCycle } from './city-economy'
 import { GOOD_IDS, PORTS, PORT_IDS, type GoodId, type PortId } from './data'
+import { fenGardenOffer } from './winter-garden'
 import { seasonalAdjustment } from './seasonal-trade'
 import type { GameState } from './model'
 
@@ -62,13 +63,16 @@ function exchangePosting(state: GameState, kind: BuyerOffer['kind']): BuyerOffer
   // Even on the last posting day the captain can reach the supplier, then the buyer.
   const longestApproach = Math.max(...PORT_IDS.map(port => PORTS[port].daysTo[need.source]))
   const dueDay = start + EXCHANGE_DAYS - 1 + longestApproach + PORTS[need.source].daysTo[need.destination]
-  return { ...need, kind, id: `board-${cycle}-${kind}`, quantity, rate, dueDay }
+  const title = need.title === 'Patch the greenhouse roof' && state.garden ? 'Glaze the propagation frames' : need.title
+  return { ...need, title, kind, id: `board-${cycle}-${kind}`, quantity, rate, dueDay }
 }
 
 export function buyerOffers(state: GameState): BuyerOffer[] {
   const offers = state.mission === 'lit'
     ? [exchangePosting(state, 'collection'), exchangePosting(state, 'delivery')]
     : state.day <= FEN_PANES.dueDay ? [FEN_PANES] : []
+  const gardenJob = fenGardenOffer(state)
+  if (gardenJob) offers.push(gardenJob)
   return offers.filter(offer => !state.buyers.orders.some(order => order.id === offer.id))
 }
 
@@ -114,7 +118,7 @@ export function expireBuyerOrders(state: GameState): string[] {
   // Retain Fen's first receipt for her dialogue. A closed rotating posting
   // only needs a receipt in this ledger while it can still be signed again.
   state.buyers.orders = state.buyers.orders.filter(order => order.status === 'signed' ||
-    order.id === FEN_PANES.id || order.id.startsWith(`board-${exchangeCycle(state.day)}-`))
+    order.id === FEN_PANES.id || order.id.startsWith(`board-${exchangeCycle(state.day)}-`) || order.id.startsWith(`fen-garden-${exchangeCycle(state.day)}-`))
   return notices
 }
 
@@ -142,7 +146,7 @@ export function validBuyerLedger(value: unknown, cargo: Record<GoodId, { quantit
   const stamped = new Map<GoodId, number>()
   return ledger.orders.every(order => {
     if (!order || typeof order !== 'object' || typeof order.id !== 'string' || ids.has(order.id) ||
-      (order.id !== FEN_PANES.id && !/^board-\d+-(collection|delivery)$/.test(order.id)) ||
+      (order.id !== FEN_PANES.id && !/^(?:board-\d+-(?:collection|delivery)|fen-garden-\d+-(?:grafts|prisms|glass|repair))$/.test(order.id)) ||
       !['collection', 'delivery'].includes(order.kind) || !['signed', 'released', 'filled', 'expired'].includes(order.status) ||
       typeof order.title !== 'string' || typeof order.buyer !== 'string' ||
       !PORT_IDS.includes(order.source) || !PORT_IDS.includes(order.destination) || order.source === order.destination ||

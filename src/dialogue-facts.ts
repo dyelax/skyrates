@@ -7,6 +7,7 @@ export function docketAnswer(
   question: string,
   paneDocket?: string,
   firstPaneOrderOpen = false,
+  harvestDocket?: string,
 ): string | undefined {
   const asksPrice =
     /\b(pay|pays|repay\w*|reimburs\w*|collect|refund|owe|worth|cost|how much|invest|underwrit\w*|why should|money|crowns)\b/i.test(
@@ -27,6 +28,8 @@ export function docketAnswer(
     )
   )
     return 'The galley and lift cells are supplied at berth. You can sail without buying food or fuel. Provisions on the exchange are trade cargo.'
+  if (harvestDocket && /\b(harvest|winter pears?|first refusal|first picking|shift kitchens?)\b/i.test(question))
+    return harvestDocket
   const asksPanes = /\b(panes?|solar glass|gardener.s order|glaz(?:e|ing)|greenhouse roof)\b/i.test(question)
   const asksFenTerms = speaker === 'fen' && /\b(how many|how much|deadline|when.*due|your order)\b/i.test(question)
   if (paneDocket && (firstPaneOrderOpen ? asksPanes || asksFenTerms : asksPanes && /\b(first|original)\b/i.test(question))) return paneDocket
