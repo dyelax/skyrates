@@ -1,0 +1,32 @@
+.illustrated-character {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+}
+.illustrated-character-crop {
+  position: absolute;
+  overflow: hidden;
+}
+.illustrated-character-crop[hidden] {
+  display: none;
+}
+.illustrated-character-crop img {
+  display: block;
+  width: 300%;
+  max-width: none;
+  height: 100%;
+}
+/* Set the name and speech marker beside the worker, leaving eyes and hands visible. */
+.quay .illustrated-person-target .place-pin,
+.quay .illustrated-person-target .place-label {
+  left: calc(var(--x) + 56%);
+  top: calc(var(--y) + 8%);
+}
+.quay .illustrated-person-target .place-label {
+  transform: translate(-16%, calc(-100% - 14px));
+}
+.quay .illustrated-person-target:is(:hover, :focus-visible) .place-label,
+.quay.show-places .illustrated-person-target .place-label {
+  transform: translate(-16%, calc(-100% - 22px));
+}

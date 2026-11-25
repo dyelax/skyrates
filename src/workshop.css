@@ -1,268 +1,134 @@
 .atelier {
   position: relative;
-  width: 100%;
-  height: 100dvh;
-  overflow: clip;
   isolation: isolate;
-  background: #182426 var(--arrival-art) center/cover;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: #202929;
+  --rim-x: 0px;
+  --rim-y: 0px;
 }
-.atelier::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  background: linear-gradient(180deg, #12181b70, transparent 20%, transparent 88%, #12181b68);
-}
-.atelier-view,
-.atelier-view canvas,
-.atelier-places,
-.atelier-conversation,
-.atelier-paper {
+.atelier-view, .room-plate, .room-picture, .room-foreground, .room-glints, .atelier-places, .atelier-paper, .atelier-conversation {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
-.atelier-view {
-  opacity: 0;
-}
-.atelier-ready .atelier-view {
-  opacity: 1;
-}
-.atelier-view canvas {
-  display: block;
-  cursor: grab;
-  touch-action: none;
-  image-rendering: pixelated;
-}
-.atelier-caption {
-  position: absolute;
-  top: clamp(19px, 4vh, 44px);
-  left: clamp(20px, 3.5vw, 62px);
-  z-index: 2;
+.atelier-view { overflow: hidden; }
+.room-plate { transform-origin: top left; touch-action: none; cursor: grab; user-select: none; }
+.room-plate:active { cursor: grabbing; }
+.room-picture { display: block; pointer-events: none; }
+.room-foreground {
   pointer-events: none;
-  color: #f9f0d9;
-  text-shadow: 0 2px 12px #142027;
+  background-size: 100% 100%;
+  mask-image: linear-gradient(0deg, black 0%, black 6%, transparent 26%);
+  transform: translate(var(--rim-x), var(--rim-y));
+}
+.room-glints { pointer-events: none; overflow: hidden; }
+.room-glints i {
+  position: absolute; left: 17%; top: 37%; width: 2px; height: 2px;
+  background: #ffe0a1; border-radius: 100%; box-shadow: 0 0 3px #ffd285; opacity: 0;
+}
+.room-glints i:nth-child(2) { left: 52%; top: 48%; animation-delay: -3.7s; }
+.room-glints i:nth-child(3) { left: 69%; top: 32%; animation-delay: -8.1s; }
+.room-glints i:nth-child(4) { left: 31%; top: 67%; animation-delay: -5.6s; }
+@media (prefers-reduced-motion: no-preference) {
+  .room-glints i { animation: room-dust-drift 12s ease-in-out infinite; }
+  @keyframes room-dust-drift {
+    0%, 70%, 100% { opacity: 0; transform: translate(0,0); }
+    34% { opacity: .48; transform: translate(9px,-8px); }
+    63% { opacity: 0; transform: translate(15px,-17px); }
+  }
+}
+.atelier-caption, .atelier-back, .atelier-tools { position: absolute; z-index: 3; }
+.atelier-caption {
+  top: max(15px,env(safe-area-inset-top)); left: max(18px,env(safe-area-inset-left));
+  max-width: min(75%, 470px); padding: 9px 15px 11px; pointer-events: none;
+  color: #f3e6ca; background: linear-gradient(110deg,#15292ce8,#1a282ad9);
+  border: 1px solid #bcb4958a; box-shadow: 0 3px 12px #10141429;
 }
 .atelier-caption small {
-  font: 600 11px/1.3 var(--font-sans);
-  text-transform: uppercase;
-  letter-spacing: 0.17em;
-  color: #ecdaa8;
+  color: #e0c395; font: 600 10px/1.4 var(--font-sans); letter-spacing: .15em; text-transform: uppercase;
 }
-.atelier-caption h1 {
-  font: 600 clamp(32px, 4.4vw, 64px)/0.98 var(--font-serif);
-  margin: 0.12em 0 0;
+.atelier-caption h1 { margin: 2px 0 0; font: 600 clamp(22px,2.3vw,34px)/1 var(--font-serif); }
+.atelier-back, .atelier-tools button, .stow-register {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  color: #f3e1bd; background: #17292bdf; border: 1px solid #c5b18a91;
+  box-shadow: 0 2px 8px #101a1b40; border-radius: 2px;
 }
-.atelier-places {
-  pointer-events: none;
-  z-index: 3;
-  visibility: hidden;
+.atelier-back { top: max(16px,env(safe-area-inset-top)); right: max(18px,env(safe-area-inset-right)); padding: 8px 11px; font: 600 13px/1 var(--font-sans); }
+.atelier-back svg { width: 14px; height: 14px; transform: scaleX(-1); }
+.atelier-tools {
+  right: max(18px,env(safe-area-inset-right)); bottom: calc(16px + var(--notice-space,0px)); display: flex; gap: 6px;
 }
-.atelier-ready .atelier-places,
-.atelier-illustrated .atelier-places {
-  visibility: visible;
-}
+.atelier-tools button { width: 35px; height: 35px; }
+.atelier-tools button svg { width: 16px; height: 16px; }
+.atelier-tools .room-hints[aria-pressed="true"] { color:#1c2a2b; background:#d8c398; }
+.atelier-places { pointer-events: none; }
 .station-pin {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  transform: translate(-12px, -50%);
-  padding: 0;
-  border: 0;
-  background: none;
-  white-space: nowrap;
-  line-height: 1;
-  pointer-events: auto;
-  color: #f4e2b5;
-  text-shadow: 0 1px 3px #131a20;
+  pointer-events: auto; position: absolute; transform: translate(-50%, -50%); display: grid; place-items: center;
+  width: 13%; height: 24%; min-width: 38px; min-height: 38px; max-width: 210px;
+  padding: 0; border: 0; background: transparent; color:#fbedc6; text-shadow: 0 1px 3px #142027;
 }
-.station-pin i,
-.atelier-home,
-.atelier-back {
-  display: grid;
-  place-items: center;
-  background: #192b2be8;
-  border: 1px solid #ddc795b3;
-  color: #f7e8c8;
-  box-shadow: 0 2px 8px #101a1b60;
-}
+.station-pin[data-place="counter"] { width: 18%; height: 13%; }
+.station-pin[data-place="door"] { width: 9%; height: 22%; }
 .station-pin i {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  display: grid; place-items: center; width: 30px; height: 30px; margin: auto; border-radius: 50%;
+  background: #172925db; border: 1px solid #e4cf97d9; box-shadow: inset 0 0 0 2px #17282597, 0 2px 9px #0b141a66;
 }
-.station-pin i svg {
-  width: 14px;
-  height: 14px;
+.station-pin i svg { height: 15px; width: 15px; }
+.station-pin .station-label {
+  position: absolute; top: calc(50% + 19px); width: max-content; max-width: 155px;
+  padding: 4px 8px; text-align:center; font: 600 13px/1.2 var(--font-sans);
+  background: #182827ee; border: 1px solid #bbab7f91; border-radius: 2px; opacity: 0;
 }
-.station-pin span {
-  font: 600 13px/1.15 var(--font-sans);
-  padding: 5px 7px;
-  background: #1b2925df;
-  border-radius: 2px;
-  opacity: 0;
+.station-pin:is(:hover,:focus-visible) i { border-color: #fcebbc; color: #fff1cb; background: #344c46; }
+.station-pin:is(:hover,:focus-visible) .station-label, .show-room-names .station-label { opacity: 1; }
+.station-pin:focus-visible { outline: 0; }
+.station-pin:focus-visible i { outline: 2px solid #ffe5a8; outline-offset: 3px; }
+@media (prefers-reduced-motion: no-preference) {
+  .atelier:not(.show-room-names) .station-pin:not(:hover,:focus-visible) .station-label { animation: room-arrival-names 6s both; }
+  @keyframes room-arrival-names { 0%, 58% { opacity: 1 } 100% { opacity: 0 } }
 }
-.station-pin:is(:hover, :focus-visible, .world-hover) span,
-.atelier-illustrated .station-pin span {
-  opacity: 1;
-}
-.station-pin.pin-outside {
-  opacity: 0;
-  pointer-events: none;
-}
-.atelier-home,
-.atelier-back {
-  position: absolute;
-  z-index: 4;
-  border-radius: 20px;
-  padding: 7px 12px;
-  line-height: 1;
-}
-.atelier-home {
-  bottom: calc(18px + var(--notice-space, 0px));
-  right: 20px;
-  width: 33px;
-  height: 33px;
-  font-size: 18px;
-}
-.atelier-back {
-  top: clamp(17px, 3vh, 35px);
-  right: clamp(18px, 2.7vw, 43px);
-  display: flex;
-  gap: 6px;
-  font: 600 12px var(--font-sans);
-}
-.atelier-back svg {
-  width: 14px;
-  height: 14px;
-}
-.atelier-paper,
-.atelier-conversation {
-  z-index: 8;
-  height: calc(100% - var(--notice-space, 0px));
-}
-.atelier-paper[hidden],
-.atelier-conversation[hidden] {
-  display: none;
-}
+.atelier-paper, .atelier-conversation { z-index: 8; height: calc(100% - var(--notice-space, 0px)); }
+.atelier-paper[hidden], .atelier-conversation[hidden] { display: none; }
 .atelier-paper {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  padding: clamp(12px, 3vw, 40px);
-  background: #0e19232b;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: clamp(12px,3vw,40px); background: linear-gradient(90deg, transparent 20%, #111e2326 62%, #101a214d);
 }
 .atelier-tray {
-  width: clamp(360px, 38vw, 570px);
-  max-width: 100%;
-  max-height: 100%;
-  position: relative;
+  position: relative; width: clamp(360px,38vw,570px); max-width: 100%; max-height: 100%;
+  border: 1px solid #b5a076; border-radius: 3px; overflow: hidden; background:#18282b;
+  box-shadow: 0 14px 40px #0e181c8a;
+}
+.atelier-tray::before {
+  content: ''; display:block; height:clamp(38px,7.4vh,72px);
+  background-image: linear-gradient(90deg,#16252b20,#1021292b), var(--cabinet);
+  background-position: center, center 43%; background-size: cover; border-bottom:1px solid #bcac7d93;
 }
 .atelier-tray .sk-interior {
-  position: static;
-  height: auto;
-  min-height: 0;
-  max-height: 100%;
-  overflow: visible;
-  background: transparent !important;
-  isolation: auto;
+  position: static; height: auto; min-height: 0; max-height: 100%; overflow: visible; background: transparent !important; isolation: auto;
 }
-.atelier-tray .sk-room-overlay {
-  display: block;
-  height: auto;
-  padding: 0;
-  background: none;
-}
+.atelier-tray .sk-room-overlay { display: block; height: auto; padding: 0; background: none; }
 .atelier-tray .sk-room-ledger {
-  width: 100%;
-  max-width: 100%;
-  max-height: calc(100dvh - 72px - var(--notice-space, 0px));
-  padding-top: 38px;
+  width: 100%; max-width: 100%; max-height: calc(100dvh - clamp(38px,7.4vh,72px) - 80px - var(--notice-space,0px));
+  padding: clamp(15px,2vw,26px); border: 0; border-radius: 0; box-shadow: none;
 }
-.atelier-tray .sk-crumb {
-  display: none;
-}
-.atelier-tray .sk-first-light {
-  max-height: calc(100dvh - 50px - var(--notice-space, 0px));
-  overflow: auto;
-  background: #14232b;
-}
-.stow-register {
-  position: absolute;
-  z-index: 4;
-  top: 8px;
-  right: 10px;
-  width: 30px;
-  height: 30px;
-  color: #eddfbf;
-  background: #243834;
-  border: 1px solid #aa9a71;
-  border-radius: 50%;
-  font: 20px/1 var(--font-sans);
-}
-.atelier.reading .atelier-places,
-.atelier.reading .atelier-home,
-.atelier.reading .atelier-back {
-  visibility: hidden;
-}
-.atelier-illustrated .atelier-places {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 12px;
-  padding: 45px;
-  flex-wrap: wrap;
-}
-.atelier-illustrated .station-pin {
-  position: static;
-  transform: none;
-}
-.atelier-illustrated .atelier-home {
-  display: none;
-}
+.atelier-tray .sk-crumb { display: none; }
+.atelier-tray:has(.sk-first-light) { width: min(920px,100%); height: min(610px,calc(100dvh - 65px - var(--notice-space,0px))); }
+.atelier-tray:has(.sk-first-light)::before { display:none; }
+.atelier-tray .sk-first-light { position:absolute; inset:0; overflow:auto; background:#14232b; }
+.stow-register { position: absolute; z-index: 4; top: 7px; right: 8px; width: 31px; height: 31px; font: 21px/1 var(--font-sans); }
+.atelier.reading :is(.atelier-places,.atelier-tools,.atelier-back) { visibility: hidden; }
+.atelier.reading .atelier-caption { visibility: hidden; }
 @media (max-width: 620px) {
-  .atelier-paper {
-    padding: 9px;
-    align-items: flex-end;
-  }
-  .atelier-tray {
-    width: 100%;
-  }
-  .atelier-tray .sk-room-ledger {
-    max-height: min(73dvh, calc(100dvh - 20px - var(--notice-space, 0px)));
-  }
-  .atelier-caption {
-    max-width: 68%;
-  }
-  .atelier-caption h1 {
-    font-size: 34px;
-  }
-  .atelier-back {
-    top: 18px;
-    right: 12px;
-  }
-  .station-pin span {
-    font-size: 11px;
-  }
-}
-
-.atelier-ready .station-pin:not(:hover):not(:focus-visible):not(.world-hover) span {
-  animation: station-arrival 6s both;
-}
-@keyframes station-arrival {
-  0%,
-  65% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .atelier-ready .station-pin:not(:hover):not(:focus-visible):not(.world-hover) span {
-    animation: none;
-  }
+  .atelier-caption { left:10px; top:12px; max-width:65%; padding:8px 10px; }
+  .atelier-caption h1 { font-size:24px; }
+  .atelier-back { top:12px; right:10px; }
+  .atelier-tools { right:12px; bottom:calc(11px + var(--notice-space,0px)); }
+  .atelier-paper { padding:9px; align-items:flex-end; }
+  .atelier-tray { width:100%; }
+  .atelier-tray .sk-room-ledger { max-height:min(70dvh, calc(100dvh - 70px - var(--notice-space,0px))); }
+  .station-pin .station-label { font-size:12px; max-width:108px; }
 }
