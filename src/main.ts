@@ -16,6 +16,7 @@ import {
   act,
   advanceDrill,
   boardingStrength,
+  hasCaptainPerk,
   loadGame,
   PORTS,
   raiderToll,
@@ -212,7 +213,7 @@ function render() {
               }
             : undefined,
           hullLevel: (state.ship.maxHull - 100) / 25,
-          quickGunnery: state.ability === 'gunner',
+          quickGunnery: hasCaptainPerk(state, 'gunner'),
           startingHull: state.ship.hull,
           shipName: 'The Wayfarer',
           onFinish: (outcome, hull, enemyHull) =>
