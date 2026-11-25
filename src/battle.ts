@@ -368,6 +368,23 @@ class SkyBattle extends Phaser.Scene {
 
   private bindControls() {
     const signal = this.listeners.signal
+    let heldForChat = false
+    const holdForChat = (open: boolean) => {
+      if (open) {
+        this.pressed.clear()
+        heldForChat = this.ready && !this.pausedDuel && !this.ended
+        if (heldForChat) this.order('pause')
+      } else if (heldForChat) {
+        heldForChat = false
+        if (this.pausedDuel) this.order('pause')
+      }
+    }
+    document.addEventListener(
+      'skyrates-playtest',
+      (event) => holdForChat((event as CustomEvent<boolean>).detail),
+      { signal },
+    )
+    if (document.querySelector('.playtest-dialog[open]')) holdForChat(true)
     this.root.addEventListener(
       'click',
       (event) => {
