@@ -37,7 +37,7 @@ interface FallingPiece {
 interface Wreck {
   age: number
   pieces: FallingPiece[]
-  sites: { x: number; y: number }[]
+  sites: { x: number; y: number; mist: Phaser.GameObjects.Image }[]
   sunk: Side[]
   button: HTMLButtonElement
   complete: () => void
@@ -175,8 +175,30 @@ export function mountBattleFx(
     wreck = undefined
     done.button.remove()
     done.pieces.forEach((piece) => piece.image.destroy())
+    done.sites.forEach((site) => site.mist.destroy())
     clouds.clear()
     done.complete()
+  }
+
+  function cloudMist(x: number, y: number) {
+    const key = 'wreck-cloud-mist'
+    if (!scene.textures.exists(key)) {
+      const texture = scene.textures.createCanvas(key, 180, 100)!
+      const ctx = texture.context
+      for (let i = 0; i < 12; i++) {
+        const cx = 29 + (i % 7) * 20
+        const cy = 52 + Math.sin(i * 2.3) * 12
+        const r = 22 + (i % 3) * 5
+        const mist = ctx.createRadialGradient(cx - 3, cy - 4, 1, cx, cy, r)
+        mist.addColorStop(0, i % 2 ? 'rgba(221,222,192,.72)' : 'rgba(170,193,183,.8)')
+        mist.addColorStop(0.55, 'rgba(186,199,183,.48)')
+        mist.addColorStop(1, 'rgba(145,174,169,0)')
+        ctx.fillStyle = mist
+        ctx.fillRect(cx - r, cy - r, 2 * r, 2 * r)
+      }
+      texture.refresh()
+    }
+    return scene.add.image(x, y, key).setDepth(7.5).setAlpha(0)
   }
 
   function startWreck(event: { sunk: Side[]; complete: () => void }) {
@@ -186,7 +208,7 @@ export function mountBattleFx(
       return
     }
     const pieces: FallingPiece[] = []
-    const sites: { x: number; y: number }[] = []
+    const sites: Wreck['sites'] = []
     // Use the ship's own painted bow, deck and stern for the falling debris.
     for (const side of event.sunk) {
       const view = views[side],
@@ -194,7 +216,7 @@ export function mountBattleFx(
         key = damagedHull(scene, original[side], 3)
       view.hull.setVisible(false)
       view.shadow.setVisible(false)
-      sites.push({ x: pose.x, y: pose.y })
+      sites.push({ x: pose.x, y: pose.y, mist: cloudMist(pose.x, pose.y) })
       for (let i = 0; i < 3; i++) {
         const piece = scene.add.image(pose.x, pose.y, key).setDepth(6 - i * 0.01)
         const left = Math.floor((piece.width * i) / 3),
@@ -264,14 +286,11 @@ export function mountBattleFx(
             .lineBetween(x, y, x + dx * 6, y + dy * 6 + 2)
         }
       }
-      for (let i = 0; i < 7; i++) {
-        const offset = (i - 3) * 12,
-          spread = reduced ? 1 : 0.55 + fall * 0.85
-        const alpha = reduced ? 0.15 : Math.sin(Math.PI * fall) * 0.52
-        clouds
-          .fillStyle(i % 2 ? 0xb6c8c1 : 0x8ca3a4, alpha)
-          .fillEllipse(site.x + offset * spread, y + Math.sin(i * 2) * 5, 25 + fall * 15, 13 + fall * 16)
-      }
+      const spread = reduced ? 0.65 : 0.38 + 0.68 * fall
+      site.mist
+        .setPosition(site.x, y + 2)
+        .setScale(spread, spread * 0.78)
+        .setAlpha(reduced ? 0.36 : Math.sin(Math.PI * fall) * 0.95)
     }
     if (t >= 1) endWreck()
   }
