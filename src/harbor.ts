@@ -5,8 +5,9 @@ import { CITY_ECONOMY } from './city-economy'
 import type { ContactWriter } from './characters'
 import { icon } from './icons'
 import { mountDockTalk } from './dock-talk'
-import type { HarborWorld } from './voxel/harbor-world'
-import './voxel/harbor.css'
+import { mountIllustratedCharacter } from './illustrated-character'
+import { mountHarborDepth } from './illustrated-harbor'
+import { artwork } from './artwork'
 import { bell, soundEnabled, toggleSound } from './audio'
 import type { InteriorView } from './interiors'
 
@@ -134,9 +135,8 @@ export function mountHarbor(
   const quay = quays[state.port]
   const lit = state.mission === 'lit' && ['sunstep', 'glasshouse'].includes(state.port)
   const weather = portWeather(state.port,state.day)
-  const scenery = 'art/quay-' + state.port + (lit ? '-lit' : '') + '.webp'
+  const scenery = artwork('quay-' + state.port + (lit ? '-lit' : ''))
   main.innerHTML = `<section class="quay" aria-label="${PORTS[state.port].name} harbor">
-    <div class="walk-view"><canvas aria-label="Walkable 3D harbor. Walk with W A S D, drag to look, or tap the paving to walk."></canvas></div>
     <div class="quay-scroll" tabindex="-1"><div class="quay-track"><div class="quay-plate">
       <img class="quay-art" alt="The working docks at ${PORTS[state.port].name}" src="${scenery}" fetchpriority="high">
       ${paintedWeather(weather)}
@@ -149,7 +149,6 @@ export function mountHarbor(
     <div class="field-tools"><button class="chart-tool" type="button" data-go="chart" aria-label="Sky chart"><img src="compass.svg" alt=""><span>Sky chart</span></button>
       <button class="scene-tool journal-tool" type="button" data-go="log" aria-label="Captain’s log" title="Captain’s log">${icon('book-open')}</button></div>
     <button class="discover" type="button" data-tool="labels" aria-pressed="false" title="Toggle place names (H)">${icon('scan-eye')}<span>Show places</span><kbd>H</kbd></button>
-    <div class="walk-help"><span class="walk-instructions">WASD walk · Drag to look · Click paving to walk</span><button data-home type="button" aria-label="Return to the landing" title="Return to the landing (Home)">⌂</button></div>
     <div class="pan-hints"><button type="button" aria-label="Pan left" data-pan="-1">‹</button><button type="button" aria-label="Pan right" data-pan="1">›</button></div>
     <div class="quay-overlay" hidden></div></section>`
   const scene = main.querySelector<HTMLElement>('.quay')!
@@ -160,10 +159,21 @@ export function mountHarbor(
   const plate = scene.querySelector<HTMLElement>('.quay-plate')!
   let returnTo: HTMLElement | null = null
   let scrollFraction = 0.5
+  let verticalFraction = 0.48
+  let verticalPan = false
+  const arrows = Array.from(scene.querySelectorAll<HTMLButtonElement>('[data-pan]'))
   const resize = new ResizeObserver(() => {
-    const excess = track.offsetWidth - scroller.clientWidth
-    scene.classList.toggle('pannable', excess > 70)
+    const excess = Math.max(0, track.offsetWidth - scroller.clientWidth)
+    const extraHeight = Math.max(0, track.offsetHeight - scroller.clientHeight)
+    verticalPan = extraHeight > scroller.clientHeight * 0.5
+    scene.classList.toggle('pannable', verticalPan || excess > Math.max(72, scroller.clientWidth * 0.17))
+    for (const arrow of arrows) {
+      const back = arrow.dataset.pan === '-1'
+      arrow.setAttribute('aria-label', verticalPan ? (back ? 'Pan up' : 'Pan down') : (back ? 'Pan left' : 'Pan right'))
+      arrow.textContent = verticalPan ? (back ? '↑' : '↓') : (back ? '‹' : '›')
+    }
     scroller.scrollLeft = excess * scrollFraction
+    scroller.scrollTop = extraHeight * verticalFraction
   })
   resize.observe(scroller)
   scroller.addEventListener(
@@ -171,26 +181,20 @@ export function mountHarbor(
     () => {
       const excess = track.offsetWidth - scroller.clientWidth
       if (excess > 0) scrollFraction = scroller.scrollLeft / excess
+      const extraHeight = track.offsetHeight - scroller.clientHeight
+      if (extraHeight > 0) verticalFraction = scroller.scrollTop / extraHeight
     },
     { passive: true },
   )
-  let world: HarborWorld | null = null
-  let closed = false
-  if (state.firstWatch !== 'new' || state.day !== 1)
-    void import('./voxel/harbor-world')
-      .then(({ mountWorld }) => {
-        if (closed) return
-        world = mountWorld(scene, state, (place) => {
-          scene.querySelector<HTMLButtonElement>('[data-place="' + place + '"]')?.click()
-        })
-      })
-      .catch(() => {
-        if (!closed) {
-          const help = scene.querySelector<HTMLElement>('.walk-instructions')!
-          scene.classList.add('illustrated-mode')
-          help.textContent = 'Illustrated harbor · 3D rendering unavailable'
-        }
-      })
+  const stopDepth = mountHarborDepth(scene, plate, scroller, state.port, lit, places.map((place) => ({
+    button: plate.querySelector<HTMLButtonElement>(`[data-place="${place}"]`)!,
+    x: quay.zones[place][4],
+    y: quay.zones[place][5],
+  })))
+
+  const stopCharacter = mountIllustratedCharacter(
+    plate, state.port, plate.querySelector<HTMLButtonElement>('[data-place="local"]')!, lit,
+  )
 
   function labelsOn() {
     const show = scene.classList.toggle('show-places')
@@ -259,7 +263,8 @@ export function mountHarbor(
     }
     if (pan)
       scroller.scrollBy({
-        left: Number(pan) * scroller.clientWidth * 0.56,
+        left: verticalPan ? 0 : Number(pan) * scroller.clientWidth * 0.56,
+        top: verticalPan ? Number(pan) * scroller.clientHeight * 0.56 : 0,
         behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
       })
     if ('close' in button.dataset) closePanel()
@@ -276,7 +281,6 @@ export function mountHarbor(
     }
   }
   function keyboard(ev: KeyboardEvent) {
-    if (document.querySelector('dialog[open]')) return
     if (ev.ctrlKey || ev.metaKey || ev.altKey || document.querySelector('dialog[open]')) return
     if (!overlay.hidden) {
       if (ev.key === 'Escape') {
@@ -312,21 +316,22 @@ export function mountHarbor(
   // Tabbing to a person on a narrow display pans the painted scene with its marker.
   plate.addEventListener('focusin', (ev) => {
     if (!(ev.target instanceof HTMLButtonElement) || !ev.target.matches(':focus-visible')) return
-    if (world) {
-      if (ev.target.classList.contains('pin-outside')) world.framePlace(ev.target.dataset.place as Place)
-      return
-    }
     if (!scene.classList.contains('pannable')) return
     const marker = ev.target.querySelector('.place-pin')?.getBoundingClientRect()
-    if (marker && (marker.left < 35 || marker.right > scroller.clientWidth - 35))
-      scroller.scrollBy({ left: marker.left + marker.width / 2 - scroller.clientWidth / 2 })
+    if (!marker) return
+    const dx = marker.left < 35 || marker.right > scroller.clientWidth - 35
+    const dy = marker.top < 35 || marker.bottom > scroller.clientHeight - 35
+    if (dx || dy) scroller.scrollBy({
+      left: dx ? marker.left + marker.width / 2 - scroller.clientWidth / 2 : 0,
+      top: dy ? marker.top + marker.height / 2 - scroller.clientHeight / 2 : 0,
+    })
   })
   scene.addEventListener('click', click)
   document.addEventListener('keydown', keyboard)
   return () => {
     resize.disconnect()
-    closed = true
-    world?.dispose()
+    stopCharacter()
+    stopDepth()
     document.removeEventListener('keydown', keyboard)
     scene.removeEventListener('click', click)
   }

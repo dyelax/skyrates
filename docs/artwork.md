@@ -66,13 +66,13 @@ Four transparent cargo objects and four illustrated interiors generated with Ima
 - [civic-copperfall.webp](../public/art/civic-copperfall.webp) — The Winter Garden inside the belly of a salvaged airship hull in an enormous copper drydock. New shallow-soil pear saplings on tiers for the night shift, amber grow lamps suspended from chain cranes, pool of rainwater, missing glass panes and a work crew planting.
 - [civic-meridian.webp](../public/art/civic-meridian.webp) — The Sounding House observation deck atop a pale green cloud spire. Tall purple and cream weather balloons hanging under staggered masts, wind-swept silk strips, large weather slate kept by paired observers, surveyor's table and transit, icy rose dawn and dramatic open sky.
 
-## The walkable harbors
+## Materials from the walkable harbor prototype
 
-The new 3D harbors use original ImageGen material studies. A panoramic daylight cloud sea in peach, teal, and lilac surrounds the floating terraces. A separate nocturnal study supplies the moon, cloud shadows, and stars after the beacon is rekindled. The sky and the harbor geometry appear in the local reflection probe.
+The original walkable prototype used ImageGen material studies. A panoramic daylight cloud sea in peach, teal, and lilac surrounds the floating terraces. A separate nocturnal study supplies the moon, cloud shadows, and stars after the beacon is rekindled. The sky and the harbor geometry appear in the local reflection probe.
 
 ImageGen produced two orthographic atlases for the four ports. One contains Sunstep’s pear-crested guild doorway, the Furnace Choir’s stained glass, Copperfall’s riveted clock, and Meridian’s brass star dial. Each landmark has a color texture and a corresponding relief texture on its modeled wall. The other contains wisteria-strewn cobbles, the glassworkers’ violet paving, weathered timber slips, and the astronomers’ radial inlay. A separate material study supplies the small-scale pigment of limestone, wood, verdigris, and linen. The props and crews on the docks occupy the same 3D space as the captain.
 
-## Fleet sailcloth
+## Fleet sailcloth study
 
 ImageGen painted a square, four-panel cloth study with the Wayfarer’s ivory sunburst on teal, the raiders’ vermilion chevron, the Harbor Watch’s indigo diagonal and an amber solar weave. Its pigment and stitching wrap over curved sail geometry that reefs and flexes during battle. The hulls and deck fittings use the harbor’s ImageGen timber and patinated metal. [Fleet sailcloth](../public/art/fleet-sailcloth.webp)
 
@@ -81,3 +81,9 @@ ImageGen painted a square, four-panel cloth study with the Wayfarer’s ivory su
 Sixteen ImageGen cabinet studies give each market, public office, shipyard and local institution its own close-range display. They depict the local job from the front so the painted shelves, tools and samples sit inside modeled cabinet joinery. Sunstep’s weighing room holds fruit and folded scions. Glasshouse shows annealing registers and lens stock. Copperfall presents reclaimed parts and winter seedlings. Meridian’s cabinets carry silk, weather drums and brass instruments.
 
 A separate ImageGen sheet supplies sixteen front-facing character materials in the four cities. Facial pigment follows the brow, cheek and nose geometry on the animated head. The same worker uses the same face on the quay and indoors.
+
+## Painted harbors and workshops
+
+The four original ports and the two relit quays supply the camera view. Small depth masks follow the architecture, sails, foliage and foreground. Each named dockside speaker has hand-registered ImageGen profile, three-quarter and facing poses. The two relit quays have their own exposure-matched strips. The silent working pose is part of the original plate.
+
+ImageGen supplied eight new market and shipyard paintings and Pilot Sen’s office. Together with the established office and civic art these give all sixteen rooms their own stage. Service points use coordinates on the same painting as the camera. The navy and ivory [Harbor Watch cutter](../public/art/watch-top.webp) joins the original overhead Wayfarer, Cinder Wasp and deckhand sprites in combat.

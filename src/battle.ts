@@ -1,5 +1,4 @@
 import Phaser from 'phaser'
-import { FLEET_TEXTURES, VoxelFleet, type FleetPose } from './fleet/fleet-gl'
 import { CloudDeck } from './cloud-deck'
 import type { WeatherReport } from './weather'
 import { paintedWeather } from './scene-weather'
@@ -194,8 +193,6 @@ class SkyBattle extends Phaser.Scene {
   private foe: Vessel
   private playerView!: ShipView
   private foeView!: ShipView
-  private fleet?: VoxelFleet
-  private voxelShips = false
   private area: FlightArea
   private veil!: Phaser.GameObjects.Rectangle
   private sky!: CloudDeck
@@ -262,9 +259,8 @@ class SkyBattle extends Phaser.Scene {
     for (const [name, file] of [
       ['sea', 'cloud-sea'],
       ['schooner', 'schooner-top'],
-      ['raider', 'raider-top'],
+      ['opponent', this.drill ? 'watch-top' : 'raider-top'],
       ['hand', 'deckhand'],
-      ...FLEET_TEXTURES,
     ]) {
       this.load.image(name, new URL(`art/${file}.webp`, document.baseURI).href)
     }
@@ -272,7 +268,7 @@ class SkyBattle extends Phaser.Scene {
 
   create() {
     if (!this.root.isConnected || this.ended) return
-    for (const key of ['sea', 'schooner', 'raider', 'hand']) {
+    for (const key of ['sea', 'schooner', 'opponent', 'hand']) {
       if (!this.textures.exists(key)) {
         this.tell('The lookout lost sight of the raider. Break away to resume your voyage.', Infinity)
         this.bindControls()
@@ -287,18 +283,10 @@ class SkyBattle extends Phaser.Scene {
       .setDepth(1)
     this.paths = this.add.graphics().setDepth(2)
     this.playerView = this.makeShip('schooner', 114)
-    this.foeView = this.makeShip('raider', 110)
-    if (VoxelFleet.supported(this)) {
-      this.fleet = new VoxelFleet(this, this.fleetPose(), this.drill ? 'watch' : 'wasp', (active) => {
-        this.voxelShips = active
-        this.root.dataset.shipRenderer = active ? 'voxel' : 'illustrated'
-        for (const view of [this.playerView, this.foeView]) {
-          view.hull.setVisible(!active)
-          view.shadow.setVisible(!active)
-        }
-        this.grapple?.crew.forEach((hand) => hand.setVisible(!active))
-      })
-    } else this.root.dataset.shipRenderer = 'illustrated'
+    this.foeView = this.makeShip('opponent', 110)
+    this.root.dataset.shipRenderer = 'illustrated'
+    this.updateShipView(this.playerView, this.player, 0)
+    this.updateShipView(this.foeView, this.foe, 1.75)
     this.overlays = this.add.graphics().setDepth(7)
     this.ready = true
     this.bindControls()
@@ -376,8 +364,6 @@ class SkyBattle extends Phaser.Scene {
   }
 
   disconnect() {
-    this.fleet?.destroy()
-    this.fleet = undefined
     this.listeners.abort()
     this.pressed.clear()
     this.ended = true
@@ -562,17 +548,6 @@ class SkyBattle extends Phaser.Scene {
     this.banner.textContent = message
     this.banner.classList.add('visible')
     this.bannerTTL = seconds
-  }
-
-  private fleetPose(): FleetPose {
-    return {
-      time: this.clock,
-      player: this.player,
-      foe: this.foe,
-      boardSeconds: this.grapple?.elapsed ?? 0,
-      hands: this.grapple?.crew ?? [],
-      weather: this.drill ? 0 : this.opts.weather.severity,
-    }
   }
 
   private makeShip(key: string, length: number): ShipView {
@@ -849,7 +824,6 @@ class SkyBattle extends Phaser.Scene {
       const hand = this.add
         .image(i < visibleCrew ? a.x : b.x, i < visibleCrew ? a.y : b.y, 'hand')
         .setDisplaySize(9.5, 9.5)
-        .setVisible(!this.voxelShips)
         .setDepth(8)
       if (i >= visibleCrew) hand.setTint(0xff9680)
       crew.push(hand)
@@ -1171,11 +1145,8 @@ class SkyBattle extends Phaser.Scene {
     for (const [i, ship] of [this.player, this.foe].entries()) {
       this.chartLabels[i].setPosition(ship.x, ship.y - 52).setVisible(!this.grapple)
     }
-    if (this.voxelShips) this.fleet?.setPose(this.fleetPose())
-    else {
-      this.updateShipView(this.playerView, this.player, 0)
-      this.updateShipView(this.foeView, this.foe, 1.75)
-    }
+    this.updateShipView(this.playerView, this.player, 0)
+    this.updateShipView(this.foeView, this.foe, 1.75)
     this.effects(dt)
     this.hudIn -= dt
     if (this.hudIn <= 0) {
