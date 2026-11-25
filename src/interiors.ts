@@ -2,6 +2,8 @@ import { seasonalPosting } from './seasonal-trade'
 import { openHandbook } from './handbook'
 import { routeWeather, seasonAt, CLIMATES } from './weather'
 import { openPrologue } from './prologue'
+import { voyageWeather } from './weather'
+import { paintedWeather } from './scene-weather'
 import './interiors.css'
 import { CITY_ECONOMY, nextPosting, RARITY } from './city-economy'
 import { chartObjectives } from './objectives'
@@ -408,6 +410,7 @@ function voyage(state: GameState, ui: Controls) {
   const leg = state.voyage
   if (!leg)
     return heading(PORTS[state.port].name, 'Moored in port') + ui.button('Return to harbor', () => ui.go('harbor'))
+  const weather = voyageWeather(state)
   let title = 'On passage'
   let line = 'The last mooring line falls away.'
   let copy = 'Your solar sails draw taut. The chart table is lashed down and the lookout is at the rail.'
@@ -439,8 +442,8 @@ function voyage(state: GameState, ui: Controls) {
       : leg.phase === 'raider' || leg.phase === 'battle'
         ? 'raider-encounter'
         : 'passage'
-  return `<div class="sk-voyage"><div class="sk-scene"><img src="${artwork(picture)}" alt="">
-    <header><div class="sk-kicker">En route</div><h1>${title}</h1></header></div>
+  return `<div class="sk-voyage"><div class="sk-scene"><img src="${artwork(picture)}" alt="">${paintedWeather(weather)}
+    <header><div class="sk-kicker">En route</div><h1>${title}</h1><p class="weather-bearing">${weather.summary} · ${weather.bearing} ${weather.knots} kn</p></header></div>
     <article class="sk-card sk-voyage-brief"><div class="sk-voyage-story"><div class="sk-leg"><span>${PORTS[leg.from].name}</span><i class="sk-path" aria-hidden="true"></i><span>${PORTS[leg.to].name}</span></div>
     <blockquote class="sk-quote">${line}</blockquote><p>${copy}</p></div><div class="sk-actions">${buttons}</div></article></div>`
 }

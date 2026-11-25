@@ -1,9 +1,13 @@
 import Phaser from 'phaser'
 import { CloudDeck } from './cloud-deck'
+import type { WeatherReport } from './weather'
+import { paintedWeather } from './scene-weather'
 import {
   SKY,
   GUN_ARC,
   SHOT_SPEED,
+  STILL_AIR,
+  moveShot,
   angleBetween,
   boardingContact,
   boardingOdds,
@@ -37,6 +41,7 @@ export interface BattleOptions {
   skill: number
   gunLevel: number
   cannons: number
+  weather: WeatherReport
   drill?: { stage: DrillStage; onCheckpoint: (stage: DrillStage) => void; onLeave: (skip: boolean) => void }
   hullLevel: number
   startingHull?: number
@@ -123,9 +128,14 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
   const cannons = options.drill ? 1 : options.cannons
   root.classList.toggle('single-battery', cannons === 1)
   root.setAttribute('aria-label', 'Airship battle')
+  const weather = options.weather
+  const windAngle = (Math.atan2(weather.wind.y, weather.wind.x) * 180) / Math.PI
+  const windStation = options.drill
+    ? ''
+    : `<figure class="duel-wind"><div class="duel-anemoscope" aria-hidden="true"><i style="transform:rotate(${windAngle}deg)">➜</i></div><figcaption><strong>${weather.knots} kn · ${weather.bearing}</strong><span>${weather.kind} · ${weather.season}</span></figcaption><button data-action="windage" aria-pressed="false" title="Aim upwind to counter shot drift (V)"><kbd>V</kbd> Wind sight</button></figure>`
   root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause"><kbd>P</kbd> Pause</button></div>
     <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : ENEMY_NAME, 'enemy')}</div>
-    <div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div><div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
+    ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div>${options.drill ? '' : paintedWeather(weather)}<div class="duel-banner visible" aria-live="polite">Taking the helm…</div></div>
     <div class="duel-console">${battery('port', cannons)}${battery('starboard', cannons)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Set an intercept course to board on contact"><kbd>B</kbd> Ram</button><button type="button" data-action="escape"><kbd>R</kbd> Break away</button></div></div></div>
     <div class="duel-foot"><span>${options.drill ? 'Watch exercise · Chalk rounds' : '<kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Click raider to fire · Ram to board'}</span><span data-read="crew"></span></div>`
   if (options.drill) {
@@ -197,6 +207,8 @@ class SkyBattle extends Phaser.Scene {
   private bannerTTL = 3
   private pressed = new Set<string>()
   private course?: Point
+  private sightSet = false
+  private wind: Point
   private escaping = false
   private ramming = false
   private pausedDuel = false
@@ -214,6 +226,7 @@ class SkyBattle extends Phaser.Scene {
     this.root = root
     this.opts = options
     this.drill = options.drill?.stage
+    this.wind = options.drill ? STILL_AIR : options.weather.wind
     this.area = area
     const flightHeight = area.bottom - area.top
     this.player = buildShip(
@@ -323,7 +336,7 @@ class SkyBattle extends Phaser.Scene {
     if (this.drill) {
       this.drawCoach()
       if (this.drill === 'melee') this.beginBoarding()
-    } else this.tell('Cream sails are yours. The fan shows your gun’s firing arc.', 4.5)
+    } else this.tell('Wind carries both ships and shots. Set the wind sight (V) for a long shot.', 6)
     this.syncHUD()
   }
 
@@ -364,6 +377,7 @@ class SkyBattle extends Phaser.Scene {
       { signal },
     )
     const keyActions: Record<string, string> = {
+      v: 'windage',
       w: 'faster',
       arrowup: 'faster',
       s: 'slower',
@@ -452,6 +466,16 @@ class SkyBattle extends Phaser.Scene {
         this.pausedDuel ? Infinity : 1.1,
       )
     } else if (!this.pausedDuel && !this.grapple) {
+      if (action === 'windage' && !this.drill) {
+        this.sightSet = !this.sightSet
+        this.buttons.windage.setAttribute('aria-pressed', String(this.sightSet))
+        this.tell(
+          this.sightSet
+            ? 'Sight set. The gunners allow for wind drift.'
+            : 'Open sights. Rounds will drift downwind.',
+          2.8,
+        )
+      }
       if (action === 'faster') this.player.throttle = Math.min(3, this.player.throttle + 1)
       if (action === 'slower') {
         this.ramming = false
@@ -548,7 +572,14 @@ class SkyBattle extends Phaser.Scene {
   }
 
   private shoot(ship: Vessel, gun: Gun, target: Point, tier: number, enemy: boolean): boolean {
-    const shot = discharge(ship, gun, target, tier, enemy ? Phaser.Math.FloatBetween(-0.065, 0.065) : 0)
+    const shot = discharge(
+      ship,
+      gun,
+      target,
+      tier,
+      enemy ? Phaser.Math.FloatBetween(-0.065, 0.065) : 0,
+      enemy || this.sightSet ? this.wind : STILL_AIR,
+    )
     if (!shot) return false
     if (enemy) shot.damage = 8
     this.shots.push({ ...shot, enemy })
@@ -608,6 +639,7 @@ class SkyBattle extends Phaser.Scene {
       el.classList.toggle('bearing', this.ready && inArc(this.player, side, this.foe))
     }
     const helmLocked = locked || (!!this.drill && !['dodge', 'fire', 'board'].includes(this.drill))
+    if (this.buttons.windage) this.buttons.windage.disabled = locked
     this.buttons.faster.disabled = helmLocked || this.player.throttle >= 3
     this.buttons.slower.disabled = helmLocked || this.player.throttle <= 0
     if (this.drill) {
@@ -748,7 +780,7 @@ class SkyBattle extends Phaser.Scene {
       desired = angleBetween(enemy, { x: this.area.width / 2, y: this.area.height / 2 })
     }
     enemy.throttle = range > 330 || this.escaping ? 2 : 1
-    moveShip(enemy, clamp(wrapAngle(desired - enemy.heading) * 1.7, -1, 1), dt)
+    moveShip(enemy, clamp(wrapAngle(desired - enemy.heading) * 1.7, -1, 1), dt, this.wind)
     enemy.x = clamp(enemy.x, 30, this.area.width - 30)
     enemy.y = clamp(enemy.y, this.area.top + 20, this.area.bottom - 20)
     this.aiDelay -= dt
@@ -1016,7 +1048,7 @@ class SkyBattle extends Phaser.Scene {
     this.clock += dt
     this.bannerTTL -= dt
     if (this.bannerTTL <= 0) this.banner.classList.remove('visible')
-    this.sky.update(dt, this.player, this.foe)
+    this.sky.update(dt, this.player, this.foe, this.wind, this.drill ? 0 : this.opts.weather.severity)
     this.paths.clear()
     if (this.grapple) this.boardingTick(dt)
     else {
@@ -1038,7 +1070,7 @@ class SkyBattle extends Phaser.Scene {
           if (this.drill === 'dodge') this.player.throttle = Math.abs(turn) > 1.15 ? 0 : distance < 52 ? 1 : 2
         }
       }
-      if (this.drill !== 'briefing' && this.drill !== 'debrief') moveShip(this.player, helm, dt)
+      if (this.drill !== 'briefing' && this.drill !== 'debrief') moveShip(this.player, helm, dt, this.wind)
       if (this.drill) this.exerciseHelm(dt)
       else this.enemyHelm(dt)
       const p = this.player
@@ -1057,9 +1089,7 @@ class SkyBattle extends Phaser.Scene {
         : clamp(p.y, this.area.top + 22, this.area.bottom - 22)
       for (let i = this.shots.length - 1; i >= 0; i--) {
         const s = this.shots[i]
-        s.x += s.vx * dt
-        s.y += s.vy * dt
-        s.lifetime -= dt
+        moveShot(s, dt, this.wind)
         const target = s.enemy ? p : this.foe
         if (hitsShip(s, target)) {
           this.shots.splice(i, 1)

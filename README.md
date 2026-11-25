@@ -23,8 +23,11 @@ On your first departure from Sunstep, the Harbor Watch runs a chalk-round exerci
 | Fire a single cannon | 1–4, click its station, or click the raider to fire an available gun |
 | Port or starboard broadside | Q / E |
 | Set an intercept for boarding | B |
+| Set the wind sight | V or click the wind gauge |
 | Break away | R |
 | Pause | P |
+
+The arrow on the wind gauge points downwind. Watch your heading as the wind carries the hull sideways. Rounds curve downwind in flight. Set the wind sight to allow for drift on long shots. The Harbor Watch runs its exercise in sheltered air.
 
 Each cannon refit adds a gun until all four stations are filled. A side with two fitted guns gains a broadside order. Each cannon reloads separately. Turning brings a fresh battery to bear. Contact brings the crews together, and crew size, experience, and hull condition influence the outcome. Captains can also slip past a raider before engaging.
 
