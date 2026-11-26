@@ -1,4 +1,4 @@
-export const ESCORT_HULL = 74
+export const ESCORT_HULL = 40
 export const ESCORT_LEGS = 2
 
 export function escortStep(

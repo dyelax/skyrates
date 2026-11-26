@@ -14,7 +14,7 @@ Open the sky chart with **M** or the compass. Select an island for passage time,
 
 ## In a fight
 
-On your first departure from Sunstep, the Harbor Watch runs a chalk-round exercise. Dodge a marked shot, fire your single port cannon, then make rail contact, push off, and return for the Watch’s surrender. The exercise saves at each lesson. You can skip it or practice again at a shipyard.
+On your first departure from Sunstep, the Harbor Watch runs a chalk-round exercise. Dodge a signaled chalk shot, fire your single port cannon, then make rail contact, push off, and return for the Watch’s surrender. The exercise saves at each lesson. You can skip it or practice again at a shipyard.
 
 | Order | Control |
 | --- | --- |
@@ -26,7 +26,7 @@ On your first departure from Sunstep, the Harbor Watch runs a chalk-round exerci
 | Break away | R |
 | Pause | P |
 
-The schooner can pivot while hove to. At full ahead it banks through a wider arc and takes a moment to straighten after you release the helm. Each cannon fires at a right angle to its rail. Its short dotted line shows the direction the round leaves the ship. Turn the hull to line up a shot or fire into open sky. Wind carries the hull sideways and curves rounds downwind after they leave the gun. The arrow on the wind gauge points downwind. The Harbor Watch runs its exercise in sheltered air.
+The schooner can pivot while hove to. At full ahead it banks through a wider arc and takes a moment to straighten after you release the helm. Each cannon fires at a right angle to its rail. Turn the hull to line up a shot or fire into open sky. Wind carries the hull sideways and curves rounds downwind after they leave the gun. The arrow on the wind gauge points downwind. The Harbor Watch runs its exercise in sheltered air.
 
 Each cannon refit adds a gun until all six stations are filled. The two rails reload independently, one gun at a time on each rail. Firing a rail releases every loaded gun on that side. On the battle test’s starting gunship, you can fire early at 1/3 or 2/3 ready, or hold for all three rounds. Firing early preserves progress on the next gun.
 

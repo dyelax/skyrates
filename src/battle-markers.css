@@ -96,3 +96,6 @@
 @media (max-width: 540px) {
   .duel-markers .ship-marker { font-size: 12px; }
 }
+
+.air-duel .ship-warning { color: #ffe1a7; font: 600 10px/13px Barlow, sans-serif; text-shadow: 0 1px 3px #342b20; }
+.air-duel .ship-warning[hidden] { display: none; }

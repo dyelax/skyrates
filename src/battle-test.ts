@@ -126,7 +126,7 @@ function showDesk(result?: TrialEnd, error = '') {
   desk.innerHTML = `<section class="test-desk">
     <header><span class="brand"><img src="compass.svg" alt="">Skyrates</span><a href="./">Return to campaign</a></header>
     <div class="desk-sheet"><div class="desk-title"><p>${result ? scenario.name + ' result' : 'Harbor Watch'}</p><h1>${result ? resultHeading(result) : 'Battle test'}</h1>
-    ${result ? '' : '<p class="intro">Choose two ships and take the helm. Practice battles leave your campaign save untouched.</p>'}</div>
+    ${result ? '' : '<p class="intro">Choose a ship and a scenario. Practice battles leave your campaign save untouched.</p>'}</div>
     <div class="matchup">${shipCard(true)}${result?.protection ? protectedShipCard(result.protection) : !result || scenario.id === 'duel' ? shipCard(false) : ''}</div>
     <footer><div class="conditions">${result ? '' : `<div class="condition-fields">
       <label>Scenario<select id="trial-scenario">${options(scenarios.map(s => s.name),scenarioIndex)}</select></label>

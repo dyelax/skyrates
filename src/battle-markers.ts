@@ -9,6 +9,8 @@ export interface TrialMarkerState {
   ship: Vessel
   name: 'Wing raider' | 'Struck prize' | 'Merchant'
   crew?: { current: number; max: number }
+  underFire?: boolean
+  leg?: number
   leadSurrendered?: boolean
   leadName?: string
   exit?: Point
@@ -267,14 +269,23 @@ export class BattleMarkers {
     this.third ??= shipMarker(this.layer, this.lines, 'third', trial.name)
     const marker = this.third
     marker.tag.hidden = false
-    if (marker.name.textContent !== trial.name) {
-      marker.name.textContent = trial.name
-      marker.tag.setAttribute('aria-label', trial.name)
+    const title = trial.name + (trial.leg ? ' · Leg ' + Math.min(2, trial.leg) + '/2' : '')
+    const status = trial.underFire ? 'Under fire' : ''
+    if (marker.name.textContent !== title) marker.name.textContent = title
+    let warning = marker.tag.querySelector<HTMLElement>('.ship-warning')
+    if (status && !warning) {
+      warning = document.createElement('span')
+      warning.className = 'ship-warning'
+      warning.textContent = 'Under fire'
+      marker.name.after(warning)
     }
+    if (warning) warning.hidden = !status
+    const accessible = status ? title + ', under fire' : title
+    if (marker.tag.getAttribute('aria-label') !== accessible) marker.tag.setAttribute('aria-label', accessible)
     marker.crew.row.hidden = !trial.crew
     setMeter(marker.hull, trial.ship.hull, trial.ship.maxHull)
     if (trial.crew) setMeter(marker.crew, trial.crew.current, trial.crew.max)
-    const box = placeThirdMarker(thirdHull, [...panels, ...bounds, ...labels], this.size, {w: this.tagWidth, h: trial.crew ? 47 : 33})
+    const box = placeThirdMarker(thirdHull, [...panels, ...bounds, ...labels], this.size, {w: this.tagWidth, h: (trial.crew ? 47 : 33) + (trial.underFire ? 13 : 0)})
     marker.tag.style.transform = `translate(${box.x}px,${box.y}px)`
     marker.leader.setAttribute('d', leaderPath(box, thirdHull.x + thirdHull.w / 2, thirdHull.y + thirdHull.h / 2, trial.ship.heading, scale))
   }
