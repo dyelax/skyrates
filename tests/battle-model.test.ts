@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  armedSide, buildOpponent, buildShip, discharge, hitsShip,
+  armedSide, buildOpponent, buildShip, fireBroadside, hitsShip,
   gunBearsOn, moveShip, moveShot, steerRaider, STILL_AIR, WATCH_CUTTER, type Shot,
 } from '../src/battle-model'
 import { RAIDER_PROFILES } from '../src/raiders'
@@ -50,7 +50,7 @@ test('the one-gun scout can bring its port gun to bear and hit a stationary hull
     for (let tick = 0; tick < 8 / dt && !hit; tick++) {
       steerRaider(scout, player, area, false, dt, STILL_AIR)
       if (!shot && tick * dt >= 3.5 && gunBearsOn(scout, gun, player))
-        shot = discharge(scout, gun, 0)
+        shot = fireBroadside(scout, gun.side, 0)[0] ?? null
       if (shot && shot.lifetime > 0) {
         moveShot(shot, dt)
         hit = hitsShip(shot, player)

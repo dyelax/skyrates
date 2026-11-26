@@ -7,15 +7,18 @@ export function nextStage(stage: DrillStage): DrillStage | undefined {
   return DRILL_STAGES[DRILL_STAGES.indexOf(stage) + 1]
 }
 
-export const GUN_POSITIONS: { side: Side; station: number; key: number }[] = [
-  { side: 'port', station: 0, key: 1 },
-  { side: 'starboard', station: 0, key: 3 },
-  { side: 'port', station: 1, key: 2 },
-  { side: 'starboard', station: 1, key: 4 },
+export const GUN_POSITIONS: { side: Side; station: number }[] = [
+  { side: 'port', station: 0 },
+  { side: 'starboard', station: 0 },
+  { side: 'port', station: 1 },
+  { side: 'starboard', station: 1 },
+  { side: 'port', station: 2 },
+  { side: 'starboard', station: 2 },
 ]
 
-export function gunKey(gun: { side: Side; station: number }): number {
-  return (gun.side === 'port' ? 1 : 3) + gun.station
+const STATION_OFFSET = [11, -12, 0] as const
+export function stationOffset(station: number): number {
+  return STATION_OFFSET[station]
 }
 
 export interface ChalkRun {
@@ -67,7 +70,7 @@ export const COACH: Record<DrillStage, { chapter: string; title: string; text: s
   fire: {
     chapter: '02 / 03 · Gunnery',
     title: 'Bring your port cannon to bear',
-    text: 'Your cannon fires straight out from the left rail. Turn with A / D, tap open sky, or choose Line up port gun. When the dotted line crosses the cutter, choose Fire port gun or press 1.',
+    text: 'Your cannon fires straight out from the left rail. Turn with A / D, tap open sky, or choose Line up port gun. When the dotted line crosses the cutter, press Q or tap Port to fire. On a larger ship, that order fires every loaded gun on the rail.',
   },
   board: {
     chapter: '03 / 03 · Close action',

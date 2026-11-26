@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { act, CAMPAIGN_RESULTS, checkpointBattle, initialState, loadGame, prizeManifest, raiderToll, skipperTerms, canLearnPerk, captainPoints, hasCaptainPerk, qualifiedMate, handLevel, priceAt, type Preparation, type SailorId, type PortId, type GameState } from '../src/model'
-import { buildOpponent, buildShip } from '../src/battle-model'
+import { buildOpponent, buildShip, fireBroadside, moveShip } from '../src/battle-model'
 import type { BattleEnding, BattleSnapshot } from '../src/battle-state'
 
 const reload = (state:unknown) => loadGame({getItem:() => JSON.stringify(state)})
@@ -33,6 +33,27 @@ function checkpoint(s:GameState, ending:BattleEnding | null): BattleSnapshot {
     contact:{armed:false,clearSeconds:0.2},projectiles:[],aiDelay:1,course:null,intercepting:false,escaping:false,
     windSight:true,terminal:ending }
 }
+test('an active six-gun reload queue and old four-gun independent timers round-trip through campaign storage', () => {
+  const battle = toBattle(departure())
+  for (const count of [4, 6]) {
+    const snapshot = checkpoint(battle, null)
+    snapshot.player = buildShip({ x: 150, y: 150 }, 0, 5, 0, 64, false, count)
+    if (count === 4) {
+      snapshot.player.guns[0].cooldown = 0.6
+      snapshot.player.guns[2].cooldown = 0.6
+    } else {
+      fireBroadside(snapshot.player, 'port', 5)
+      moveShip(snapshot.player, 0, 1.2)
+      assert.equal(fireBroadside(snapshot.player, 'port', 5).length, 1)
+    }
+    const db = reload(checkpointBattle(battle, battle.voyage!.id, snapshot))
+    const restored = db.voyage?.battle?.player
+    assert.deepEqual(restored, snapshot.player)
+    moveShip(restored!, 0, 0.8)
+    assert.equal(fireBroadside(restored!, 'port', 5).length, count === 4 ? 2 : 1)
+  }
+})
+
 function finish(s:GameState, ending:BattleEnding) {
   const id=s.voyage!.id
   const saved=checkpointBattle(s,id,checkpoint(s,ending))

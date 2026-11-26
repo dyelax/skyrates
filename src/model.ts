@@ -6,7 +6,7 @@ export * from './prize-command'
 import { RAIDER_PROFILES, appraise, legacyPirateSeed, legacyPirateTerms, raiderToll, rollPirate, tollSettlementLabel, validPirateTerms, type PirateTerms, type TollSettlement } from './raiders'
 export * from './raiders'
 import { seasonalAdjustment } from './seasonal-trade'
-import { DRILL_STAGES, nextStage, type DrillStage } from './drill'
+import { DRILL_STAGES, GUN_POSITIONS, nextStage, type DrillStage } from './drill'
 import {
   ABILITY_IDS,
   BEACON_COMMISSION,
@@ -325,18 +325,14 @@ function shipOffer(state: GameState, upgrade: UpgradeId): UpgradeOffer {
       }
     case 'guns':
       return {
-        name: ship.cannons < 4 ? 'Fit another cannon' : 'Cannon refit',
-        description:
-          ship.cannons < 4
-            ? [
-                '',
-                'Add a starboard bow gun.',
-                'Fit a second port gun for a broadside.',
-                'Fit a second starboard gun for a broadside.',
-              ][ship.cannons]
-            : 'Improve power and reload speed on all four guns.',
+        name: ship.cannons < GUN_POSITIONS.length ? 'Fit another cannon' : 'Cannon refit',
+        description: [
+          '', 'Add a starboard bow gun.', 'Fit a second port gun for a broadside.',
+          'Fit a second starboard gun for a broadside.', 'Fit a third port gun amidships.',
+          'Fit a third starboard gun amidships.', 'Improve power and reload speed on all six guns.',
+        ][ship.cannons],
         cost: 70 + 40 * ship.guns,
-        available: ship.guns < 3,
+        available: ship.cannons < GUN_POSITIONS.length || ship.guns < GUN_POSITIONS.length - 1,
       }
     case 'crew':
       return {
@@ -898,7 +894,7 @@ function applyDockCommand(state: GameState, action: Command): boolean {
           break
         case 'guns':
           ship.guns += 1
-          ship.cannons = Math.min(4, ship.cannons + 1)
+          ship.cannons = Math.min(GUN_POSITIONS.length, ship.cannons + 1)
           break
         case 'crew':
           ship.crew += 2
@@ -1033,7 +1029,7 @@ function validShip(value: unknown): value is Ship {
     integer(value.maxHull, value.hull) &&
     integer(value.guns) &&
     integer(value.cannons, 1) &&
-    value.cannons <= 4 &&
+    value.cannons <= GUN_POSITIONS.length &&
     integer(value.crew, 1) &&
     integer(value.veterans) &&
     value.veterans <= value.crew

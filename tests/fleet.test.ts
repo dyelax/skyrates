@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { GUN_POSITIONS } from '../src/drill'
+import { GUN_POSITIONS, stationOffset } from '../src/drill'
 import { buildAirframe, buildGangway, buildHand, FLOATS_PER_VERTEX } from '../src/fleet/airframes'
 
 function values(mesh: Float32Array, field: number) {
@@ -8,16 +8,16 @@ function values(mesh: Float32Array, field: number) {
 }
 
 test('fitted deck guns use the same side, station and muzzle as the flight model', () => {
-  for (let count = 1; count <= 4; count++) {
+  for (let count = 1; count <= GUN_POSITIONS.length; count++) {
     const fitted = GUN_POSITIONS.slice(0, count)
     const hull = buildAirframe('wayfarer', fitted)
     const motion = values(hull, 12)
     for (const [index, gun] of GUN_POSITIONS.entries()) {
-      const joint = 3 + gun.station * 2 + (gun.side === 'port' ? 0 : 1)
+      const joint = (gun.station === 2 ? 11 : 3 + gun.station * 2) + (gun.side === 'port' ? 0 : 1)
       assert.equal(motion.has(joint), index < count)
       for (let i = 0; i < hull.length; i += FLOATS_PER_VERTEX) {
         if (hull[i + 12] !== joint) continue
-        assert.equal(hull[i + 13], gun.station === 0 ? 11 : -12)
+        assert.equal(hull[i + 13], stationOffset(gun.station))
         assert.equal(Math.sign(hull[i + 15]), gun.side === 'port' ? -1 : 1)
       }
     }
