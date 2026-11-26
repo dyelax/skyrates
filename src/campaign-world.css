@@ -1,4 +1,5 @@
 .campaign-sky { position: fixed; inset: 0; }
+.campaign-sky[inert] :is(.flight-actions, .flight-context, .flight-port-battery) { visibility: hidden; }
 .campaign-surface { position: fixed; z-index: 4; right: max(1rem, env(safe-area-inset-right)); top: max(1rem, env(safe-area-inset-top)); width: min(32rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; overscroll-behavior: contain; border-radius: .7rem; background: #14232bf5; color: #ece4d3; box-shadow: 0 8px 36px #101b2670; }
 .campaign-surface[hidden], .campaign-sky[hidden] { display: none; }
 .campaign-surface:has(.context-ledger) { padding: 1rem; }
