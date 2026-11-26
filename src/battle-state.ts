@@ -1,3 +1,4 @@
+import { GUN_POSITIONS } from './drill'
 import type { Point, Shot, Vessel } from './battle-model'
 
 export const BATTLE_ENDINGS = ['victory', 'defeat', 'escaped', 'boarded', 'yielded', 'withdrawn', 'mutualWreck'] as const
@@ -34,9 +35,9 @@ function vessel(v: unknown): boolean {
   return record(v) && point(v) && [v.vx, v.vy, v.heading, v.angularSpeed, v.heel].every(finite)
     && nonnegative(v.hull) && finite(v.maxHull) && v.maxHull > 0 && v.hull <= v.maxHull
     && nonnegative(v.throttle) && Number.isInteger(v.throttle) && v.throttle <= 3
-    && Array.isArray(v.guns) && v.guns.length >= 1 && v.guns.length <= 4
+    && Array.isArray(v.guns) && v.guns.length >= 1 && v.guns.length <= GUN_POSITIONS.length
     && v.guns.every(g => record(g) && (g.side === 'port' || g.side === 'starboard')
-      && (g.station === 0 || g.station === 1) && nonnegative(g.cooldown) && finite(g.reload) && g.reload > 0)
+      && (g.station === 0 || g.station === 1 || g.station === 2) && nonnegative(g.cooldown) && finite(g.reload) && g.reload > 0)
 }
 
 export function validBattleSnapshot(v: unknown): v is BattleSnapshot {

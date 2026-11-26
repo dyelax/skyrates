@@ -37,6 +37,7 @@ body { margin: 0; }
 .ship-card dd { margin: 2px 0 0; font-size: 22px; font-variant-numeric: tabular-nums; }
 .ship-card .battery { grid-column: 1/-1; }
 .ship-card .battery dd { font-size: 16px; }
+.ship-card .battery-tip { margin: 5px 0 0; color: #cbd4c6; font-size: 14px; }
 .desk-sheet footer { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 18px 0; }
 .conditions, .sound { color: #c8d0c1; font-size: 14px; }
 .conditions { display: grid; gap: 6px; }

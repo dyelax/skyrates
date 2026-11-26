@@ -20,15 +20,17 @@ On your first departure from Sunstep, the Harbor Watch runs a chalk-round exerci
 | --- | --- |
 | Turn | A / D or left / right arrows. Click open sky to steer toward it. |
 | Change throttle | W / S or up / down arrows |
-| Fire a single cannon | 1–4 or tap a gun. Tapping the raider fires one ready gun on its side of your ship. |
-| Port or starboard broadside | Q / E |
+| Fire the port or starboard rail | Tap its button or press Q / E. The 1 and 2 keys also fire port. The 3 and 4 keys fire starboard. |
+| Fire the rail facing the raider | Tap the raider or press Space. |
 | Close in, or push off if the hulls touch | B |
 | Break away | R |
 | Pause | P |
 
 The schooner can pivot while hove to. At full ahead it banks through a wider arc and takes a moment to straighten after you release the helm. Each cannon fires at a right angle to its rail. Its short dotted line shows the direction the round leaves the ship. Turn the hull to line up a shot or fire into open sky. Wind carries the hull sideways and curves rounds downwind after they leave the gun. The arrow on the wind gauge points downwind. The Harbor Watch runs its exercise in sheltered air.
 
-Each cannon refit adds a gun until all four stations are filled. A side with two fitted guns gains a broadside order. Each cannon reloads separately. Turning brings a fresh battery to bear. An impact costs hull on both ships. A bow striking a rail squarely inflicts more damage on the rail. Close gently to keep a prize afloat. The boarding parties exchange blows at the touching rails while both crew bars fall. Steer clear or push off to disengage. Both crew bars retain their remaining strength. Crew size, veterans and leadership increase the strength you bring to the fight. An enemy with zero crew strength and a surviving hull strikes colors.
+Each cannon refit adds a gun until all six stations are filled. The two rails reload independently, one gun at a time on each rail. Firing a rail releases every loaded gun on that side. On the battle test’s starting gunship, you can fire early at 1/3 or 2/3 ready, or hold for all three rounds. Firing early preserves progress on the next gun.
+
+An impact costs hull on both ships. A bow striking a rail squarely inflicts more damage on the rail. Close gently to keep a prize afloat. The boarding parties exchange blows at the touching rails while both crew bars fall. Steer clear or push off to disengage. Both crew bars retain their remaining strength. Crew size, veterans and leadership increase the strength you bring to the fight. An enemy with zero crew strength and a surviving hull strikes colors.
 
 Open the destination’s **Raider lookout** before sailing. It appraises your purse and commercial crates at their home-port list prices. It shows the possible toll, the usual demand and the most likely enemy. A richer manifest attracts more dangerous ships on average. Your first passage and the Harbor Watch exercise are free.
 

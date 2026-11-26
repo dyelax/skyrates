@@ -197,7 +197,7 @@ const PEOPLE = {
     background:
       'I used to stand beneath a hull with chalk in one hand and listen for a plate that rang flat. The proof bell was my first alarm clock.',
     knowledge: [
-      'Only the proof slip fits heavy plating and additional cannon stations. Can explain independent reloads and crew roles.',
+      'Only the proof slip fits heavy plating and additional cannon stations. Can explain how each rail loads its guns in sequence and which crew roles serve aboard.',
       'The governor spindles leave in matched pairs after testing.',
     ],
     personal:

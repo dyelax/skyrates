@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   buildShip,
-  discharge,
+  fireBroadside,
   hitsShip,
   gunBearsOn,
   gunMuzzle,
@@ -15,17 +15,52 @@ import {
 const position = { x: 250, y: 220 }
 const broadside = { x: 250, y: 50, heading: 0 }
 
-test('schooner cannons track independent reload times and a broadside shoots only loaded guns', () => {
-  const ship = buildShip(position, 0, 3, 0)
-  const port = ship.guns.filter((gun) => gun.side === 'port')
-  assert.equal(port.length, 2)
+test('a captain can fire one, two or all three loaded guns without disturbing either rail’s pending work', () => {
+  const ship = buildShip(position, 0, 5, 0)
+  const port = ship.guns.filter(gun => gun.side === 'port')
+  const starboard = ship.guns.filter(gun => gun.side === 'starboard')
+  const interval = port[0].reload / port.length
+  assert.equal(port.length, 3)
   assert.ok(gunBearsOn(ship, port[0], broadside))
-  assert.equal(gunBearsOn(ship, ship.guns[1], broadside), false)
-  assert.ok(discharge(ship, port[0], 0))
-  moveShip(ship, 0, 0.75)
-  assert.equal(port.filter((gun) => discharge(ship, gun, 0)).length, 1)
-  assert.ok(port[0].cooldown < port[1].cooldown)
-  assert.ok(ship.guns.filter((gun) => gun.side === 'starboard').every((gun) => gun.cooldown === 0))
+  assert.equal(gunBearsOn(ship, starboard[0], broadside), false)
+  const full = fireBroadside(ship, 'port', 5)
+  assert.equal(full.length, 3)
+  assert.equal(new Set(full.map(shot => shot.x)).size, 3)
+  assert.ok(full.every(shot => shot.damage === 30))
+  assert.deepEqual(port.map(gun => gun.cooldown), [interval, 2 * interval, 3 * interval])
+  assert.deepEqual(fireBroadside(ship, 'port', 5), [])
+  moveShip(ship, 0, 1.25 * interval)
+  const pending = port.slice(1).map(gun => gun.cooldown)
+  const single = fireBroadside(ship, 'port', 5)
+  assert.equal(single.length, 1)
+  assert.equal(single[0].damage, full[0].damage)
+  assert.deepEqual(port.slice(1).map(gun => gun.cooldown), pending)
+  assert.ok(Math.abs(port[0].cooldown - (pending[1] + interval)) < 1e-9)
+  moveShip(ship, 0, 1.75 * interval)
+  assert.equal(fireBroadside(ship, 'port', 5).length, 2)
+  const before = port.map(gun => gun.cooldown)
+  assert.equal(fireBroadside(ship, 'starboard', 5).length, 3)
+  assert.deepEqual(port.map(gun => gun.cooldown), before)
+})
+
+test('frame rate and repeated empty orders give the same rounds per rail over complete loading cycles', () => {
+  for (const hz of [30, 60, 120]) {
+    for (const waitForFull of [false, true]) {
+      const ship = buildShip(position, 0, 5, 0)
+      const rail = ship.guns.filter(gun => gun.side === 'port')
+      let rounds = fireBroadside(ship, 'port', 5).length
+      // 29 seconds is ten complete 2.9s cycles. In both modes an
+      // already-loaded round may always be fired on the boundary itself.
+      for (let i = 0; i < 29 * hz; i++) {
+        moveShip(ship, 0, 1 / hz)
+        if (!waitForFull || rail.every(gun => !gun.cooldown))
+          rounds += fireBroadside(ship, 'port', 5).length
+        if (!waitForFull) assert.equal(fireBroadside(ship, 'port', 5).length, 0)
+      }
+      assert.equal(rounds, 33)
+      assert.ok(ship.guns.filter(gun => gun.side === 'starboard').every(gun => !gun.cooldown))
+    }
+  }
 })
 
 test('gunnery and hull upgrades improve actual shots and armor; prior damage persists', () => {
@@ -36,8 +71,8 @@ test('gunnery and hull upgrades improve actual shots and armor; prior damage per
   assert.ok(upgrade.guns[0].reload < basic.guns[0].reload)
   const gunner = buildShip(position, 0, 1, 1, 64, true)
   assert.equal(gunner.guns[0].reload, upgrade.guns[0].reload * 0.8)
-  const a = discharge(basic, basic.guns[0], 0)!
-  const b = discharge(upgrade, upgrade.guns[0], 1)!
+  const a = fireBroadside(basic, 'port', 0)[0]
+  const b = fireBroadside(upgrade, 'port', 1)[0]
   assert.ok(b.damage > a.damage)
   assert.ok(a.vy < 0)
 })
@@ -60,20 +95,21 @@ test('a projectile can miss an oriented hull at close range', () => {
 })
 
 test('fresh hulls have one port gun and shipyard refits open specific independent stations', () => {
-  for (const [level, sides] of ['p', 'ps', 'psp', 'psps'].entries()) {
+  for (const [level, sides] of ['p', 'ps', 'psp', 'psps', 'pspsp', 'pspsps'].entries()) {
     const ship = buildShip(position, 0, level, 0)
     assert.equal(ship.guns.map((gun) => gun.side[0]).join(''), sides)
   }
 })
 
-test('all four fitted stations launch perpendicular to a moving hull at every heading', () => {
+test('all six fitted stations launch perpendicular to a moving hull at every heading', () => {
   for (const heading of [0, -0.78, 1.5, Math.PI]) {
-    const ship = buildShip(position, heading, 3, 0)
+    const ship = buildShip(position, heading, 5, 0)
     ship.vx = 83
     ship.vy = -21
+    const shots = [...fireBroadside(ship, 'port', 0), ...fireBroadside(ship, 'starboard', 0)]
     for (const gun of ship.guns) {
       const muzzle = gunMuzzle(ship, gun)
-      const shot = discharge(ship, gun, 0)!
+      const shot = shots.find(round => round.x === muzzle.x && round.y === muzzle.y)!
       assert.deepEqual({ x: shot.x, y: shot.y }, muzzle)
       const forward = shot.vx * Math.cos(heading) + shot.vy * Math.sin(heading)
       const sideways = -shot.vx * Math.sin(heading) + shot.vy * Math.cos(heading)
@@ -88,7 +124,7 @@ test('firing into open sky misses an off-axis ship until the captain turns the h
   const target = buildShip({ x: position.x + 80, y: position.y - 120 }, 0, 0, 0)
   const gun = gunship.guns[0]
   const tryShot = () => {
-    const shot = discharge(gunship, gun, 0)!
+    const shot = fireBroadside(gunship, gun.side, 0)[0]
     while (shot.lifetime > 0) {
       moveShot(shot, 1 / 60)
       if (hitsShip(shot, target)) return true
@@ -106,7 +142,7 @@ test('firing into open sky misses an off-axis ship until the captain turns the h
 test('wind drifts a round after launch and carries a hove-to ship', () => {
   const wind = { x: 0, y: 1 }
   const ship = buildShip({ x: 500, y: 220 }, -Math.PI / 2, 0, 0)
-  const shot = discharge(ship, ship.guns[0], 0)!
+  const shot = fireBroadside(ship, 'port', 0)[0]
   const launch = { ...shot }
   assert.ok(Math.abs(launch.vy) < 1e-10)
   moveShot(shot, 1, wind)

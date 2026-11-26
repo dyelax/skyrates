@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { battery, syncBattery } from './battle-battery'
 import { artwork } from './artwork'
 import type { PortId } from './data'
 import { mountBattleFx } from './battle-fx'
@@ -17,7 +18,7 @@ import {
   buildOpponent,
   buildShip,
   closestSide,
-  discharge,
+  fireBroadside,
   hitsShip,
   gunBearsOn,
   gunMuzzle,
@@ -30,7 +31,7 @@ import {
   steerRaider,
   wrapAngle,
 } from './battle-model'
-import type { BattleOpponent, Gun, Point, Shot, Side, Vessel } from './battle-model'
+import type { BattleOpponent, Point, Shot, Side, Vessel } from './battle-model'
 import { combatEnding, contactStep, hullContact, PHYSICS_STEP, type CrewPair } from './contact-combat'
 import type { BattleEnding, BattleSnapshot, ContactClock } from './battle-state'
 import { battleSound } from './audio'
@@ -39,8 +40,6 @@ import {
   chalkRun,
   chalkPoint,
   evadedRound,
-  gunKey,
-  GUN_POSITIONS,
   type ChalkRun,
   type DrillStage,
 } from './drill'
@@ -118,28 +117,10 @@ function hullCard(title: string, id: string): string {
   return `<div class="duel-ship-readout"><strong class="duel-ship-name" id="vessel-${id}">${title}</strong>${meter('Hull', id)}${meter('Crew health', id + 'Crew')}</div>`
 }
 
-function battery(side: Side, count: number): string {
-  const guns = GUN_POSITIONS.slice(0, count).filter(gun => gun.side === side)
-  if (!guns.length) return ''
-  const sideName = side === 'port' ? 'Port' : 'Starboard'
-  const expanded = count > 2
-  const stations = guns.map(gun => {
-    const station = gun.station ? 'aft' : 'bow'
-    const label = expanded ? (gun.station ? 'Aft' : 'Bow') : sideName + ' gun'
-    return `<button type="button" class="gun-station" data-action="gun${gun.key}" aria-keyshortcuts="${gun.key}" aria-label="Fire ${side} ${station} cannon"><span class="gun-reticle" aria-hidden="true"></span><span>${label}</span><small class="reload-time" aria-hidden="true"></small><i aria-hidden="true"></i></button>`
-  }).join('')
-  const volleyKey = side === 'port' ? 'Q' : 'E'
-  const volley = guns.length > 1
-    ? `<button type="button" data-action="${side}" aria-label="Fire ${side} broadside" aria-keyshortcuts="${volleyKey}" title="Fire loaded ${side} guns (${volleyKey})">Volley</button>`
-    : ''
-  return `<div class="duel-battery" role="group" aria-label="${sideName} battery" data-marker-obstacle>${expanded ? '<span class="battery-side">' + sideName + '</span>' : ''}<div class="duel-buttons">${stations}${volley}</div></div>`
-}
-
 export function mountBattle(host: HTMLElement, options: BattleOptions): () => void {
   const root = document.createElement('section')
   root.className = options.drill ? 'air-duel is-drill' : 'air-duel'
-  const cannons = options.drill ? 1 : options.cannons
-  root.classList.toggle('full-batteries', cannons > 2)
+  const cannons = options.drill ? 1 : options.savedBattle?.player.guns.length ?? options.cannons
   root.setAttribute('aria-label', 'Airship battle')
   const weather = options.weather
   const windAngle = (Math.atan2(weather.wind.y, weather.wind.x) * 180) / Math.PI
@@ -156,7 +137,7 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
         <div class="report-body"><div class="duel-readouts">${hullCard('Wayfarer', 'player')}${hullCard(options.drill ? 'Watch · Lark' : options.opponent.name, 'enemy')}</div>
         <p class="report-location">Range <b data-read="range"></b>${options.drill ? '' : ' · ' + weather.summary + ' · ' + weather.season}</p>
         <p>Choose a heading in the sky, or turn with <kbd>A</kbd> / <kbd>D</kbd>. Set throttle with <kbd>W</kbd> / <kbd>S</kbd>.</p>
-        <p><kbd>1</kbd>–<kbd>4</kbd> fire fitted guns. <kbd>Q</kbd> / <kbd>E</kbd> fire the port or starboard broadside. <kbd>B</kbd> closes or pushes off. <kbd>R</kbd> breaks away.</p></div>
+        <p><kbd>Q</kbd> fires every ready port gun. <kbd>E</kbd> fires starboard. Each side reloads one gun at a time. <kbd>Space</kbd> fires the rail facing the enemy. <kbd>B</kbd> closes or pushes off. <kbd>R</kbd> breaks away.</p></div>
       </details>
     </div>
     <div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading in the sky, or turn with A and D."></div><div class="duel-markers"></div></div>
@@ -361,16 +342,7 @@ class SkyBattle extends Phaser.Scene {
       const at = { x: pointer.worldX, y: pointer.worldY }
       if (Math.hypot(at.x - this.foe.x, at.y - this.foe.y) < 48) {
         if (this.drill && this.drill !== 'fire') return
-        const side = closestSide(this.player, this.foe)
-        const gun = this.player.guns.find((g) => g.side === side && g.cooldown <= 0)
-        if (gun) this.firePlayer([gun])
-        else
-          this.tell(
-            this.player.guns.some((g) => g.side === side)
-              ? 'Gunners are reloading.'
-              : 'Your gun is on the other side. Turn the schooner.',
-            2,
-          )
+        this.order(closestSide(this.player, this.foe))
       } else {
         this.ramming = false
         this.course = at
@@ -467,10 +439,10 @@ class SkyBattle extends Phaser.Scene {
       arrowdown: 'slower',
       q: 'port',
       e: 'starboard',
-      1: 'gun1',
-      2: 'gun2',
-      3: 'gun3',
-      4: 'gun4',
+      1: 'port',
+      2: 'port',
+      3: 'starboard',
+      4: 'starboard',
       r: 'escape',
       b: 'ram',
       p: 'pause',
@@ -528,7 +500,7 @@ class SkyBattle extends Phaser.Scene {
         this.player.throttle = 2
       } else if (this.drill === 'fire') {
         const gun = this.player.guns[0]
-        if (gunBearsOn(this.player, gun, this.foe)) this.firePlayer([gun])
+        if (gunBearsOn(this.player, gun, this.foe)) this.order(gun.side)
         else {
           const heading = headingForBroadside(this.player, gun, this.foe)
           this.course = localPoint({ ...this.player, heading }, 130, 0)
@@ -541,7 +513,7 @@ class SkyBattle extends Phaser.Scene {
     if (this.drill && action !== 'pause') {
       if (action === 'escape' || (action === 'ram' && !['board', 'melee', 'return'].includes(this.drill))) return
       if (['briefing', 'debrief'].includes(this.drill)) return
-      if ((action.startsWith('gun') || ['best', 'port', 'starboard'].includes(action)) && this.drill !== 'fire')
+      if (['best', 'port', 'starboard'].includes(action) && this.drill !== 'fire')
         return
     }
     if (action === 'pause') {
@@ -604,11 +576,8 @@ class SkyBattle extends Phaser.Scene {
       }
       if (action === 'port' || action === 'starboard' || action === 'best') {
         const side = action === 'best' ? closestSide(this.player, this.foe) : action
-        this.firePlayer(this.player.guns.filter((g) => g.side === side))
-      }
-      if (action.startsWith('gun')) {
-        const gun = this.player.guns.find((g) => gunKey(g) === Number(action.slice(3)))
-        if (gun) this.firePlayer([gun])
+        if (!this.player.guns.some(gun => gun.side === side)) this.tell('No cannon is fitted on that side.', 2)
+        else if (!this.shootRail(this.player, side, this.opts.gunLevel, false)) this.tell('Gunners are reloading.', 1)
       }
     }
     this.save()
@@ -627,25 +596,15 @@ class SkyBattle extends Phaser.Scene {
     this.bannerTTL = seconds
   }
 
-  private firePlayer(guns: Gun[]) {
-    if (!guns.length) {
-      this.tell('No cannon is fitted on that side.', 2)
-      return
+  private shootRail(ship: Vessel, side: Side, tier: number, enemy: boolean): boolean {
+    const shots = fireBroadside(ship, side, tier)
+    if (!shots.length) return false
+    for (const shot of shots) {
+      if (enemy) shot.damage = 8
+      this.shots.push({ ...shot, enemy })
+      this.burst(shot, enemy ? COPPER : GOLD, 11, 51)
     }
-    let count = 0
-    for (const gun of guns) if (this.shoot(this.player, gun, this.opts.gunLevel, false)) count++
-    if (!count) this.tell('Gunners are reloading.', 1)
-    else if (count > 1) this.tell(`${guns[0].side === 'port' ? 'Port' : 'Starboard'} broadside!`, 1.15)
-  }
-
-  private shoot(ship: Vessel, gun: Gun, tier: number, enemy: boolean): boolean {
-    const shot = discharge(ship, gun, tier)
-    if (!shot) return false
-    if (enemy) shot.damage = 8
-    this.shots.push({ ...shot, enemy })
-    battleSound('cannon')
-    this.burst(shot, enemy ? COPPER : GOLD, 11, 51)
-
+    battleSound('cannon', 0.75 + (shots.length - 1) * 0.125)
     return true
   }
 
@@ -696,25 +655,12 @@ class SkyBattle extends Phaser.Scene {
     if (this.readings.ramOrder.textContent !== ramOrder) this.readings.ramOrder.textContent = ramOrder
     if (this.readings.escapeOrder.textContent !== escapeOrder) this.readings.escapeOrder.textContent = escapeOrder
     const locked = !this.ready || this.pausedDuel || this.ended
-    this.player.guns.forEach((gun) => {
-      const el = this.buttons[`gun${gunKey(gun)}`]
-      el.disabled =
-        locked ||
-        gun.cooldown > 0 ||
-        (!!this.drill && this.drill !== 'fire')
-      el.classList.toggle('bearing', this.drill === 'fire' && gunBearsOn(this.player, gun, this.foe) && !el.disabled)
-      el.style.setProperty('--gun-ready', `${100 * (1 - gun.cooldown / gun.reload)}%`)
-      const station = `Fire ${gun.side} ${gun.station === 0 ? 'bow' : 'aft'} cannon`
-      const seconds = gun.cooldown > 0 ? gun.cooldown.toFixed(1) + 's' : ''
-      el.classList.toggle('reloading', Boolean(seconds))
-      el.querySelector('.reload-time')!.textContent = seconds
-      el.setAttribute('aria-label', seconds ? station + ', reloading ' + seconds : station)
-      el.title = seconds ? station + ' · Reloading ' + seconds : station + ' (' + gunKey(gun) + ')'
-    })
     for (const side of ['port', 'starboard'] as const) {
       const el = this.buttons[side]
       if (!el) continue
-      el.disabled = locked || !this.player.guns.some((g) => g.side === side && !g.cooldown)
+      const bearing = this.drill === 'fire' && this.player.guns.some(gun =>
+        gun.side === side && gunBearsOn(this.player, gun, this.foe))
+      syncBattery(el, side, this.player.guns, locked || (!!this.drill && this.drill !== 'fire'), bearing)
     }
     const helmLocked = locked || (!!this.drill && !['dodge', 'fire', 'board', 'melee', 'return'].includes(this.drill))
     this.buttons.faster.disabled = helmLocked || this.player.throttle >= 3
@@ -869,7 +815,7 @@ class SkyBattle extends Phaser.Scene {
     const target = raiderLookout(enemy, player)
     const gun = enemy.guns.find(g => g.side === side && !g.cooldown && gunBearsOn(enemy, g, target))
     if (gun) {
-      this.shoot(enemy, gun, 0, true)
+      this.shootRail(enemy, side, 0, true)
       this.aiDelay = 1.6 + (this.opts.combatRandom ?? Math.random)() * 0.5
     }
   }

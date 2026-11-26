@@ -1,4 +1,4 @@
-import { GUN_POSITIONS } from './drill'
+import { GUN_POSITIONS, stationOffset } from './drill'
 
 export interface BattleOpponent {
   name: string
@@ -71,6 +71,7 @@ export function armamentLabel(cannons: number): string {
   if (cannons === 1) return '1 port gun'
   if (cannons === 2) return '2 guns, one on each rail'
   if (cannons === 4) return '4 guns, two on each rail'
+  if (cannons === 6) return '6 guns, three on each rail'
   const stations = GUN_POSITIONS.slice(0, cannons)
   const port = stations.filter(gun => gun.side === 'port').length
   return `${stations.length} guns, ${port} port and ${stations.length - port} starboard`
@@ -89,7 +90,7 @@ export function buildShip(
   hullLevel: number,
   remainingHull?: number,
   quickGunnery = false,
-  cannons = Math.min(4, 1 + gunLevel),
+  cannons = Math.min(GUN_POSITIONS.length, 1 + gunLevel),
 ): Vessel {
   const reload = Math.max(2.1, 4.2 - gunLevel * 0.26) * (quickGunnery ? 0.8 : 1)
   const guns: Gun[] = GUN_POSITIONS.slice(0, cannons).map(({ side, station }) => ({
@@ -152,7 +153,7 @@ export function moveShip(ship: Vessel, helm: number, dt: number, wind: Point = S
   // stays level and a coasting ship keeps its bank until the turn rolls out.
   const bank = Math.atan(ship.angularSpeed * forward / 118)
   ship.heel += (bank - ship.heel) * -Math.expm1(-dt * 4.4)
-  for (const gun of ship.guns) gun.cooldown = Math.max(0, gun.cooldown - dt)
+  for (const gun of ship.guns) gun.cooldown = gun.cooldown <= dt + 1e-9 ? 0 : gun.cooldown - dt
 }
 
 // Lead the rollout when following a course so the bow settles on its heading.
@@ -194,18 +195,14 @@ export function localPoint(ship: Point & { heading: number }, forward: number, l
 
 type HullPose = Point & { heading: number }
 
-function stationOffset(gun: Gun): number {
-  return gun.station === 0 ? 11 : -12
-}
-
 export function gunMuzzle(ship: HullPose, gun: Gun): Point {
-  return localPoint(ship, stationOffset(gun), gun.side === 'port' ? -12 : 12)
+  return localPoint(ship, stationOffset(gun.station), gun.side === 'port' ? -12 : 12)
 }
 
 // A helm order only. Neither the muzzle nor a round in flight receives a target.
 export function headingForBroadside(ship: Vessel, gun: Gun, point: Point): number {
   const range = Math.max(1, Math.hypot(point.x - ship.x, point.y - ship.y))
-  const offset = Math.acos(Math.max(-1, Math.min(1, stationOffset(gun) / range)))
+  const offset = Math.acos(Math.max(-1, Math.min(1, stationOffset(gun.station) / range)))
   return angleBetween(ship, point) + (gun.side === 'port' ? offset : -offset)
 }
 
@@ -233,15 +230,28 @@ export function gunBearsOn(ship: Vessel, gun: Gun, target: HullPose): boolean {
     distanceToSegment(muzzle, a, b) <= 15 || distanceToSegment(end, a, b) <= 15
 }
 
-export function discharge(ship: Vessel, gun: Gun, tier: number): Shot | null {
-  if (gun.cooldown > 0) return null
-  gun.cooldown = gun.reload
+// The rail returns its full complement in one reload. New work goes behind
+// the last unfinished gun, retaining even a fraction of its loading time.
+export function fireBroadside(ship: Vessel, side: Side, tier: number): Shot[] {
+  const rail = ship.guns.filter(gun => gun.side === side)
+  let tail = Math.max(0, ...rail.map(gun => gun.cooldown))
+  const shots: Shot[] = []
+  for (const gun of rail) {
+    if (gun.cooldown > 0) continue
+    tail += gun.reload / rail.length
+    gun.cooldown = tail
+    shots.push(launchRound(ship, gun, tier))
+  }
+  return shots
+}
+
+function launchRound(ship: Vessel, gun: Gun, tier: number): Shot {
   const muzzle = gunMuzzle(ship, gun)
   const bearing = sideBearing(ship, gun.side)
   const vx = Math.cos(bearing), vy = Math.sin(bearing)
   ship.vx -= vx * 4
   ship.vy -= vy * 4
-  ship.angularSpeed += (gun.station === 0 ? -1 : 1) * (gun.side === 'port' ? -0.035 : 0.035)
+  ship.angularSpeed += -Math.sign(stationOffset(gun.station)) * (gun.side === 'port' ? -0.035 : 0.035)
   return {
     ...muzzle,
     vx: vx * SHOT_SPEED,

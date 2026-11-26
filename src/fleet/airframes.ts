@@ -1,3 +1,4 @@
+import { stationOffset } from '../drill'
 import type { Gun } from '../battle-model'
 
 type Vec = [number, number, number]
@@ -257,11 +258,12 @@ export function buildAirframe(livery: Livery, guns: Pick<Gun, 'side' | 'station'
   }
   for (const gun of guns) {
     const z = gun.side === 'port' ? -1 : 1,
-      x = gun.station === 0 ? 11 : -12
+      x = stationOffset(gun.station)
     const index = gun.station * 2 + (z < 0 ? 0 : 1)
     b.box(x, 1.15, z * 9, 4, 1.5, 5, paint('#653c2e'))
     for (const dx of [-1.7, 1.7]) b.box(x + dx, 1.3, z * 8, 0.8, 1.1, 3.6, gunmetal)
-    const recoil = 3 + index,
+    // Joint IDs 7–10 already animate the boarding party.
+    const recoil = gun.station === 2 ? 11 + (z < 0 ? 0 : 1) : 3 + index,
       pivot: Vec = [x, 2.8, z]
     b.beam([x, 2.6, z * 6], [x, 3.3, z * 14.6], 2.2, paint('#42595c', metal, recoil, pivot))
     b.box(x, 3.3, z * 13.7, 2.7, 2.7, 1, paint('#d4a650', metal, recoil, pivot))

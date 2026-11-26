@@ -393,6 +393,20 @@ test('first sailing orders start the watch drill once and checkpoints survive re
   assert.equal(left.voyageCount, landed.voyageCount)
 })
 
+test('Copperfall sells each real fitting up to three per rail with the advertised price and persistent count', () => {
+  let state = { ...land(initialState(), 'copperfall'), coins: 1000 }
+  for (const cost of [70, 110, 150, 190, 230]) {
+    assert.deepEqual([upgradeOffer(state, 'guns').available, upgradeOffer(state, 'guns').cost], [true, cost])
+    const before = state
+    state = reload(act(state, { type: 'upgrade', upgrade: 'guns' }))
+    assert.equal(state.ship.cannons, before.ship.cannons + 1)
+    assert.equal(state.coins, before.coins - cost)
+  }
+  assert.equal(state.ship.cannons, 6)
+  assert.equal(upgradeOffer(state, 'guns').available, false)
+  assert.equal(act(state, { type: 'upgrade', upgrade: 'guns' }), state)
+})
+
 test('legacy ships underway keep their existing four guns when loading the newer register', () => {
   const raw = JSON.parse(JSON.stringify(initialState()))
   delete raw.drill
@@ -401,6 +415,10 @@ test('legacy ships underway keep their existing four guns when loading the newer
   const old = loadGame({ getItem: () => JSON.stringify(raw) })
   assert.equal(old.ship.cannons, 4)
   assert.equal(old.drill, null)
+  let oldRefit = { ...land(old, 'copperfall'), coins: 1000 }
+  for (let i = 0; i < 5; i++) oldRefit = act(oldRefit, { type: 'upgrade', upgrade: 'guns' })
+  assert.deepEqual([oldRefit.ship.cannons, oldRefit.ship.guns], [6, 5])
+
   const original = initialState()
   assert.equal(original.ship.cannons, 1)
   const slip = land(original, 'copperfall')
