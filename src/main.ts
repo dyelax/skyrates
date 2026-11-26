@@ -116,7 +116,7 @@ function dispatch(command: Command) {
   if (state.drill) view = 'battle'
   else if (state.voyage) view = 'voyage'
   else if (arrival) view = 'harbor'
-  else if (command.type === 'endDrill') view = 'shipyard'
+  else if (command.type === 'endDrill') view = 'harbor'
   bell(
     command.type === 'payInvoice'
       ? 'mission'

@@ -10,18 +10,20 @@ Take the helm of the Wayfarer, a wooden schooner that rides a glowing lift keel 
 
 The Wayfarer starts at her berth in Sunstep Quay. Select a building to approach its landing and trade, refit, speak with a local, or collect a commission. Closing the ledger returns you to the same quay. You can steer between the port buildings without spending a travel day.
 
-Cast off and fly with the helm, or choose an island as a waypoint. Turn with **A/D** or the arrow keys and set throttle with **W/S**. You can change course, turn back, or visit another unlocked port. Slow down alongside a berth and dock to deliver bonded mail or settle a passage. Direct trips take the sailing days shown in the chart; long diversions can carry into another day. Your position, heading, cargo and encounters survive a reload.
+Cast off and fly with the helm, or choose an island as a waypoint. Turn with **A/D** or the arrow keys and set throttle with **W/S**. You can change course, turn back, or visit another unlocked port. Slow down alongside a berth and dock to deliver bonded mail or settle a passage. Press **C** to hold the selected course and **F** to dock or hail when in range. Direct trips take the sailing days shown in the chart. Long diversions can carry into another day. Your position, heading, cargo and encounters survive a reload.
 
 Independent ships travel the same sky. A merchant can exchange signals. A nearby raider can demand cargo or crowns while you keep control of the helm. Payment buys passage past that ship. Refusing starts a pursuit. Fire a broadside in the navigation view, board by bringing the rails together, or open enough distance to escape. You can also choose to raise hostile colors against a merchant. Defense bounties apply to raiders that attacked you.
+
+## At battle stations
 
 Harbormaster Vale and the shipyard offer a free Harbor Watch chalk-round exercise. You can cast off from Sunstep immediately for a protected first voyage. Dodge a signaled chalk shot, fire your single port cannon, then make rail contact, push off, and return for the Watch’s surrender. The exercise saves at each lesson. You can skip it or practice again at a shipyard.
 
 | Order | Control |
 | --- | --- |
-| Turn | A / D or left / right arrows. Click open sky to steer toward it. |
+| Turn | A / D or left / right arrows. In the Watch exercise and battle test, you can also click open sky to steer toward it. |
 | Change throttle | W / S or up / down arrows |
-| Fire the port or starboard rail | Tap its button or press Q / E. The 1 and 2 keys also fire port. The 3 and 4 keys fire starboard. |
-| Fire the rail facing the raider | Tap the raider or press Space. |
+| Fire the port or starboard rail | Tap its button or press Q / E. In the Watch exercise and battle test, 1 and 2 also fire port, and 3 and 4 fire starboard. |
+| Fire the rail facing the raider | Press Space. In the Watch exercise and battle test, you can also tap the raider. |
 | Close in, or push off if the hulls touch | B |
 | Break away | R |
 | Pause | P |
@@ -34,7 +36,7 @@ An impact costs hull on both ships. A bow striking a rail squarely inflicts more
 
 Open the destination’s **Raider lookout** before sailing. It appraises your purse and commercial crates at their home-port list prices. It shows the possible toll, the usual demand and the most likely enemy. A richer manifest attracts more dangerous ships on average. Your first passage and the Harbor Watch exercise are free.
 
-When hailed, you see the actual ship, its armament, both crew strengths and the exact toll. Pay from your purse or tender the listed crates. Whole crates earn change if their appraisal exceeds the demand, and you cover any shortfall in crowns. Refuse the demand to take the helm. You can fight or escape at the edge. Defeat costs the posted settlement. Papers and bonded mail stay aboard.
+When hailed, the raider names a price. Open **Appraise ship** to see its armament, both crew strengths, cargo and your options for commanding a prize. Pay from your purse or tender the listed crates. Whole crates earn change if their appraisal exceeds the demand, and you cover any shortfall in crowns. Refuse to fight or open distance. The chase ends when you stay beyond the raider’s reach. Defeat costs the posted settlement. Papers and bonded mail stay aboard.
 
 The levy and ship weights are authored in `src/raiders.ts`. Each whole rate within a row is equally likely.
 
@@ -47,7 +49,7 @@ The levy and ship weights are authored in `src/raiders.ts`. Each whole rate with
 
 Below 140 crowns, starting scout/cutter/corsair odds are 75/23/2%. At 140 crowns they become 44/47/9%, and at 320 crowns they become 32/45/23%. Promotion stops at corsair. A scout carries one gun, a cutter two, and a corsair four. Payment rounds to the nearest whole crown between 5% rounded up and half the manifest rounded down. A manifest worth zero or one crown passes free.
 
-Each captain has a saved random seed. Casting off locks the rate, demand and ship for a pirate voyage. Reloading or choosing another destination for the same voyage number keeps the draw. Changes to the manifest can change the cost and shift ship odds. Earlier saves already facing a raider keep their quoted enemy and price, subject to the half-manifest cap.
+Each captain has a saved random seed. When a physical patrol hails, its identity and your manifest determine the rate, demand and ship. The quoted terms survive reloading and changing waypoints. Other raiders can find you on the same passage. Earlier saves already facing a raider keep their quoted enemy and price, subject to the half-manifest cap.
 
 ## Local edition
 
@@ -81,7 +83,7 @@ npm run dev
 
 `npm test` runs the economy, save, progression, and combat regression tests. `npm run build` type-checks the game and builds the static site into `dist/`. `npm run preview` serves that build locally.
 
-The TypeScript game simulation is independent of the interface. Port definitions and chapter tuning live in [the game data](src/data.ts). Battlefields overlook the four port regions, with distant clouds below the ships. During squalls, higher banks cross the flight path and leave gaps to steer through. The battle test lets you choose a location independently of its repeatable calm, windy and storm forecasts. The ports and workshops use still ImageGen illustrations with selectable people, buildings and counters. The same harbor image and clickable locations work when WebGL is unavailable. [Artwork and production prompts](docs/artwork.md) · [Bundled third-party notices](public/licenses)
+The TypeScript game simulation is independent of the interface. Port definitions and chapter tuning live in [the game data](src/data.ts). Battlefields overlook the four port regions, with distant clouds below the ships. During squalls, higher banks cross the flight path and leave gaps to steer through. The battle test lets you choose a location independently of its repeatable calm, windy and storm forecasts. Campaign ports use Blender models with working lamps, service landings and nearby staff. Time aloft and the weather change the lighting. A distant painted island also serves as the close view on devices without WebGL. The same places remain selectable. [Artwork and production prompts](docs/artwork.md) · [Bundled third-party notices](public/licenses)
 
 The public game is served from the root of the `gh-pages` branch. Publish the contents of a tested `dist/` build to that branch with a `.nojekyll` file. The `main` branch contains the source and editable game data.
 

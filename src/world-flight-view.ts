@@ -1,10 +1,15 @@
-import { PORTS, PORT_IDS, type PortId } from './data'
+import { GOODS, PORTS, PORT_IDS, type PortId } from './data'
 import { CITY_ECONOMY } from './city-economy'
 import { npcAtPort, npcName } from './characters'
 import { icon } from './icons'
 import {
   boardingStrength,
+  commandReadiness,
+  encounterId,
+  hasCaptainPerk,
   isUnlocked,
+  prizeManifest,
+  skipperTerms,
   worldAtBerth,
   worldCombatLoad,
   worldOpponent,
@@ -24,7 +29,7 @@ import {
 } from './world-flight'
 import { WorldFlightSky } from './world-flight-sky'
 import { battery, syncBattery } from './battle-battery'
-import { armedSide } from './battle-model'
+import { armamentLabel, armedSide } from './battle-model'
 import { hullContact } from './contact-combat'
 import type { BattleSnapshot } from './battle-state'
 import { stepCampaignSky, fireWorldRail, pushWorldContact } from './world-combat'
@@ -391,18 +396,30 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
     let message = ''
     if (leg?.phase === 'raider' && leg.pirate) {
       const toll = raiderToll(state)
+      const foe = toll.profile
+      const id = encounterId(leg)
+      const cargo = prizeManifest(state, foe.id, id)
+      const skipper = skipperTerms(state, id)
+      const judgment = hasCaptainPerk(state, 'readRoom')
+        ? ' ' + skipper.evidence + ' Chance of signing articles: ' + Math.round(skipper.chance * 100) + '%.'
+        : ''
       message =
         '<strong>' +
         name +
-        ' demands ' +
-        toll.crowns +
-        ' crowns</strong><div>' +
-        action('crowns', 'Pay ' + toll.crowns, state.coins < toll.crowns) +
+        (toll.crowns ? ' demands ' + toll.crowns + ' crowns' : ' offers clear passage') +
+        '</strong><div>' +
+        action('crowns', toll.crowns ? 'Pay ' + toll.crowns : 'Accept passage', state.coins < toll.crowns) +
         (toll.settlement.cargo.length
           ? action('cargo', tollSettlementLabel(toll.settlement), toll.exposedValue < toll.crowns)
           : '') +
         action('refuse', 'Refuse') +
-        '</div>'
+        '</div>' +
+        `<details class="flight-appraisal"><summary>Appraise ship</summary><div>
+          <p>${foe.name} · ${armamentLabel(foe.cannons)} · ${foe.hull} hull. Their crew strength is ${foe.crew}. Yours is ${Number(boardingStrength(state).toFixed(2))}.</p>
+          <p>Their hold carries ${cargo.quantity} crates of ${GOODS[cargo.good].name.toLowerCase()}. ${commandReadiness(state)}</p>
+          <p>${skipper.motive}${judgment}</p>
+          <p>Yielding costs ${tollSettlementLabel(toll.settlement)}. Papers and bonded mail stay aboard.</p>
+        </div></details>`
     } else if (leg?.phase === 'merchant')
       message =
         '<strong>' +

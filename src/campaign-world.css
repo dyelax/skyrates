@@ -9,11 +9,28 @@
 .campaign-surface .context-ledger .sk-voyage .sk-scene { min-height: 0; padding: 0; }
 .campaign-surface .context-ledger .sk-voyage .sk-scene img, .campaign-surface .context-ledger .sk-voyage .scene-weather { display: none; }
 .campaign-surface .context-ledger .sk-scene header { position: relative; inset: auto; }
+.campaign-surface:not(.map-surface) .context-ledger {
+  height: auto;
+  overflow: visible;
+  background: transparent;
+}
+.campaign-surface:not(.map-surface) .context-ledger .sk-crumb {
+  position: static;
+  min-height: 44px;
+  margin-bottom: .6rem;
+}
+.campaign-surface .context-ledger :is(.sk-voyage, .sk-first-light, .sk-voyage .sk-scene, .sk-first-light .sk-scene, .sk-voyage-brief, .sk-first-light .sk-layout) {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: auto;
+  max-height: none;
+}
 .campaign-surface:has(> .dock-talk) { min-height: min(27rem, 75dvh); }
 .campaign-surface > .dock-talk { position: relative; inset: auto; width: 100%; transform: none; }
 @media(max-width:600px) {
-  .campaign-surface { right: 0; left: 0; width: 100%; bottom: 0; top: auto; max-height: 73dvh; padding-bottom: env(safe-area-inset-bottom); border-radius: .7rem .7rem 0 0; }
-  .campaign-surface.map-surface { width: 100%; }
+  .campaign-surface { right: 0; left: 0; width: 100%; bottom: 0; top: auto; max-height: 64dvh; padding-bottom: env(safe-area-inset-bottom); border-radius: .7rem .7rem 0 0; }
+  .campaign-surface.map-surface { width: 100%; max-height: 83dvh; }
 }
 
 .sk-flight-mark { position: absolute; z-index: 3; pointer-events: none; color: #ffe7b4; text-shadow: 0 1px 3px #121e28, 0 0 6px #121e28; transform: translate(-.55em,-50%); font: 600 .85rem Barlow, sans-serif; }
