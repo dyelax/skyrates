@@ -1,3 +1,4 @@
+import type { TrialCargoId } from './trial-cargo'
 import {
   angleBetween, armedSide, buildOpponent, buildShip, gunBearsOn, gunMuzzle,
   headingForBroadside, helmForHeading, hitsShip, moveShip, raiderLookout, steerRaider,
@@ -18,6 +19,7 @@ export interface TrialProtectionReport {
 }
 type Role = 'hostile' | 'struck' | 'merchant' | 'wreck'
 interface Participant {
+  cargoId?: TrialCargoId
   name: string
   ship: Vessel
   crew: number
@@ -36,8 +38,8 @@ const middle = (area: Area) => (area.top + area.bottom) / 2
 const bound = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n))
 const warningTime = 2.1
 
-function participant(name: string, ship: Vessel, crew: number, role: Role): Participant {
-  return { name, ship, crew, maxCrew: crew, role, delay: 1.5, aim: 0, contact: freshContact() }
+function participant(name: string, ship: Vessel, crew: number, role: Role, cargoId?: TrialCargoId): Participant {
+  return { cargoId, name, ship, crew, maxCrew: crew, role, delay: 1.5, aim: 0, contact: freshContact() }
 }
 
 // The tester owns these extra vessels. The shared scene still advances the
@@ -56,7 +58,7 @@ export class TrialProtection {
   constructor(readonly scenario: TrialScenario, player: Vessel, selected: BattleOpponent, area: Area) {
     const y = middle(area)
     const enemy = buildOpponent({ x: 420, y }, -Math.PI / 2, selected)
-    this.lead = participant(selected.name, enemy, selected.crew, 'hostile')
+    this.lead = participant(selected.name, enemy, selected.crew, 'hostile', 'first-raider')
     if (scenario === 'prize-protection') {
       Object.assign(player, { x: 306, y, heading: 0, throttle: 0 })
       // Both raiders are active from the first tick. A battered lead ship
@@ -65,7 +67,7 @@ export class TrialProtection {
       this.lead.crew = 2.4
       this.limping = enemy
       const wing = buildOpponent({ x: 655, y: y - 72 }, Math.PI / 2, RAIDER_PROFILES[1])
-      this.extra = participant('Wing raider', wing, RAIDER_PROFILES[1].crew, 'hostile')
+      this.extra = participant('Wing raider', wing, RAIDER_PROFILES[1].crew, 'hostile', 'wing-raider')
     } else {
       const merchant = buildShip({ x: 150, y }, 0, 0, 0, undefined, false, 0)
       merchant.hull = merchant.maxHull = ESCORT_HULL
@@ -93,7 +95,7 @@ export class TrialProtection {
         - Math.hypot(b.ship.x - player.x, b.ship.y - player.y))[0]?.ship
   }
 
-  stepFlight(player: Vessel, area: Area, wind: Point, dt: number, fire: Order) {
+  stepFlight(player: Vessel, area: Area, wind: Point, dt: number, fire: Order, advanceRail?: (ship: Vessel) => void) {
     this.warning = undefined
     if (this.extra.role === 'merchant' && this.exit) {
       const ship = this.extra.ship
@@ -120,6 +122,9 @@ export class TrialProtection {
         const heading = approach ? angleBetween(ship, quarry) : headingForBroadside(ship, gun, predicted)
         moveShip(ship, helmForHeading(ship, heading), dt, wind)
       } else steerRaider(ship, player, area, false, dt, wind)
+      ship.x = bound(ship.x, 26, area.width - 26)
+      ship.y = bound(ship.y, area.top + 23, area.bottom - 23)
+      advanceRail?.(ship)
       const canFire = distance < 510 && actor.delay <= 0 && !gun.cooldown
       if (quarry !== player && canFire && distance < 430) {
         actor.aim += dt
@@ -130,8 +135,6 @@ export class TrialProtection {
         actor.aim = 0
         actor.delay = 1.6
       }
-      ship.x = bound(ship.x, 26, area.width - 26)
-      ship.y = bound(ship.y, area.top + 23, area.bottom - 23)
     }
   }
 
@@ -188,10 +191,14 @@ export class TrialProtection {
       return { ending: !player.hull ? 'defeat' : !playerCrew ? 'yielded' : 'escaped' }
     }
     for (const actor of [this.lead, this.extra]) {
-      if (actor.ship.hull <= 0) actor.role = 'wreck'
+      if (actor.ship.hull <= 0 && actor.role !== 'wreck') {
+        actor.role = 'wreck'
+        for (const gun of actor.ship.guns) delete gun.salvoIn
+      }
       else if (actor.role === 'hostile' && actor.crew <= 0) {
         actor.role = 'struck'
         actor.ship.throttle = 0
+        for (const gun of actor.ship.guns) delete gun.salvoIn
       }
     }
     if (this.scenario === 'merchant-escort') {
@@ -204,7 +211,7 @@ export class TrialProtection {
         this.completed = 1
         this.leg = 2
         const enemy = buildOpponent({ x: 0, y: 0 }, 0, RAIDER_PROFILES[2])
-        this.lead = participant('Corsair', enemy, RAIDER_PROFILES[2].crew, 'hostile')
+        this.lead = participant('Corsair', enemy, RAIDER_PROFILES[2].crew, 'hostile', 'second-crossing')
         this.placeEscort(player, area)
         this.warning = undefined
         return { changed: true, notice: 'Second crossing. The merchant carries its damage forward.' }

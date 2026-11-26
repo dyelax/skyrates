@@ -7,18 +7,23 @@ export function nextStage(stage: DrillStage): DrillStage | undefined {
   return DRILL_STAGES[DRILL_STAGES.indexOf(stage) + 1]
 }
 
-export const GUN_POSITIONS: { side: Side; station: number }[] = [
-  { side: 'port', station: 0 },
-  { side: 'starboard', station: 0 },
-  { side: 'port', station: 1 },
-  { side: 'starboard', station: 1 },
-  { side: 'port', station: 2 },
-  { side: 'starboard', station: 2 },
-]
+// The original bow, aft and amidships mounts keep their station IDs in old saves.
+const STATION_OFFSET = [11, -12, 0, 28, -28, 19, -20, 35, -35, 6, -6, 24, -24, 15, -16, 31, -31, 3, -3, 8.5, -9, 21.5, -22, 33]
+export const FITTED_CANNONS = [1, 2, 3, 4, 5, 6, 10, 16, 24, 36, 48] as const
+export const GUN_POSITIONS: { side: Side; station: number }[] = STATION_OFFSET.flatMap((_, station) => [
+  { side: 'port', station }, { side: 'starboard', station },
+])
 
-const STATION_OFFSET = [11, -12, 0] as const
 export function stationOffset(station: number): number {
   return STATION_OFFSET[station]
+}
+
+export function nextCannonFit(cannons: number, rating: number): number {
+  // Older captains could own four guns before paying for any gunnery refits.
+  // Keep those installations and their original one-at-a-time refit path.
+  const nextRating = Math.min(FITTED_CANNONS.length - 1, rating + 1)
+  if (rating < 5) return Math.max(cannons, Math.min(6, cannons + 1), FITTED_CANNONS[nextRating])
+  return Math.max(cannons, FITTED_CANNONS[nextRating])
 }
 
 export interface ChalkRun {

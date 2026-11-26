@@ -2,7 +2,7 @@ import { flyToNextStop, settleThenFlyToPort } from './passage-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { act, CAMPAIGN_RESULTS, checkpointBattle, initialState, loadGame, prizeManifest, raiderToll, skipperTerms, canLearnPerk, captainPoints, hasCaptainPerk, qualifiedMate, handLevel, priceAt, type Preparation, type SailorId, type PortId, type GameState } from '../src/model'
-import { buildOpponent, buildShip, fireBroadside, moveShip } from '../src/battle-model'
+import { advanceBroadside, buildOpponent, buildShip, fireBroadside, moveShip, moveShot } from '../src/battle-model'
 import type { BattleEnding, BattleSnapshot } from '../src/battle-state'
 
 const reload = (state:unknown) => loadGame({getItem:() => JSON.stringify(state)})
@@ -44,6 +44,7 @@ test('an active six-gun reload queue and old four-gun independent timers round-t
       snapshot.player.guns[2].cooldown = 0.6
     } else {
       fireBroadside(snapshot.player, 'port', 5)
+      advanceBroadside(snapshot.player, .14, 5)
       moveShip(snapshot.player, 0, 1.2)
       assert.equal(fireBroadside(snapshot.player, 'port', 5).length, 1)
     }
@@ -51,7 +52,8 @@ test('an active six-gun reload queue and old four-gun independent timers round-t
     const restored = db.voyage?.battle?.player
     assert.deepEqual(restored, snapshot.player)
     moveShip(restored!, 0, 0.8)
-    assert.equal(fireBroadside(restored!, 'port', 5).length, count === 4 ? 2 : 1)
+    const immediate = fireBroadside(restored!, 'port', 5)
+    assert.equal(immediate.length + advanceBroadside(restored!, .14, 5).length, count === 4 ? 2 : 1)
   }
 })
 
@@ -273,4 +275,38 @@ test('wrecks, failed boarding, withdrawal and escape have distinct settlements, 
   assert.equal(checkpointBattle(battle,battle.voyage!.id,bad),battle)
   const saved=checkpointBattle(battle,battle.voyage!.id,checkpoint(battle,'mutualWreck'))
   assert.equal(settleThenFlyToPort(saved,{type:'resolveBattle',id:saved.voyage!.id,result:'surrendered',hull:90,enemyHull:60}),saved)
+})
+
+test('a captain reloading mid-capital salvo retains every unfired barrel and every round already aloft', () => {
+  const state = toBattle(departure())
+  const snap = checkpoint(state, null)
+  snap.player = buildShip({x: 150, y: 150}, 0, 10, 4)
+  const fired = [...fireBroadside(snap.player, 'port', 10), ...advanceBroadside(snap.player, .34, 10)]
+  snap.projectiles = fired.map(shot => ({...shot, enemy:false}))
+  const expected = snap.player.guns.filter(gun => gun.salvoIn !== undefined).length
+  assert.ok(fired.length > 1 && expected > 1)
+  const resumed = reload(checkpointBattle(state, state.voyage!.id, snap)).voyage!.battle!
+  assert.deepEqual(resumed, snap)
+  assert.equal(fireBroadside(resumed.player, 'port', 10).length, 0)
+  assert.equal(advanceBroadside(resumed.player, 1, 10).length, expected)
+  assert.equal(resumed.projectiles.length + expected, 24)
+  assert.equal(advanceBroadside(resumed.player, 1, 10).length, 0)
+})
+
+test('a checkpoint can hold two capital ships firing both rails under Quick Gunnery', () => {
+  const state = toBattle(departure())
+  const snap = checkpoint(state, null)
+  snap.player = buildShip({x: 150, y: 150}, 0, 10, 4, undefined, true)
+  snap.enemy = buildShip({x: 700, y: 300}, 0, 10, 4, undefined, true)
+  for (let tick = 0; tick < 110; tick++) {
+    for (const shot of snap.projectiles) moveShot(shot, 1 / 60)
+    snap.projectiles = snap.projectiles.filter(s => s.lifetime > 0)
+    for (const ship of [snap.player, snap.enemy]) {
+      moveShip(ship, 0, 1 / 60)
+      const fired = [...advanceBroadside(ship, 1 / 60, 10), ...fireBroadside(ship, 'port', 10), ...fireBroadside(ship, 'starboard', 10)]
+      snap.projectiles.push(...fired.map(s => ({ ...s, enemy: ship === snap.enemy })))
+    }
+  }
+  assert.ok(snap.projectiles.length > 128)
+  assert.deepEqual(reload(checkpointBattle(state, state.voyage!.id, snap)).voyage!.battle, snap)
 })

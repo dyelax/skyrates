@@ -1,3 +1,4 @@
+import type { TrialCargoReceipt } from './trial-cargo'
 import { salvageLabel, type SalvageReceipt } from './salvage'
 import { prizeManifest } from './prize-command'
 import '@fontsource/barlow/latin-400.css'
@@ -18,7 +19,12 @@ const fittings = [
   { name: 'Starter Wayfarer', hullLevel: 0, gunLevel: 0, hands: 6, veterans: 1 },
   { name: 'Veteran boarding fit', hullLevel: 1, gunLevel: 1, hands: 8, veterans: 3 },
   { name: 'Broadside gunship', hullLevel: 2, gunLevel: 5, hands: 6, veterans: 1 },
+  { name: 'Capital gunship', hullLevel: 4, gunLevel: 10, hands: 10, veterans: 4 },
 ]
+
+// A practice-only armored target can take a full capital pass. It shares the
+// corsair's cargo table, without adding a new enemy to ordinary route hails.
+const trialOpponents = [...RAIDER_PROFILES, { id: 'corsair' as const, name: 'Armored flagship', cannons: 12, hull: 1440, crew: 18 }]
 
 // Keep the windy preset's repeatable chart wind, with clear visibility so both
 // nonstorm presets can be compared against the same passing squall.
@@ -49,6 +55,7 @@ interface TrialEnd {
   outcome: BattleEnding
   hull: number
   enemyHull: number
+  trialCargo?: TrialCargoReceipt[]
   salvage?: SalvageReceipt
   crew: Readonly<{ player: number; enemy: number }>
   protection?: TrialProtectionReport
@@ -100,7 +107,7 @@ function showDesk(result?: TrialEnd, error = '') {
   leaveBattle?.()
   leaveBattle = undefined
   const fit = fittings[fitIndex]
-  const enemy = RAIDER_PROFILES[enemyIndex]
+  const enemy = trialOpponents[enemyIndex]
   const scenario = scenarios[scenarioIndex]
   const ship = buildShip({ x: 0, y: 0 }, 0, fit.gunLevel, fit.hullLevel)
   const weather = forecasts[weatherIndex].report
@@ -112,7 +119,7 @@ function showDesk(result?: TrialEnd, error = '') {
   const shipCard = (player: boolean) => {
     const title = player ? 'Your ship' : scenario.id === 'duel' ? 'Opponent' : 'First raider'
     const name = player ? fit.name : enemy.name
-    const names = player ? fittings.map(f => f.name) : RAIDER_PROFILES.map(e => e.name)
+    const names = player ? fittings.map(f => f.name) : trialOpponents.map(e => e.name)
     const hull = read(player ? result?.hull : result?.enemyHull, player ? ship.maxHull : enemy.hull)
     const crew = read(player ? result?.crew.player : result?.crew.enemy, player ? strength : enemy.crew)
     return `<article class="ship-card ${player ? 'friendly' : 'hostile'}">
@@ -133,6 +140,7 @@ function showDesk(result?: TrialEnd, error = '') {
       <label>Location<select id="trial-location">${PORT_IDS.map(id => `<option value="${id}"${id === trialLocation ? ' selected' : ''}>${PORTS[id].name}</option>`).join('')}</select></label>
       <label>Weather<select id="trial-weather">${options(forecasts.map(f => f.name),weatherIndex)}</select></label>
     </div>${scenario.order ? '<p class="trial-order">'+scenario.order+'</p>' : ''}`}
+      ${result?.trialCargo?.map(r => '<span class="trial-salvage">' + r.name + ' · ' + salvageLabel(r) + '</span>').join('') ?? ''}
       ${result?.salvage ? '<span class="trial-salvage">'+salvageLabel(result.salvage)+'</span>' : ''}
       <span>${result ? PORTS[trialLocation].name + ' · ' : ''}${weather.summary} · ${weather.knots} kn ${weather.bearing} · ${weather.season}</span></div>
     <div class="actions">${result ? '<button id="change">Change setup</button>' : `<label class="sound"><input type="checkbox" id="sounds"${sound ? ' checked' : ''}> Battle sound</label>`}
@@ -141,7 +149,10 @@ function showDesk(result?: TrialEnd, error = '') {
     </div></section>`
   function change(event: Event) {
     const select = event.currentTarget as HTMLSelectElement
-    if (select.id === 'your-fit') fitIndex = select.selectedIndex
+    if (select.id === 'your-fit') {
+      fitIndex = select.selectedIndex
+      if (fittings[fitIndex].name === 'Capital gunship') enemyIndex = trialOpponents.length - 1
+    }
     else if (select.id === 'opponent-fit') enemyIndex = select.selectedIndex
     else if (select.id === 'trial-scenario') scenarioIndex = select.selectedIndex
     else if (select.id === 'trial-location') trialLocation = PORT_IDS[select.selectedIndex]
@@ -174,9 +185,9 @@ function showDesk(result?: TrialEnd, error = '') {
         onTrialReport: report => { protection = report },
         onExit: () => { if (id === match) { showDesk(); desk.querySelector<HTMLButtonElement>('#fight')?.focus() } },
         onUnavailable: () => { if (id === match) showDesk(undefined, 'unavailable') },
-        onFinish: (outcome, hull, enemyHull, crew, salvage) => {
+        onFinish: (outcome, hull, enemyHull, crew, salvage, trialCargo) => {
           if (id !== match) return
-          showDesk({ outcome, hull, enemyHull, crew, salvage, protection })
+          showDesk({ outcome, hull, enemyHull, crew, salvage, trialCargo, protection })
           desk.querySelector<HTMLButtonElement>('#fight')?.focus()
         },
       })
