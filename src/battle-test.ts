@@ -2,11 +2,11 @@ import '@fontsource/barlow/latin-400.css'
 import '@fontsource/barlow/latin-600.css'
 import '@fontsource/cormorant-garamond/latin-600.css'
 import { artwork } from './artwork'
-import { armamentLabel, buildShip } from './battle-model'
+import { armamentLabel, buildShip, STILL_AIR } from './battle-model'
 import { RAIDER_PROFILES } from './raiders'
 import { setSessionSound } from './audio'
 import type { BattleEnding } from './battle-state'
-import { routeWeather } from './weather'
+import { routeWeather, type WeatherReport } from './weather'
 import './battle-test.css'
 
 const fittings = [
@@ -15,9 +15,13 @@ const fittings = [
   { name: 'Broadside gunship', hullLevel: 2, gunLevel: 3, hands: 6, veterans: 1 },
 ]
 
-// Actual chart forecasts. Every trial with a given selection opens the same sky.
+// Calm is the zero-drift gunnery reference. Windy and Storm use actual chart forecasts.
+const calm: WeatherReport = {
+  kind: 'clear', season: 'spring', wind: STILL_AIR, severity: 0,
+  summary: 'Clear skies', bearing: 'calm', knots: 0,
+}
 const forecasts = [
-  { name: 'Calm', report: routeWeather('glasshouse', 'copperfall', 17) },
+  { name: 'Calm', report: calm },
   { name: 'Windy', report: routeWeather('meridian', 'copperfall', 1) },
   { name: 'Storm', report: routeWeather('copperfall', 'meridian', 30) },
 ]
