@@ -1,0 +1,65 @@
+.salvage-watch {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  width: min(282px, 94vw);
+  padding: 9px 12px 10px;
+  color: #f6ecd1;
+  background: #152f34f0;
+  border: 1px solid #c8ad72;
+  border-radius: 9px;
+  font:
+    14px/1.22 Barlow,
+    sans-serif;
+}
+.salvage-watch > div,
+.salvage-watch nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 7px;
+  align-items: center;
+}
+.salvage-watch [data-time] {
+  font-variant-numeric: tabular-nums;
+  color: #f3cf82;
+}
+.salvage-watch p {
+  margin: 3px 0;
+}
+.salvage-watch nav {
+  margin-top: 6px;
+}
+.salvage-watch button {
+  flex: 1;
+  border-radius: 5px;
+  border: 1px solid #b7a879;
+  background: #20464b;
+  color: #fff1ce;
+  min-height: 34px;
+  font:
+    600 13px Barlow,
+    sans-serif;
+  cursor: pointer;
+}
+.salvage-watch button:focus-visible {
+  outline: 2px solid #ffe5a8;
+  outline-offset: 2px;
+}
+.air-duel.salvaging .duel-armament,
+.air-duel.salvaging .duel-engage {
+  visibility: hidden;
+}
+@media (pointer: coarse) {
+  .salvage-watch button {
+    min-height: 44px;
+  }
+}
+@media (max-height: 480px) {
+  .salvage-watch {
+    bottom: auto;
+    top: 7px;
+  }
+}

@@ -1,3 +1,5 @@
+import { salvageLabel, type SalvageReceipt } from './salvage'
+import { prizeManifest } from './prize-command'
 import '@fontsource/barlow/latin-400.css'
 import '@fontsource/barlow/latin-600.css'
 import '@fontsource/cormorant-garamond/latin-600.css'
@@ -39,6 +41,7 @@ interface TrialEnd {
   outcome: BattleEnding
   hull: number
   enemyHull: number
+  salvage?: SalvageReceipt
   crew: Readonly<{ player: number; enemy: number }>
 }
 
@@ -97,6 +100,7 @@ function showDesk(result?: TrialEnd, error = '') {
       <label>Location<select id="trial-location">${PORT_IDS.map(id => `<option value="${id}"${id === trialLocation ? ' selected' : ''}>${PORTS[id].name}</option>`).join('')}</select></label>
       <label>Weather<select id="trial-weather">${options(forecasts.map(f => f.name),weatherIndex)}</select></label>
     </div>`}
+      ${result?.salvage ? '<span class="trial-salvage">'+salvageLabel(result.salvage)+'</span>' : ''}
       <span>${result ? PORTS[trialLocation].name + ' · ' : ''}${weather.summary} · ${weather.knots} kn ${weather.bearing} · ${weather.season}</span></div>
     <div class="actions">${result ? '<button id="change">Change setup</button>' : `<label class="sound"><input type="checkbox" id="sounds"${sound ? ' checked' : ''}> Battle sound</label>`}
     <button id="fight" class="fight">${result ? 'Rematch' : 'Fight'}</button></div></footer>
@@ -129,12 +133,13 @@ function showDesk(result?: TrialEnd, error = '') {
       leaveBattle = mountBattle(desk, {
         opponent: enemy, crew: fit.hands, skill: strength / fit.hands, gunLevel: fit.gunLevel,
         cannons: ship.guns.length, hullLevel: fit.hullLevel, shipName: fit.name,
+        salvageLoad: { manifest: prizeManifest({ pirateSeed: 4817 }, enemy.id, PORT_IDS.indexOf(trialLocation) + 1), free: 12 },
         location: trialLocation, weather, combatRandom: trialRandom(),
         onExit: () => { if (id === match) { showDesk(); desk.querySelector<HTMLButtonElement>('#fight')?.focus() } },
         onUnavailable: () => { if (id === match) showDesk(undefined, 'unavailable') },
-        onFinish: (outcome, hull, enemyHull, crew) => {
+        onFinish: (outcome, hull, enemyHull, crew, salvage) => {
           if (id !== match) return
-          showDesk({ outcome, hull, enemyHull, crew })
+          showDesk({ outcome, hull, enemyHull, crew, salvage })
           desk.querySelector<HTMLButtonElement>('#fight')?.focus()
         },
       })

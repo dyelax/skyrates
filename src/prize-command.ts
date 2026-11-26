@@ -153,7 +153,7 @@ export function commandReadiness(state: GameState): string {
     ` Charisma · Negotiation ${rank}/3. Learn the three perks in your captain’s log to recruit a skipper.`)
 }
 
-export function prizeManifest(state: GameState, opponent: RaiderProfile['id'], id: number): PrizeManifest {
+export function prizeManifest(state: Pick<GameState,'pirateSeed'>, opponent: RaiderProfile['id'], id: number): PrizeManifest {
   const stock: GoodId[] = ['provisions', 'glass', 'machinery']
   const index = legacyPirateSeed(`manifest/${state.pirateSeed}/${id}`) % stock.length
   return { good:stock[index], quantity:{scout:6,cutter:8,corsair:10}[opponent] }
