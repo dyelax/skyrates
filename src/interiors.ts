@@ -616,7 +616,7 @@ function voyage(state: GameState, ui: Controls) {
     const canPayCash = state.coins >= toll.crowns
     title = 'A toll on the skyway'
     line = toll.crowns === 0 ? '“Nothing to levy. On your way, Captain.”' : `“${toll.crowns} ${toll.crowns === 1 ? 'crown' : 'crowns'} for passage, Captain.”`
-    copy = `Lookout sights the <strong>${foe.name}</strong> with ${armamentLabel(foe.cannons)}, ${foe.hull} hull and ${crew} (strength ${foe.crew}). Your crew has ${Number(boardingStrength(state).toFixed(2))} fighting strength. While the hulls touch, both crews tire. If theirs yields with both ships afloat, you can take terms. A wreck sinks with its cargo.`
+    copy = `Lookout sights the <strong>${foe.name}</strong> with ${armamentLabel(foe.cannons)}, ${foe.hull} hull and ${crew} (strength ${foe.crew}). Your crew has ${Number(boardingStrength(state).toFixed(2))} fighting strength. While the hulls touch, both crews tire. If theirs yields with both ships afloat, you can take terms. A few crates can break free from a wreck. Fly through them before they fall below the clouds.`
     terms = `<details class="sk-fold"><summary>Toll and surrender terms</summary><p>They count ${state.coins} crowns in your purse and ${toll.cargoValue} in cargo, worth ${toll.exposedValue} together. ${toll.rate !== null && toll.crowns > 0 ? 'Their rate is ' + toll.rate + '%, settled in whole crowns. ' : ''}${canPayCargo ? 'They accept ' + cargoTerms + '. ' : ''}If defeated, you surrender ${cargoTerms}. Commission papers and bonded mail stay aboard.</p></details>`
     terms += `<p><b>Prize command.</b> ${commandReadiness(state)}</p>
       <details class="sk-fold"><summary>Enemy skipper and cargo</summary><p>${skipper.motive}

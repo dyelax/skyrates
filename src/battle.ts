@@ -1,3 +1,5 @@
+import { launchCargo, collectCargo, fallingPoint, recovered, salvageReceipt, type SalvageLoad, type SalvageState, type SalvageReceipt } from './salvage'
+import { SalvageView } from './salvage-view'
 import Phaser from 'phaser'
 import { battery, syncBattery } from './battle-battery'
 import { artwork } from './artwork'
@@ -65,7 +67,8 @@ export interface BattleOptions {
   onUnavailable: () => void
   savedBattle?: BattleSnapshot
   onSave?: (snapshot: BattleSnapshot) => void
-  onFinish: (outcome: BattleEnding, remainingHull: number, enemyHull: number, crew: Readonly<CrewPair>) => void
+  salvageLoad?: SalvageLoad
+  onFinish: (outcome: BattleEnding, remainingHull: number, enemyHull: number, crew: Readonly<CrewPair>, salvage?: SalvageReceipt) => void
 }
 
 type Projectile = Shot & { enemy: boolean }
@@ -247,6 +250,8 @@ class SkyBattle extends Phaser.Scene {
   private touching = false
   private accumulator = 0
   private saveIn = .25
+  private salvage?: SalvageState
+  private salvageView?: SalvageView
   private terminal: BattleEnding | null = null
   private listeners = new AbortController()
   private banner: HTMLElement
@@ -330,7 +335,6 @@ class SkyBattle extends Phaser.Scene {
     this.showBoarding(0)
     this.overlays = this.add.graphics().setDepth(7)
     this.ready = true
-    if (this.terminal) { this.finish(this.terminal, true); return }
     this.bindControls()
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (
@@ -340,6 +344,10 @@ class SkyBattle extends Phaser.Scene {
       )
         return
       const at = { x: pointer.worldX, y: pointer.worldY }
+      if (this.salvageView) {
+        this.course = at
+        return
+      }
       if (Math.hypot(at.x - this.foe.x, at.y - this.foe.y) < 48) {
         if (this.drill && this.drill !== 'fire') return
         this.order(closestSide(this.player, this.foe))
@@ -349,6 +357,7 @@ class SkyBattle extends Phaser.Scene {
         if (this.drill === 'dodge') this.player.throttle = 2
       }
     })
+    if (this.terminal) { this.finish(this.terminal, true); return }
     if (this.drill) this.drawCoach()
     this.syncMarkers()
     this.syncHUD()
@@ -384,6 +393,7 @@ class SkyBattle extends Phaser.Scene {
     this.area = next
     if (previous.height !== next.height || previous.top !== next.top || previous.bottom !== next.bottom) {
       const objects: Point[] = [this.player, this.foe, ...this.sparks, ...this.shots]
+      if (this.salvage) objects.push(...this.salvage.crates)
       if (this.buoy) objects.push(this.buoy)
       if (this.chalk) this.chalk = undefined
       if (this.course) objects.push(this.course)
@@ -486,6 +496,7 @@ class SkyBattle extends Phaser.Scene {
 
   private order(action: string) {
     if (this.ended) return
+    if (this.salvageView && !['faster', 'slower', 'pause'].includes(action)) return
     if (this.drill && action === 'skip') {
       this.opts.drill!.onLeave(true)
       return
@@ -832,8 +843,9 @@ class SkyBattle extends Phaser.Scene {
     this.escaping = save.escaping
     this.ramming = save.intercepting
     this.terminal = save.terminal
+    this.salvage = save.salvage
     const factor = (this.area.bottom - this.area.top) / (save.area.bottom - save.area.top)
-    for (const p of [this.player, this.foe, ...this.shots, ...(this.course ? [this.course] : [])]) {
+    for (const p of [this.player, this.foe, ...this.shots, ...(this.salvage?.crates ?? []), ...(this.course ? [this.course] : [])]) {
       p.y = this.area.top + (p.y - save.area.top) * factor
     }
     this.touching = hullContact(this.player, this.foe).gap <= .00001
@@ -848,7 +860,7 @@ class SkyBattle extends Phaser.Scene {
       area: { top: this.area.top, bottom: this.area.bottom },
       contact: this.contact, projectiles: this.shots, course: this.course ?? null,
       aiDelay: this.aiDelay, escaping: this.escaping, intercepting: this.ramming,
-      terminal: this.terminal,
+      terminal: this.terminal, ...(this.salvage ? { salvage: this.salvage } : {}),
     }))
   }
 
@@ -856,9 +868,12 @@ class SkyBattle extends Phaser.Scene {
     if (this.ended) return
     this.ended = true
     this.terminal = outcome
+    if (!resume && outcome === 'victory' && !this.drill && this.opts.salvageLoad) {
+      this.salvage = launchCargo('raider-1', this.opts.salvageLoad.manifest, this.player, this.foe, this.area)
+      if (this.opts.salvageLoad.free <= 0) this.salvage.remaining = 0
+    }
     this.showBoarding(0)
     this.save()
-    this.listeners.abort()
     this.syncHUD()
     const message = {
       victory: `${this.opts.opponent.name} wrecked`,
@@ -873,7 +888,8 @@ class SkyBattle extends Phaser.Scene {
     const complete = () => {
       if (settled || !this.root.isConnected) return
       settled = true
-      this.opts.onFinish(outcome, this.player.hull, this.foe.hull, { ...this.crew })
+      if (this.salvage?.remaining && this.opts.salvageLoad) this.beginSalvage(resume)
+      else this.reportResult(outcome)
     }
     if (resume) { queueMicrotask(complete); return }
     this.events.emit('sky:ships', { player: this.player, enemy: this.foe })
@@ -885,8 +901,72 @@ class SkyBattle extends Phaser.Scene {
     if (sunk.length) {
       this.overlays.clear()
       this.banner.hidden = true
-      if (!this.events.emit('sky:terminal', { sunk, complete })) complete()
+      if (!this.events.emit('sky:terminal', { sunk, complete, nextLabel: this.salvage?.remaining ? 'Continue to cargo' : undefined })) complete()
     } else this.time.delayedCall(700, complete)
+  }
+
+  private reportResult(outcome: BattleEnding) {
+    this.listeners.abort()
+    const load = this.opts.salvageLoad
+    const receipt = this.salvage && load ? salvageReceipt(load.manifest, recovered(this.salvage)) : undefined
+    this.opts.onFinish(outcome, this.player.hull, this.foe.hull, { ...this.crew }, receipt)
+  }
+
+  private beginSalvage(resume: boolean) {
+    const state = this.salvage!,
+      load = this.opts.salvageLoad!
+    this.ended = false
+    this.ramming = this.escaping = this.touching = false
+    if (!resume) this.course = undefined
+    this.shots.length = 0
+    this.pressed.clear()
+    this.clearBanner()
+    this.paths.clear()
+    this.overlays.clear()
+    this.foeView.hull.setVisible(false)
+    this.foeView.shadow.setVisible(false)
+    this.root.classList.add('salvaging')
+    this.buttons.pause.disabled = false
+    this.salvageView = new SalvageView(
+      this,
+      this.root,
+      load,
+      () => {
+        if (this.pausedDuel) this.order('pause')
+        const targets = state.crates
+          .filter((c) => !c.taken)
+          .map((c) => fallingPoint(c, state.remaining, this.wind, this.area))
+        const distance = (p: Point) => Math.hypot(p.x - this.player.x, p.y - this.player.y)
+        this.course = targets.sort((a, b) => distance(a) - distance(b))[0]
+        this.player.throttle = 3
+        this.save()
+      },
+      () => this.endSalvage(),
+    )
+    this.markers.resize()
+    this.syncMarkers()
+    this.syncHUD()
+    this.paintSalvage()
+  }
+
+  private paintSalvage() {
+    if (this.salvage && this.salvageView)
+      this.salvageView.draw(
+        this.salvage,
+        this.wind,
+        this.area,
+        clamp(this.area.width / this.scale.displaySize.width, 0.8, 2.4),
+      )
+  }
+
+  private endSalvage() {
+    if (!this.salvageView || !this.salvage || this.ended) return
+    this.salvage.remaining = 0
+    this.ended = true
+    this.save()
+    this.salvageView.close()
+    this.salvageView = undefined
+    this.reportResult('victory')
   }
 
   private traceCourse() {
@@ -986,6 +1066,14 @@ class SkyBattle extends Phaser.Scene {
       }
     }
     if (this.drill !== 'briefing' && this.drill !== 'debrief') moveShip(this.player, helm, dt, this.wind)
+    if (this.salvage && this.salvageView && this.opts.salvageLoad) {
+      this.player.x = clamp(this.player.x, 24, this.area.width - 24)
+      this.player.y = clamp(this.player.y, this.area.top + 22, this.area.bottom - 22)
+      const picked = collectCargo(this.salvage, this.opts.salvageLoad, this.player, this.wind, this.area, dt)
+      if (picked) this.saveIn = 0
+      if (this.salvage.remaining <= 0) this.endSalvage()
+      return
+    }
     if (this.drill) this.exerciseHelm(dt)
     else this.enemyHelm(dt)
     const p = this.player
@@ -1080,7 +1168,8 @@ class SkyBattle extends Phaser.Scene {
     this.clouds?.update(dt, flew ? this.player.x - beforeX : 0, flew ? this.player.y - beforeY : 0)
     this.bannerTTL -= dt
     if (this.bannerTTL <= 0 && !this.banner.hidden) this.clearBanner()
-    this.traceCourse()
+    if (this.salvageView) this.paintSalvage()
+    else this.traceCourse()
     this.events.emit('sky:ships', { player: this.player, enemy: this.foe })
     this.saveIn -= dt
     if (!this.drill && this.saveIn <= 0) this.save()

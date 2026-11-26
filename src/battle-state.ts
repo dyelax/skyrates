@@ -1,4 +1,5 @@
 import { GUN_POSITIONS } from './drill'
+import { validSalvage, type SalvageState } from './salvage'
 import type { Point, Shot, Vessel } from './battle-model'
 
 export const BATTLE_ENDINGS = ['victory', 'defeat', 'escaped', 'boarded', 'yielded', 'withdrawn', 'mutualWreck'] as const
@@ -23,6 +24,7 @@ export interface BattleSnapshot {
   intercepting: boolean
   escaping: boolean
   windSight?: boolean // Retired control in version 1 saves.
+  salvage?: SalvageState
   terminal: BattleEnding | null
 }
 
@@ -50,5 +52,6 @@ export function validBattleSnapshot(v: unknown): v is BattleSnapshot {
     && finite(v.aiDelay) && (v.course === null || point(v.course))
     && [v.intercepting, v.escaping].every(f => typeof f === 'boolean')
     && (v.windSight === undefined || typeof v.windSight === 'boolean')
+    && (v.salvage === undefined || (v.terminal === 'victory' && validSalvage(v.salvage)))
     && (v.terminal === null || BATTLE_ENDINGS.includes(v.terminal as BattleEnding))
 }
