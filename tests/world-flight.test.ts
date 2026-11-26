@@ -235,3 +235,22 @@ test('armed and unarmed traders react only to the pilot’s own attack; struck a
   assert.equal(steps, 6)
   assert(validWorldFlight(keep))
 })
+
+test('the sky clock follows flown time through the berth, departure and restore', () => {
+  const first = start()
+  advance(first, 3.5, 0, 2)
+  const clock = (first.skyTimeAtDeparture ?? 0) + first.elapsed
+  moorWorldFlight(first, 'sunstep')
+  const next = initWorldFlight({
+    seed: 35,
+    origin: 'sunstep',
+    destination: 'copperfall',
+    weather: calm,
+    encounter: 'none',
+    previous: JSON.parse(JSON.stringify(first)),
+  })
+  assert.equal(next.skyTimeAtDeparture, clock)
+  assert.equal(next.elapsed, 0)
+  const invalid = { ...next, skyTimeAtDeparture: -1 }
+  assert(!validWorldFlight(invalid))
+})

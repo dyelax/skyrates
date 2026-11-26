@@ -54,6 +54,27 @@ export const WORLD_TOWNS = Object.fromEntries(PORT_IDS.map((id) => [id, makeTown
   PortId,
   WorldTown
 >
+// Normalized shore in elliptical town coordinates, shared by the sky island
+// painter and the hull collision boundary. Docks retain a supported landing.
+export function worldCoastRadius(port: PortId, angle: number) {
+  const town = WORLD_TOWNS[port],
+    phase = PORT_IDS.indexOf(port) * 1.23 + 0.56
+  let edge =
+    0.895 +
+    0.089 * Math.cos(angle * 3 + phase) +
+    0.059 * Math.sin(angle * 5 - 0.8 * phase) +
+    0.035 * Math.cos(angle * 8 + 1.2) +
+    0.017 * Math.sin(angle * 17 + phase)
+  for (const site of town.sites) {
+    const a = Math.atan2(
+      (site.position.y - town.center.y) / town.island.ry,
+      (site.position.x - town.center.x) / town.island.rx,
+    )
+    const diff = wrapAngle(a - angle)
+    edge = Math.max(edge, 0.82 + 0.17 * Math.exp((-diff * diff) / 0.052))
+  }
+  return edge
+}
 export const WORLD_TOWN_RADIUS = 510
 export const WORLD_NOTICE_RADIUS = 430
 export const WORLD_BREAKOFF_RADIUS = 560
@@ -93,6 +114,7 @@ export interface WorldFlight {
   weather: WeatherReport
   load: number
   elapsed: number
+  skyTimeAtDeparture?: number
   distance: number
   remainder: number
   safe: boolean
@@ -288,6 +310,7 @@ export function initWorldFlight(input: WorldDeparture): WorldFlight {
     weather: structuredClone(input.weather),
     load: bound(input.load ?? 0, 0, 1),
     elapsed: 0,
+    skyTimeAtDeparture: input.previous ? (input.previous.skyTimeAtDeparture ?? 0) + input.previous.elapsed : 0,
     distance: 0,
     departed: false,
     remainder: 0,
@@ -450,21 +473,26 @@ export function worldCourse(from: Point, destination: Point): Point {
 }
 
 function clearLand(ship: WorldPose) {
-  for (const town of Object.values(WORLD_TOWNS)) {
-    const x = ship.x - town.center.x,
+  for (const port of PORT_IDS) {
+    const town = WORLD_TOWNS[port],
+      x = ship.x - town.center.x,
       y = ship.y - town.center.y
     if (Math.abs(x) > 240 || Math.abs(y) > 190) continue
-    const rx = town.island.rx + 10,
-      ry = town.island.ry + 10
-    const r = Math.hypot(x / rx, y / ry)
-    if (r < 1) {
-      const nx = r > 1e-6 ? x / (rx * rx) : 1,
-        ny = y / (ry * ry),
-        mag = Math.hypot(nx, ny)
-      const ux = nx / mag,
-        uy = ny / mag
-      const d = r > 1e-6 ? (1 - r * r) / (2 * mag) : rx
-      expel(ship, ux, uy, Math.min(rx, d))
+    const rx = town.island.rx,
+      ry = town.island.ry,
+      u = x / rx,
+      v = y / ry,
+      radius = Math.hypot(u, v)
+    const angle = Math.atan2(v, u),
+      coast = worldCoastRadius(port, angle)
+    if (radius < 1e-6) expel(ship, 1, 0, rx * coast + 10)
+    else {
+      const slope = (worldCoastRadius(port, angle + 0.006) - worldCoastRadius(port, angle - 0.006)) / 0.012
+      const gx = (u / radius + (slope * v) / (radius * radius)) / rx,
+        gy = (v / radius - (slope * u) / (radius * radius)) / ry
+      const magnitude = Math.hypot(gx, gy),
+        penetration = (coast - radius) / magnitude + 10
+      if (penetration > 0) expel(ship, gx / magnitude, gy / magnitude, Math.min(rx, penetration))
     }
     for (const site of town.sites) {
       const dx = ship.x - site.position.x,
@@ -724,6 +752,7 @@ export function validWorldFlight(v: unknown): v is WorldFlight {
     !finite(v.load) ||
     v.load < 0 ||
     v.load > 1 ||
+    (v.skyTimeAtDeparture !== undefined && (!finite(v.skyTimeAtDeparture) || v.skyTimeAtDeparture < 0)) ||
     !finite(v.elapsed) ||
     v.elapsed < 0 ||
     !finite(v.distance) ||
