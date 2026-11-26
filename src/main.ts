@@ -66,8 +66,7 @@ function drawNotice() {
   toast.classList.toggle('visible', !!message)
   toast.querySelector('span')!.textContent = message || ''
   const remaining = state.pendingNotices.length - 1
-  toast.querySelector('button')!.textContent =
-    remaining > 0 ? 'Acknowledge · ' + remaining + ' more' : 'Acknowledge'
+  toast.querySelector('button')!.textContent = remaining > 0 ? 'Acknowledge · ' + remaining + ' more' : 'Acknowledge'
   measureNotice()
 }
 
@@ -99,7 +98,7 @@ function navigate(next: View) {
     }
   }
   if (state.voyage && next === 'harbor') next = 'voyage'
-  if (state.voyage && !['battle','voyage','chart','log'].includes(next)) return
+  if (state.voyage && !['battle', 'voyage', 'chart', 'log'].includes(next)) return
   bell('select')
   view = next
   render()
@@ -128,23 +127,36 @@ function dispatch(command: Command) {
           : 'select',
   )
   render()
-  if (arrival || command.type === 'castOff' || command.type === 'sail' || command.type === 'engage' || command.type === 'payInvoice')
+  if (
+    arrival ||
+    command.type === 'castOff' ||
+    command.type === 'sail' ||
+    command.type === 'engage' ||
+    command.type === 'payInvoice'
+  )
     window.scrollTo({ top: 0, behavior: 'instant' })
   drawNotice()
 }
 
 function render() {
-  const leg=state.voyage
-  const battle=leg?.battle
-  if (leg?.phase==='battle' && battle?.terminal && !battle.salvage?.remaining && !state.drill) {
-    dispatch({type:'resolveBattle',id:encounterId(leg),result:CAMPAIGN_RESULTS[battle.terminal],hull:battle.player.hull,enemyHull:battle.enemy.hull})
+  const leg = state.voyage
+  const battle = leg?.battle
+  if (leg?.phase === 'battle' && battle?.terminal && !battle.salvage?.remaining && !state.drill) {
+    dispatch({
+      type: 'resolveBattle',
+      id: encounterId(leg),
+      result: CAMPAIGN_RESULTS[battle.terminal],
+      hull: battle.player.hull,
+      enemyHull: battle.enemy.hull,
+    })
     return
   }
   const token = ++renderToken
   battleUnmount?.()
   battleUnmount = undefined
   main.querySelector('.first-watch-note')?.remove()
-  const cruising = view === 'voyage' && !!state.voyage && ['underway','raider','merchant','battle'].includes(state.voyage.phase)
+  const cruising =
+    view === 'voyage' && !!state.voyage && ['underway', 'raider', 'merchant', 'battle'].includes(state.voyage.phase)
   const sheet = view !== 'harbor' && !cruising
   surface.replaceChildren()
   surface.hidden = !sheet
@@ -153,54 +165,76 @@ function render() {
   sky.inert = sheet
   sky.hidden = view === 'battle'
   if (world) world.update(state)
-  else world = mountWorldFlight(sky,{
-    state,
-    onCheckpoint:(flight,battle) => {
-      const leg = state.voyage
-      if (!leg || state.drill) return
-      const next = checkpointFlight(state,leg.id,flight,battle)
-      if (next === state) return
-      state = next
-      stored = saveGame(state)
-      if (next.voyage?.phase !== leg.phase) render()
-      else if (battle?.terminal && !battle.salvage?.remaining) {
-        dispatch({type:'resolveBattle',id:encounterId(leg),result:CAMPAIGN_RESULTS[battle.terminal],
-          hull:battle.player.hull,enemyHull:battle.enemy.hull})
-      }
-    },
-    onAttack:contact => {
-      if (!sky.inert && state.voyage) dispatch({type:'attackMerchant',id:state.voyage.id,contact})
-    },
-    onDemandChoice:choice => {
-      const leg=state.voyage
-      if (!leg || sky.inert) return
-      if (choice==='refuse') dispatch({type:'engage'})
-      else if (choice==='leave') dispatch({type:'leaveMerchant',id:encounterId(leg)})
-      else if (choice==='attack' && leg.hailed) dispatch({type:'attackMerchant',id:leg.id,contact:leg.hailed})
-      else if (choice==='cargo'||choice==='crowns') dispatch({type:'payToll',id:encounterId(leg),payment:choice})
-    },
-    onBerthCheckpoint:flight => {
-      if (sky.inert) return
-      const next = checkpointBerth(state,flight)
-      if (next !== state) { state = next; stored = saveGame(state) }
-    },
-    onCastOff:() => { if (!sky.inert) dispatch({type:'castOff'}) },
-    onWaypoint:port => { if (!sky.inert && state.voyage) dispatch({type:'setWaypoint',id:state.voyage.id,port}) },
-    onHail:contact => { if (!sky.inert && state.voyage) dispatch({type:'hailFlight',id:state.voyage.id,contact,manual:true}) },
-    onDock:port => { if (!sky.inert && state.voyage) dispatch({type:'dockFlight',id:state.voyage.id,port}) },
-    onService:place => {
-      if (sky.inert) return
-      if (place === 'chart' || place === 'log') { navigate(place); return }
-      const flight = state.voyage?.flight ?? worldAtBerth(state)
-      const site = nearbyWorldSite(flight)
-      if (!site || site.siteId !== (place === 'local' ? 'dockworker' : place)) return
-      if (state.voyage) {
-        if (nearbyDock(flight) !== site.port) return
-        dispatch({type:'dockFlight',id:state.voyage.id,port:site.port})
-      }
-      if (!state.voyage && state.port === site.port) navigate(place)
-    },
-  })
+  else
+    world = mountWorldFlight(sky, {
+      state,
+      onCheckpoint: (flight, battle) => {
+        const leg = state.voyage
+        if (!leg || state.drill) return
+        const next = checkpointFlight(state, leg.id, flight, battle)
+        if (next === state) return
+        state = next
+        stored = saveGame(state)
+        if (next.voyage?.phase !== leg.phase) render()
+        else if (battle?.terminal && !battle.salvage?.remaining) {
+          dispatch({
+            type: 'resolveBattle',
+            id: encounterId(leg),
+            result: CAMPAIGN_RESULTS[battle.terminal],
+            hull: battle.player.hull,
+            enemyHull: battle.enemy.hull,
+          })
+        }
+      },
+      onAttack: contact => {
+        if (!sky.inert && state.voyage) dispatch({ type: 'attackMerchant', id: state.voyage.id, contact })
+      },
+      onDemandChoice: choice => {
+        const leg = state.voyage
+        if (!leg || sky.inert) return
+        if (choice === 'refuse') dispatch({ type: 'engage' })
+        else if (choice === 'leave') dispatch({ type: 'leaveMerchant', id: encounterId(leg) })
+        else if (choice === 'attack' && leg.hailed)
+          dispatch({ type: 'attackMerchant', id: leg.id, contact: leg.hailed })
+        else if (choice === 'cargo' || choice === 'crowns')
+          dispatch({ type: 'payToll', id: encounterId(leg), payment: choice })
+      },
+      onBerthCheckpoint: flight => {
+        if (sky.inert) return
+        const next = checkpointBerth(state, flight)
+        if (next !== state) {
+          state = next
+          stored = saveGame(state)
+        }
+      },
+      onCastOff: () => {
+        if (!sky.inert) dispatch({ type: 'castOff' })
+      },
+      onWaypoint: port => {
+        if (!sky.inert && state.voyage) dispatch({ type: 'setWaypoint', id: state.voyage.id, port })
+      },
+      onHail: contact => {
+        if (!sky.inert && state.voyage) dispatch({ type: 'hailFlight', id: state.voyage.id, contact, manual: true })
+      },
+      onDock: port => {
+        if (!sky.inert && state.voyage) dispatch({ type: 'dockFlight', id: state.voyage.id, port })
+      },
+      onService: place => {
+        if (sky.inert) return
+        if (place === 'chart' || place === 'log') {
+          navigate(place)
+          return
+        }
+        const flight = state.voyage?.flight ?? worldAtBerth(state)
+        const site = nearbyWorldSite(flight)
+        if (!site || site.siteId !== (place === 'local' ? 'dockworker' : place)) return
+        if (state.voyage) {
+          if (nearbyDock(flight) !== site.port) return
+          dispatch({ type: 'dockFlight', id: state.voyage.id, port: site.port })
+        }
+        if (!state.voyage && state.port === site.port) navigate(place)
+      },
+    })
   main.dataset.saved = String(stored)
   main.dataset.screen = view
   document.title =
@@ -219,42 +253,61 @@ function render() {
         }[view]) + ' · Skyrates'
   if (view === 'harbor') {
     if (state.firstWatch === 'arrived' && state.port === 'sunstep' && state.mission === 'offered')
-      firstWatchNote(main,state,()=>navigate('authority'),()=>{
-        state = {...state,firstWatch:'briefed'}
-        stored=saveGame(state)
-      })
-  }
-  else if (cruising) return
-  else if (view === 'local') mountDockTalk(surface,state,() => navigate('harbor'),recordContact)
+      firstWatchNote(
+        main,
+        state,
+        () => navigate('authority'),
+        () => {
+          state = { ...state, firstWatch: 'briefed' }
+          stored = saveGame(state)
+        },
+      )
+  } else if (cruising) return
+  else if (view === 'local') mountDockTalk(surface, state, () => navigate('harbor'), recordContact)
   else if (view === 'battle' && state.drill) {
     // The Watch exercise is an authored range. Campaign armament runs directly
     // on the world renderer and retains its camera, weather and traffic.
-    surface.innerHTML='<section class="battle-loading" role="status">Taking the helm…</section>'
-    const unavailable=() => {
-      if (token!==renderToken) return
-      surface.innerHTML='<section class="battle-loading"><p>The Watch exercise could not load.</p><button data-retry>Retry exercise</button><button data-skip>Skip free exercise</button></section>'
-      surface.querySelector('[data-retry]')!.addEventListener('click',render)
-      surface.querySelector('[data-skip]')!.addEventListener('click',()=>dispatch({type:'endDrill',skip:true}))
+    surface.innerHTML = '<section class="battle-loading" role="status">Taking the helm…</section>'
+    const unavailable = () => {
+      if (token !== renderToken) return
+      surface.innerHTML =
+        '<section class="battle-loading"><p>The Watch exercise could not load.</p><button data-retry>Retry exercise</button><button data-skip>Skip free exercise</button></section>'
+      surface.querySelector('[data-retry]')!.addEventListener('click', render)
+      surface.querySelector('[data-skip]')!.addEventListener('click', () => dispatch({ type: 'endDrill', skip: true }))
     }
-    void import('./battle').then(({mountBattle})=>{
-      if (token!==renderToken || !state.drill) return
-      battleUnmount=mountBattle(surface,{
-        opponent:WATCH_CUTTER,crew:state.ship.crew,skill:boardingStrength(state)/state.ship.crew,
-        gunLevel:state.ship.guns,cannons:state.ship.cannons,location:battleLocation(state),weather:voyageWeather(state),
-        startingHull:state.ship.hull,hullLevel:(state.ship.maxHull-100)/25,
-        quickGunnery:hasCaptainPerk(state,'gunner'),shipName:'The Wayfarer',onUnavailable:unavailable,
-        drill:{stage:state.drill,onCheckpoint:stage=>{
-          if (token!==renderToken) return
-          state=advanceDrill(state,stage)
-          stored=saveGame(state)
-        },onLeave:skip=>dispatch({type:'endDrill',skip})},
-        onFinish:()=>{},
+    void import('./battle')
+      .then(({ mountBattle }) => {
+        if (token !== renderToken || !state.drill) return
+        battleUnmount = mountBattle(surface, {
+          opponent: WATCH_CUTTER,
+          crew: state.ship.crew,
+          skill: boardingStrength(state) / state.ship.crew,
+          gunLevel: state.ship.guns,
+          cannons: state.ship.cannons,
+          location: battleLocation(state),
+          weather: voyageWeather(state),
+          startingHull: state.ship.hull,
+          hullLevel: (state.ship.maxHull - 100) / 25,
+          quickGunnery: hasCaptainPerk(state, 'gunner'),
+          shipName: 'The Wayfarer',
+          onUnavailable: unavailable,
+          drill: {
+            stage: state.drill,
+            onCheckpoint: stage => {
+              if (token !== renderToken) return
+              state = advanceDrill(state, stage)
+              stored = saveGame(state)
+            },
+            onLeave: skip => dispatch({ type: 'endDrill', skip }),
+          },
+          onFinish: () => {},
+        })
       })
-    }).catch(unavailable)
-  } else renderInterior(surface,view as InteriorView,state,dispatch,navigate,recordContact,false,true)
+      .catch(unavailable)
+  } else renderInterior(surface, view as InteriorView, state, dispatch, navigate, recordContact, false, true)
 }
 
-mountPlaytestChat(() => ({state,view}))
+mountPlaytestChat(() => ({ state, view }))
 document.addEventListener('pointerdown', beginAmbience, { once: true })
 render()
 
