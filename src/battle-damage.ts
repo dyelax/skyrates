@@ -5,6 +5,24 @@ export function hullDamageStage(hull: number, maxHull: number): number {
   return fraction < 0.15 ? 3 : fraction < 0.35 ? 2 : fraction < 0.7 ? 1 : 0
 }
 
+// WebGL 1 supports mipmaps only on power-of-two textures. Preserve the original
+// frame inside transparent padding so collision footprints and damage painting
+// keep exactly the same dimensions as the source illustration.
+function hullCanvas(scene: Phaser.Scene, key: string, width: number, height: number) {
+  const texture = scene.textures.createCanvas(key, 2 ** Math.ceil(Math.log2(width)), 2 ** Math.ceil(Math.log2(height)))
+  texture?.get().setSize(width, height)
+  return texture
+}
+
+export function prepareHull(scene: Phaser.Scene, key: string) {
+  const sourceKey = key + '-art'
+  const image = scene.textures.get(sourceKey).getSourceImage() as HTMLImageElement
+  const texture = hullCanvas(scene, key, image.width, image.height)!
+  texture.context.drawImage(image, 0, 0)
+  texture.refresh()
+  scene.textures.remove(sourceKey)
+}
+
 type Point = [number, number]
 
 function polygon(ctx: CanvasRenderingContext2D, points: Point[]) {
@@ -20,13 +38,14 @@ export function damagedHull(scene: Phaser.Scene, key: string, stage: number): st
   if (!stage) return key
   const name = `${key}-damage-${stage}`
   if (scene.textures.exists(name)) return name
-  const original = scene.textures.get(key).getSourceImage() as HTMLImageElement
-  const texture = scene.textures.createCanvas(name, original.width, original.height)
+  const original = scene.textures.get(key)
+  const { width, height } = original.get()
+  const texture = hullCanvas(scene, name, width, height)
   if (!texture) return key
   const ctx = texture.context
-  ctx.drawImage(original, 0, 0)
+  ctx.drawImage(original.getSourceImage() as HTMLCanvasElement, 0, 0)
   ctx.save()
-  ctx.scale(original.width / 240, original.height / 80)
+  ctx.scale(width / 240, height / 80)
   ctx.globalCompositeOperation = 'source-atop'
   ctx.fillStyle = ['transparent', 'rgba(25,20,19,.13)', 'rgba(21,20,23,.31)', 'rgba(18,23,25,.5)'][stage]
   ctx.fillRect(0, 0, 240, 80)
@@ -59,7 +78,7 @@ export function damagedHull(scene: Phaser.Scene, key: string, stage: number): st
     ctx.stroke()
   }
   // The raider's red mainsail sits farther aft than the Wayfarer's solar mainsail.
-  const main = key === 'opponent' && original.height / original.width > 0.37 ? 105 : 137
+  const main = key === 'opponent' && height / width > 0.37 ? 105 : 137
   tear([
     [main - 19, -3],
     [main + 2, -3],

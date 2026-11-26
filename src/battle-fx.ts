@@ -240,7 +240,7 @@ export function mountBattleFx(
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'duel-skip-wreck'
-    button.textContent = 'Skip wreck sequence'
+    button.textContent = 'View result'
     button.onclick = endWreck
     root.append(button)
     button.focus({ preventScroll: true })
@@ -312,7 +312,7 @@ export function mountBattleFx(
         dy = 0
       if (t >= 1 || motion.matches) shake = undefined
       else {
-        const unit = scene.scale.width / Math.max(1, scene.game.canvas.getBoundingClientRect().width)
+        const unit = scene.scale.width / scene.cameras.main.zoomX / Math.max(1, scene.game.canvas.getBoundingClientRect().width)
         const distance = unit * shake.power * Math.cos(3 * Math.PI * t) * (1 - t) ** 2
         dx = shake.x * distance
         dy = shake.y * distance

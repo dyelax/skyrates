@@ -72,9 +72,9 @@ test('repeated impacts stay bounded, and a reduced-motion wreck can settle only 
     events,
     add: { graphics: () => paint, image: () => ({ ...image }) },
     textures: { exists: () => true },
-    scale: { width: 960 },
+    scale: { width: 1920 },
     game: { canvas: { getBoundingClientRect: () => ({ width: 390 }) } },
-    cameras: { main: { setScroll: (x: number, y: number) => camera.push((Math.hypot(x, y) * 390) / 960) } },
+    cameras: { main: { zoomX: 2, setScroll: (x: number, y: number) => camera.push((Math.hypot(x, y) * 390) / 960) } },
   }
   const player = { hull: { ...image }, shadow: { ...image } }
   const enemy = { hull: { ...image }, shadow: { ...image } }
