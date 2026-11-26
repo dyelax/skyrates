@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { placeShipMarkers } from '../src/battle-markers'
+import { placeShipMarkers, placeThirdMarker } from '../src/battle-markers'
 
 type Box = { x: number; y: number; w: number; h: number }
 const crosses = (a: Box, b: Box) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
@@ -29,5 +29,20 @@ test('an open-sky contact gives each ship a clear leader and a separate two-mete
     assert.ok(you.y + you.h + 10 <= player.y)
     assert.ok(scout.y >= enemy.y + enemy.h + 10)
     assert.ok(!crosses(you,scout))
+  }
+})
+
+test('an escort or a struck prize keeps its own label when all three hulls meet near a phone control', () => {
+  const viewport = { w: 320, h: 600 }
+  const tag = { w: 90, h: 47 }
+  const controls = [{x: 6, y: 484, w: 142, h: 108}, {x: 160, y: 470, w: 152, h: 122}]
+  const ships: [Box, Box] = [{x: 114, y: 432, w: 36, h: 24}, {x: 145, y: 435, w: 36, h: 24}]
+  const third = {x: 124, y: 455, w: 36, h: 24}
+  const pair = placeShipMarkers(ships, [...controls, third], viewport, tag, true)
+  const obstacles = [...controls, ...ships, third, ...pair]
+  for (const height of [33, 47]) {
+    const marker = placeThirdMarker(third, obstacles, viewport, {w: tag.w, h: height})
+    assert.ok(obstacles.every(box => !crosses(box, marker)))
+    assert.ok(marker.x >= 0 && marker.x + marker.w <= viewport.w && marker.y + marker.h <= viewport.h)
   }
 })

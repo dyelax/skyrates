@@ -64,13 +64,13 @@ export const COACH: Record<DrillStage, { chapter: string; title: string; text: s
   },
   dodge: {
     chapter: '01 / 03 · Helm',
-    title: 'Leave the red firing lane',
-    text: 'The red line leads straight out from the Watch cutter’s port gun. Press W to sail forward, or order a course to the green buoy to leave its path.',
+    title: 'Dodge the chalk round',
+    text: 'Watch for the flash at the cutter’s port gun. Press W or steer to the green buoy before the chalk round reaches you.',
   },
   fire: {
     chapter: '02 / 03 · Gunnery',
     title: 'Bring your port cannon to bear',
-    text: 'Your cannon fires straight out from the left rail. Turn with A / D, tap open sky, or choose Line up port gun. When the dotted line crosses the cutter, press Q or tap Port to fire. On a larger ship, that order fires every loaded gun on the rail.',
+    text: 'Your cannon fires straight out from the left rail. Turn with A / D, tap open sky, or choose Line up port gun. When the cutter is abeam and the Port button brightens, press Q or tap Port to fire. On a larger ship, that order fires every loaded gun on the rail.',
   },
   board: {
     chapter: '03 / 03 · Close action',

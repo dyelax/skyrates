@@ -49,11 +49,19 @@
 }
 .duel-markers .ship-meter {
   display: grid;
-  grid-template-columns: 2.65em minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr);
   column-gap: 5px;
   align-items: center;
   height: 14px;
 }
+.air-duel .health-glyph {
+  display: block;
+  width: 18px;
+  height: 14px;
+  color: #b0ecdc;
+  filter: drop-shadow(0 1px 1px #10262b);
+}
+.air-duel .health-glyph-crew { color: #ffd584; }
 .duel-markers .ship-meter i {
   display: block;
   box-sizing: border-box;
@@ -70,6 +78,32 @@
   background: #b0ecdc;
 }
 .duel-markers .crew-meter b { background: #ffd584; }
+.ship-marker:has(.crew-meter[hidden]) { height: 33px; }
+.merchant-exit {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: flex;
+  width: 72px;
+  height: 20px;
+  gap: 5px;
+  align-items: center;
+  color: #e6ffdc;
+  font: 600 12px/1 var(--font-sans, sans-serif);
+  text-shadow: 0 1px 2px #10232b, 0 0 4px #082929;
+}
+.merchant-exit.at-right { flex-direction: row-reverse; }
+.merchant-exit::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  background: #153e3b;
+  border: 2px solid #daffd2;
+  outline: 1px solid #1a3332;
+}
 @media (max-width: 540px) {
   .duel-markers .ship-marker { font-size: 12px; }
 }
+
+.air-duel .ship-warning { display: block; height: 14px; color: #ffe1a7; font: 600 10px/13px Barlow, sans-serif; text-shadow: 0 1px 3px #342b20; }
+.air-duel .ship-warning[hidden] { display: none; }

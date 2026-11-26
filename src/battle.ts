@@ -1,3 +1,4 @@
+import { healthGlyph } from './health-glyph'
 import { launchCargo, collectCargo, fallingPoint, recovered, salvageReceipt, type SalvageLoad, type SalvageState, type SalvageReceipt } from './salvage'
 import { SalvageView } from './salvage-view'
 import Phaser from 'phaser'
@@ -5,10 +6,12 @@ import { battery, syncBattery } from './battle-battery'
 import { artwork } from './artwork'
 import type { PortId } from './data'
 import { mountBattleFx } from './battle-fx'
-import { prepareHull } from './battle-damage'
+import { SurrenderFlag } from './battle-surrender-flag'
+import { TrialProtection, type TrialScenario, type TrialProtectionReport } from './trial-protection'
+import { damagedHull, hullDamageStage, prepareHull } from './battle-damage'
 import { AirshipRig } from './battle-rig'
 import { drawBoarders } from './boarding-art'
-import { BattleMarkers } from './battle-markers'
+import { BattleMarkers, type TrialMarkerState } from './battle-markers'
 import './battle-fx.css'
 import type { WeatherReport } from './weather'
 import { CloudDeck } from './cloud-deck'
@@ -67,11 +70,13 @@ export interface BattleOptions {
   onUnavailable: () => void
   savedBattle?: BattleSnapshot
   onSave?: (snapshot: BattleSnapshot) => void
+  trialScenario?: TrialScenario
+  onTrialReport?: (report: TrialProtectionReport) => void
   salvageLoad?: SalvageLoad
   onFinish: (outcome: BattleEnding, remainingHull: number, enemyHull: number, crew: Readonly<CrewPair>, salvage?: SalvageReceipt) => void
 }
 
-type Projectile = Shot & { enemy: boolean }
+type Projectile = Shot & { enemy: boolean; source?: Vessel }
 interface Spark extends Point {
   vx: number
   vy: number
@@ -116,7 +121,7 @@ function drawingSize(container: HTMLElement) {
 }
 
 function hullCard(title: string, id: string): string {
-  const meter = (label: string, key: string) => `<div class="duel-meter-title"><span id="gauge-${key}">${label}</span><b data-read="${key}"></b></div><div class="duel-hull-track" role="meter" aria-labelledby="vessel-${id} gauge-${key}" aria-valuemin="0"><i data-fill="${key}"></i></div>`
+  const meter = (label: 'Hull' | 'Crew health', key: string) => `<div class="duel-meter-title"><span title="${label}">${healthGlyph(label === 'Hull' ? 'Hull' : 'Crew')}<span class="duel-sr-only" id="gauge-${key}">${label}</span></span><b data-read="${key}"></b></div><div class="duel-hull-track" role="meter" aria-labelledby="vessel-${id} gauge-${key}" aria-valuemin="0"><i data-fill="${key}"></i></div>`
   return `<div class="duel-ship-readout"><strong class="duel-ship-name" id="vessel-${id}">${title}</strong>${meter('Hull', id)}${meter('Crew health', id + 'Crew')}</div>`
 }
 
@@ -222,6 +227,12 @@ class SkyBattle extends Phaser.Scene {
   private opts: BattleOptions
   private player: Vessel
   private foe: Vessel
+  private trial?: TrialProtection
+  private extraView?: AirshipRig
+  private surrenderFlag?: SurrenderFlag
+  private sinkingExtra?: Vessel
+  private boardingTarget?: Vessel
+  private ramTarget?: Vessel
   private playerView!: AirshipRig
   private foeView!: AirshipRig
   private area: FlightArea
@@ -279,6 +290,10 @@ class SkyBattle extends Phaser.Scene {
     this.foe = buildOpponent({ x: 595, y: area.top + flightHeight * 0.51 }, Math.PI * 0.49, options.opponent)
     this.crewMax = { player: options.crew * options.skill, enemy: this.drill ? 3 : options.opponent.crew }
     this.crew = { ...this.crewMax }
+    if (options.trialScenario) {
+      this.trial = new TrialProtection(options.trialScenario, this.player, options.opponent, area)
+      this.syncTrialLead()
+    }
     if (options.savedBattle && !this.drill) this.restore(options.savedBattle)
     this.banner = root.querySelector('.duel-banner')!
     this.markers = new BattleMarkers(
@@ -328,6 +343,13 @@ class SkyBattle extends Phaser.Scene {
     this.boardingWatch = this.add.graphics().setName('boarding-at-rail').setDepth(6.5).setVisible(false)
     this.playerView = new AirshipRig(this, 'schooner', 114)
     this.foeView = new AirshipRig(this, 'opponent', 110)
+    if (this.trial) {
+      const merchant = this.trial.scenario === 'merchant-escort'
+      this.extraView = new AirshipRig(this, merchant ? 'schooner' : 'opponent', merchant ? 98 : 108, '-extra')
+      if (merchant) this.extraView.hull.setTint(0xe0c885)
+      this.surrenderFlag = new SurrenderFlag(this)
+      this.paintThirdShip()
+    }
     mountBattleFx(this, this.root, { player: this.playerView, enemy: this.foeView }, { player: this.player, enemy: this.foe })
     this.root.dataset.shipRenderer = 'illustrated'
     this.playerView.update(this.player)
@@ -348,9 +370,12 @@ class SkyBattle extends Phaser.Scene {
         this.course = at
         return
       }
-      if (Math.hypot(at.x - this.foe.x, at.y - this.foe.y) < 48) {
+      const target = this.trial
+        ? [this.trial.lead, this.trial.extra].find(actor => actor.role === 'hostile' && Math.hypot(at.x - actor.ship.x, at.y - actor.ship.y) < 48)?.ship
+        : Math.hypot(at.x - this.foe.x, at.y - this.foe.y) < 48 ? this.foe : undefined
+      if (target) {
         if (this.drill && this.drill !== 'fire') return
-        this.order(closestSide(this.player, this.foe))
+        this.order(closestSide(this.player, target))
       } else {
         this.ramming = false
         this.course = at
@@ -373,7 +398,33 @@ class SkyBattle extends Phaser.Scene {
     }
     this.boardingTime += dt
     const scale = clamp(this.area.width / Math.max(1, this.scale.displaySize.width), .92, 2.6)
-    drawBoarders(this.boardingWatch, hullContact(this.player, this.foe), scale, this.boardingTime, this.reducedMotion.matches)
+    drawBoarders(this.boardingWatch, hullContact(this.player, this.boardingTarget ?? this.foe), scale, this.boardingTime, this.reducedMotion.matches)
+  }
+
+  private syncTrialLead() {
+    const lead = this.trial!.lead
+    this.foe = lead.ship
+    this.crew.enemy = lead.crew
+    this.crewMax.enemy = lead.maxCrew
+  }
+
+  private paintThirdShip() {
+    if (!this.trial || !this.extraView) return
+    const actor = this.trial.extra, view = this.extraView
+    const base = this.trial.scenario === 'merchant-escort' ? 'schooner' : 'opponent'
+    this.surrenderFlag?.update(actor.ship, actor.role === 'struck' && actor.ship.hull > 0)
+    if (this.sinkingExtra === actor.ship) return
+    view.shadow.setTexture(damagedHull(this, base, hullDamageStage(actor.ship.hull, actor.ship.maxHull)))
+    view.update(actor.ship)
+    if (!actor.ship.hull) {
+      this.sinkingExtra = actor.ship
+      this.burst(actor.ship, COPPER, 28, 57)
+      battleSound('wreck')
+      const time = this.reducedMotion.matches ? 160 : 900
+      for (const image of [view.hull, view.shadow])
+        this.tweens.add({ targets: image, alpha: 0, scaleX: image.scaleX * .48, scaleY: image.scaleY * .48,
+          duration: time, ease: 'Cubic.easeIn' })
+    }
   }
 
   private setChartZoom() {
@@ -384,7 +435,17 @@ class SkyBattle extends Phaser.Scene {
 
   private syncMarkers() {
     const camera = this.cameras.main
-    this.markers.update(this.player, this.foe, this.crew, this.crewMax, this.touching, camera.scrollX, camera.scrollY)
+    let third: TrialMarkerState | undefined
+    if (this.trial) {
+      const extra = this.trial.extra
+      third = { ship: extra.ship, name: this.trial.scenario === 'merchant-escort' ? 'Merchant' :
+        extra.role === 'struck' ? 'Struck prize' : 'Wing raider',
+        leg: this.trial.scenario === 'merchant-escort' ? this.trial.completed + 1 : undefined,
+        underFire: Boolean(this.trial.warning), leadName: this.trial.lead.name, leadSurrendered: this.trial.lead.role === 'struck',
+        crew: extra.role === 'hostile' ? { current: extra.crew, max: extra.maxCrew } : undefined,
+        exit: this.trial.exit }
+    }
+    this.markers.update(this.player, this.foe, this.crew, this.crewMax, this.touching, camera.scrollX, camera.scrollY, third)
   }
 
   resizeSky(next: FlightArea) {
@@ -394,6 +455,8 @@ class SkyBattle extends Phaser.Scene {
     if (previous.height !== next.height || previous.top !== next.top || previous.bottom !== next.bottom) {
       const objects: Point[] = [this.player, this.foe, ...this.sparks, ...this.shots]
       if (this.salvage) objects.push(...this.salvage.crates)
+      if (this.trial) objects.push(this.trial.extra.ship)
+      if (this.trial?.exit) objects.push(this.trial.exit)
       if (this.buoy) objects.push(this.buoy)
       if (this.chalk) this.chalk = undefined
       if (this.course) objects.push(this.course)
@@ -409,6 +472,7 @@ class SkyBattle extends Phaser.Scene {
 
   disconnect() {
     this.listeners.abort()
+    this.surrenderFlag?.destroy()
     this.pressed.clear()
     this.ended = true
   }
@@ -548,16 +612,18 @@ class SkyBattle extends Phaser.Scene {
       if (action === 'ram') {
         this.escaping = false
         if (this.touching) {
-          const { nx, ny } = hullContact(this.player, this.foe)
+          const other = this.boardingTarget ?? this.foe
+          const { nx, ny } = hullContact(this.player, other)
           // A short shove from the crew clears the rail without committing to an escape.
           this.ramming = false
           this.course = undefined
           this.player.throttle = 0
-          this.player.vx = this.foe.vx - 40 * nx
-          this.player.vy = this.foe.vy - 40 * ny
+          this.player.vx = other.vx - 40 * nx
+          this.player.vy = other.vy - 40 * ny
           this.tell('Pushing clear of their rail.', 1.5)
         } else {
           this.ramming = !this.ramming
+          this.ramTarget = this.trial?.closestHostile(this.player)
           this.course = undefined
           if (this.ramming) this.player.throttle = this.drill === 'return' ? 1 : 3
           this.tell(this.ramming ? 'Closing with their rail.' : 'Intercept course belayed.', 1.5)
@@ -612,7 +678,7 @@ class SkyBattle extends Phaser.Scene {
     if (!shots.length) return false
     for (const shot of shots) {
       if (enemy) shot.damage = 8
-      this.shots.push({ ...shot, enemy })
+      this.shots.push(this.trial ? { ...shot, enemy, source: ship } : { ...shot, enemy })
       this.burst(shot, enemy ? COPPER : GOLD, 11, 51)
     }
     battleSound('cannon', 0.75 + (shots.length - 1) * 0.125)
@@ -780,24 +846,14 @@ class SkyBattle extends Phaser.Scene {
     }
     const run = this.chalk
     const gfx = this.paths
-    const end = { x: run.aim.x + run.direction.x * 150, y: run.aim.y + run.direction.y * 150 }
-    gfx.lineStyle(17, 0xff865d, 0.16).lineBetween(run.origin.x, run.origin.y, end.x, end.y)
-    for (let n = 0; n < run.length + 150; n += 21) {
-      gfx
-        .lineStyle(2, 0xff9a6e, 0.85)
-        .lineBetween(
-          run.origin.x + n * run.direction.x,
-          run.origin.y + n * run.direction.y,
-          run.origin.x + (n + 12) * run.direction.x,
-          run.origin.y + (n + 12) * run.direction.y,
-        )
-    }
     if (this.buoy)
       gfx
         .lineStyle(2, FAIR_WIND, 0.9)
         .strokeCircle(this.buoy.x, this.buoy.y, 12)
         .strokeCircle(this.buoy.x, this.buoy.y, 6)
     if (run.cue > 0) {
+      gfx.fillStyle(0xffd997, .9).fillCircle(run.origin.x, run.origin.y, 4)
+      gfx.lineStyle(2, COPPER, .85).strokeCircle(run.origin.x, run.origin.y, 8)
       run.cue -= dt
       return
     }
@@ -812,7 +868,7 @@ class SkyBattle extends Phaser.Scene {
       this.chalk = undefined
       this.chalkDelay = 1.7
       this.burst(pos, COPPER, 14, 33)
-      this.tell('Chalk on the rail. Watch the line and move across it. Try again.', 2.8)
+      this.tell('Chalk on the rail. Steer for the green buoy when the cutter signals.', 2.8)
     } else if (evadedRound(run, this.player)) this.teach('fire')
   }
 
@@ -868,7 +924,7 @@ class SkyBattle extends Phaser.Scene {
     if (this.ended) return
     this.ended = true
     this.terminal = outcome
-    if (!resume && outcome === 'victory' && !this.drill && this.opts.salvageLoad) {
+    if (!resume && outcome === 'victory' && !this.drill && !this.trial && this.opts.salvageLoad) {
       this.salvage = launchCargo('raider-1', this.opts.salvageLoad.manifest, this.player, this.foe, this.area)
       if (this.opts.salvageLoad.free <= 0) this.salvage.remaining = 0
     }
@@ -882,7 +938,10 @@ class SkyBattle extends Phaser.Scene {
       withdrawn: 'Both crews withdraw', mutualWreck: 'Both ships are lost',
       escaped: 'You escaped pursuit',
     }[outcome]
-    this.tell(message, Infinity)
+    const trialEnd = this.trial?.report
+    this.tell(trialEnd?.status === 'lost' && this.trial?.scenario === 'merchant-escort' ? 'Merchant lost'
+      : trialEnd?.status === 'afloat' && this.trial?.scenario === 'merchant-escort' ? 'Merchant delivered'
+      : message, Infinity)
     this.buttons.pause.disabled = true
     let settled = false
     const complete = () => {
@@ -909,6 +968,7 @@ class SkyBattle extends Phaser.Scene {
     this.listeners.abort()
     const load = this.opts.salvageLoad
     const receipt = this.salvage && load ? salvageReceipt(load.manifest, recovered(this.salvage)) : undefined
+    if (this.trial?.report) this.opts.onTrialReport?.(this.trial.report)
     this.opts.onFinish(outcome, this.player.hull, this.foe.hull, { ...this.crew }, receipt)
   }
 
@@ -983,18 +1043,9 @@ class SkyBattle extends Phaser.Scene {
       const end = localPoint(ship, -43 - ship.throttle * 4, 0)
       g.lineStyle(3, tint, 0.56).lineBetween(aft.x, aft.y, end.x, end.y)
     }
-    for (const gun of p.guns) {
-      const muzzle = gunMuzzle(p, gun)
-      const bearing = sideBearing(p, gun.side)
-      const teaching = this.drill === 'fire'
-      const linedUp = teaching && gunBearsOn(p, gun, this.foe)
-      const range = teaching ? Math.min(640, Math.hypot(this.foe.x - p.x, this.foe.y - p.y) + 28) : 62
-      const dx = Math.cos(bearing), dy = Math.sin(bearing)
-      g.lineStyle(linedUp ? 2.5 : 2, linedUp ? GOLD : FAIR_WIND, teaching ? .9 : .7)
-      for (let n = 7; n < range; n += 15) {
-        const end = Math.min(n + 9, range)
-        g.lineBetween(muzzle.x + n * dx, muzzle.y + n * dy, muzzle.x + end * dx, muzzle.y + end * dy)
-      }
+    const warning = this.trial?.warning
+    if (warning) {
+      g.fillStyle(0xffd591, .65 + .3 * warning.progress).fillCircle(warning.muzzle.x, warning.muzzle.y, 4)
     }
     if (this.course) {
       const c = this.course
@@ -1050,8 +1101,9 @@ class SkyBattle extends Phaser.Scene {
     const right = this.pressed.has('d') || this.pressed.has('arrowright')
     let helm = Number(right) - Number(left)
     if (this.ramming) {
-      const lead = Math.min(1.65, Math.hypot(this.foe.x - this.player.x, this.foe.y - this.player.y) / 115)
-      this.course = { x: this.foe.x + this.foe.vx * lead, y: this.foe.y + this.foe.vy * lead }
+      const target = this.ramTarget ?? this.foe
+      const lead = Math.min(1.65, Math.hypot(target.x - this.player.x, target.y - this.player.y) / 115)
+      this.course = { x: target.x + target.vx * lead, y: target.y + target.vy * lead }
     }
     if (this.course && !left && !right) {
       const distance = Math.hypot(this.player.x - this.course.x, this.player.y - this.course.y)
@@ -1075,6 +1127,8 @@ class SkyBattle extends Phaser.Scene {
       return
     }
     if (this.drill) this.exerciseHelm(dt)
+    else if (this.trial) this.trial.stepFlight(this.player, this.area, this.wind, dt,
+      (ship, side) => { this.shootRail(ship, side, 0, true) })
     else this.enemyHelm(dt)
     const p = this.player
     const atEscapeEdge = this.escaping &&
@@ -1087,16 +1141,18 @@ class SkyBattle extends Phaser.Scene {
       : clamp(p.y, this.area.top + 22, this.area.bottom - 22)
     for (let i = this.shots.length - 1; i >= 0; i--) {
       const s = this.shots[i]
+      const from = this.trial ? { x: s.x, y: s.y } : undefined
       moveShot(s, dt, this.wind)
-      const target = s.enemy ? p : this.foe
-      if (hitsShip(s, target)) {
+      const opponent = s.enemy ? p : this.foe
+      const target = this.trial ? this.trial.shotTarget(s, from!, s.enemy, p, s.source) : hitsShip(s, opponent) ? opponent : undefined
+      if (target) {
         this.shots.splice(i, 1)
         const previousHull = target.hull
         target.hull = Math.max(0, target.hull - s.damage)
         target.vx += s.vx * 0.018
         target.vy += s.vy * 0.018
         const speed = Math.hypot(s.vx, s.vy) || 1
-        if (!this.events.emit('sky:hit', { x: s.x, y: s.y, nx: s.vx / speed, ny: s.vy / speed,
+        if (target === this.trial?.extra.ship || !this.events.emit('sky:hit', { x: s.x, y: s.y, nx: s.vx / speed, ny: s.vy / speed,
           damage: Math.min(s.damage, previousHull), side: s.enemy ? 'player' : 'enemy' })) {
           this.burst(s, s.enemy ? COPPER : GOLD, 18, 70)
           battleSound('hit')
@@ -1116,6 +1172,28 @@ class SkyBattle extends Phaser.Scene {
         s.y > this.area.height + 20
       )
         this.shots.splice(i, 1)
+    }
+    if (this.trial) {
+      const contact = this.trial.contacts(p, this.crew.player, dt)
+      this.crew.player = contact.strength
+      this.boardingTarget = contact.touching
+      this.touching = Boolean(contact.touching)
+      for (const hit of contact.impacts) this.events.emit('sky:impact', { ...hit.contact, damage: hit.damage })
+      const result = this.trial.resolve(p, this.crew.player, atEscapeEdge, this.area)
+      this.syncTrialLead()
+      if (result.changed) {
+        if (this.ramming && this.trial.scenario === 'prize-protection') this.player.throttle = 0
+        this.course = this.ramTarget = this.boardingTarget = undefined
+        this.ramming = this.touching = false
+        if (this.trial.scenario === 'merchant-escort') this.shots.length = 0
+        this.root.querySelector('#vessel-enemy')!.textContent = this.trial.lead.name
+      }
+      if (result.notice) this.tell(result.notice, 3)
+      if (result.ending) {
+        this.paintThirdShip()
+        this.finish(result.ending)
+      }
+      return
     }
     if (!this.drill || ['board', 'melee', 'return'].includes(this.drill)) {
       const wasTouching = this.touching
@@ -1154,7 +1232,7 @@ class SkyBattle extends Phaser.Scene {
     if (!this.ready || this.ended || this.pausedDuel) return
     // Bound catch-up after background throttling; use the same physics tick at all display rates.
     const dt = Math.min(.16, delta / 1000)
-    const beforeX = this.player.x, beforeY = this.player.y, lesson = this.drill
+    const beforeX = this.player.x, beforeY = this.player.y, lesson = this.drill, completed = this.trial?.completed
     this.accumulator += dt
     this.paths.clear()
     while (this.accumulator >= PHYSICS_STEP && !this.ended) {
@@ -1164,7 +1242,7 @@ class SkyBattle extends Phaser.Scene {
     if (this.ended) return
     // Measure actual chart movement after collision and boundary resolution.
     // Reframing the Watch exercise is a placement change, not simulated flight.
-    const flew = lesson === this.drill
+    const flew = lesson === this.drill && completed === this.trial?.completed
     this.clouds?.update(dt, flew ? this.player.x - beforeX : 0, flew ? this.player.y - beforeY : 0)
     this.bannerTTL -= dt
     if (this.bannerTTL <= 0 && !this.banner.hidden) this.clearBanner()
@@ -1176,6 +1254,7 @@ class SkyBattle extends Phaser.Scene {
     this.syncMarkers()
     this.playerView.update(this.player)
     this.foeView.update(this.foe)
+    this.paintThirdShip()
     this.showBoarding(dt)
     this.effects(dt)
     this.hudIn -= dt

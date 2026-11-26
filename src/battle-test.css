@@ -41,6 +41,7 @@ body { margin: 0; }
 .desk-sheet footer { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 18px 0; }
 .conditions, .sound { color: #c8d0c1; font-size: 14px; }
 .conditions { display: grid; gap: 6px; }
+.trial-order { margin: 3px 0; max-width: 48ch; line-height: 1.35; color: #f4e7c9; }
 .condition-fields { display: flex; align-items: end; flex-wrap: wrap; gap: 8px 12px; }
 .condition-fields label { display: grid; gap: 3px; }
 .conditions select { color:#f7ecca; background:#23383b; border:1px solid #6b8279; border-radius:2px; min-height:44px; padding:3px 8px; font:600 16px var(--font-sans); }

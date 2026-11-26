@@ -87,7 +87,7 @@ export class AirshipRig {
   private source: string
   private poses = new Set<string>()
 
-  constructor(private scene: Phaser.Scene, key: string, private length: number) {
+  constructor(private scene: Phaser.Scene, key: string, private length: number, private posePrefix = '') {
     this.source = key
     this.shadow = scene.add.image(0, 0, key).setTintFill(0x112e38).setAlpha(.37).setDepth(3)
     this.hull = scene.add.image(0, 0, key).setDepth(5)
@@ -107,7 +107,7 @@ export class AirshipRig {
       this.source = source
     }
     const step = Math.max(-MAX_POSE, Math.min(MAX_POSE, Math.round(ship.heel / BANK_STEP)))
-    const pose = step ? source + '-bank-' + step : source
+    const pose = step ? source + this.posePrefix + '-bank-' + step : source
     if (step && !this.poses.has(pose)) {
       paintPose(this.scene, source, step, pose)
       this.poses.add(pose)

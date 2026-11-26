@@ -1,9 +1,21 @@
-import { SKY, type Vessel } from './battle-model'
+import { healthGlyph } from './health-glyph'
+import { SKY, type Point, type Vessel } from './battle-model'
 import type { CrewPair } from './contact-combat'
 
 type Side = keyof CrewPair
 type Box = { x: number; y: number; w: number; h: number }
 const sides = ['player', 'enemy'] as const
+
+export interface TrialMarkerState {
+  ship: Vessel
+  name: 'Wing raider' | 'Struck prize' | 'Merchant'
+  crew?: { current: number; max: number }
+  underFire?: boolean
+  leg?: number
+  leadSurrendered?: boolean
+  leadName?: string
+  exit?: Point
+}
 
 function overlap(a: Box, b: Box) {
   const w = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x))
@@ -70,7 +82,7 @@ export function placeShipMarkers(ships: [Box, Box], panels: Box[], size: { w: nu
   return best
 }
 
-function shipMarker(layer: HTMLElement, lines: SVGSVGElement, side: Side, fullName: string) {
+function shipMarker(layer: HTMLElement, lines: SVGSVGElement, side: Side | 'third', fullName: string) {
   const leader = document.createElementNS('http://www.w3.org/2000/svg', 'path')
   leader.classList.add('ship-leader')
   lines.append(leader)
@@ -89,13 +101,14 @@ function shipMarker(layer: HTMLElement, lines: SVGSVGElement, side: Side, fullNa
     row.setAttribute('role', 'meter')
     row.setAttribute('aria-label', label)
     row.setAttribute('aria-valuemin', '0')
-    row.innerHTML = label + ' <i><b></b></i>'
+    row.title = label
+    row.innerHTML = healthGlyph(label) + '<i><b></b></i>'
     tag.append(row)
     return { row, fill: row.querySelector('b')!, now: NaN, max: NaN }
   }
   const hull = meter('Hull'), crew = meter('Crew')
   layer.append(tag)
-  return { tag, leader, hull, crew }
+  return { tag, name, leader, hull, crew }
 }
 
 type ShipMeter = ReturnType<typeof shipMarker>['hull']
@@ -130,6 +143,38 @@ function leaderPath(box: Box, cx: number, cy: number, heading: number, scale: nu
   return `M ${x} ${y} H ${elbow} L ${cx + dx / distance} ${cy + dy / distance}`
 }
 
+function shipBounds(ship: Vessel, scale: number, scrollX: number, scrollY: number): Box {
+  const sin = Math.abs(Math.sin(ship.heading)), cos = Math.abs(Math.cos(ship.heading))
+  const w = (114 * cos + 44 * sin) * scale, h = (114 * sin + 44 * cos) * scale
+  return { x: (ship.x - scrollX) * scale - w / 2, y: (ship.y - scrollY) * scale - h / 2, w, h }
+}
+
+// The primary duel keeps its familiar two-label placement. Choose a nearby
+// free slot for the third ship after accounting for those labels and the HUD.
+export function placeThirdMarker(ship: Box, obstacles: Box[], size: {w: number; h: number}, tag: {w: number; h: number}): Box {
+  const cx = ship.x + ship.w / 2, cy = ship.y + ship.h / 2
+  const xs = [cx - tag.w / 2, ship.x - tag.w - 6, ship.x + ship.w + 6]
+  const ys = [ship.y - tag.h - 9, ship.y + ship.h + 9, cy - tag.h / 2]
+  // If the three hulls are rafted together, the first open patch can be
+  // beyond both of the existing nameplates, or just inside a screen edge.
+  for (const o of obstacles) {
+    if (o.x < cx + 2 * tag.w && o.x + o.w > cx - 2 * tag.w) ys.push(o.y - tag.h - 3, o.y + o.h + 3)
+    if (o.y < cy + 3 * tag.h && o.y + o.h > cy - 3 * tag.h) xs.push(o.x - tag.w - 3, o.x + o.w + 3)
+  }
+  let best: Box = { x: 0, y: 0, ...tag }, leastOverlap = Infinity, shortest = Infinity
+  for (const x of xs) for (const y of ys) {
+    const box = {x: Math.round(Math.max(2, Math.min(size.w-tag.w-2, x))), y: Math.round(Math.max(2, Math.min(size.h-tag.h-2, y))), ...tag}
+    const covered = obstacles.reduce((sum, o) => sum + overlap(box, o), 0)
+    const distance = Math.hypot(box.x + tag.w / 2 - cx, box.y + tag.h / 2 - cy)
+    if (covered < leastOverlap || (covered === leastOverlap && distance < shortest)) {
+      best = box
+      leastOverlap = covered
+      shortest = distance
+    }
+  }
+  return best
+}
+
 // Native text and bars stay legible at a fixed CSS size while the battle camera zooms.
 export class BattleMarkers {
   private readonly player
@@ -138,13 +183,17 @@ export class BattleMarkers {
   private size = { w: 0, h: 0 }
   private tagWidth = 0
   private playerAbove = true
+  private readonly lines: SVGSVGElement
+  private third?: ReturnType<typeof shipMarker>
+  private exit?: HTMLElement
 
-  constructor(private layer: HTMLElement, playerName: string, enemyName: string) {
+  constructor(private layer: HTMLElement, playerName: string, private enemyName: string) {
     layer.style.visibility = 'hidden'
     const lines = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     lines.classList.add('ship-leaders')
     lines.setAttribute('aria-hidden', 'true')
     layer.append(lines)
+    this.lines = lines
     this.player = shipMarker(layer, lines, 'player', playerName)
     this.enemy = shipMarker(layer, lines, 'enemy', enemyName)
     this.resize()
@@ -170,17 +219,37 @@ export class BattleMarkers {
     })
   }
 
-  update(player: Vessel, enemy: Vessel, crew: CrewPair, maximum: CrewPair, touching: boolean, scrollX: number, scrollY: number) {
+  update(player: Vessel, enemy: Vessel, crew: CrewPair, maximum: CrewPair, touching: boolean, scrollX: number, scrollY: number, trial?: TrialMarkerState) {
     this.layer.style.visibility = 'visible'
     const scale = this.size.w / SKY.width
     const ships = [player, enemy] as const
-    const bounds = ships.map(ship => {
-      const sin = Math.abs(Math.sin(ship.heading)), cos = Math.abs(Math.cos(ship.heading))
-      const w = (114 * cos + 44 * sin) * scale, h = (114 * sin + 44 * cos) * scale
-      return { x: (ship.x - scrollX) * scale - w / 2, y: (ship.y - scrollY) * scale - h / 2, w, h }
-    }) as [Box, Box]
+    const bounds = ships.map(ship => shipBounds(ship, scale, scrollX, scrollY)) as [Box, Box]
+    const thirdHull = trial && trial.ship.hull > 0 ? shipBounds(trial.ship, scale, scrollX, scrollY) : undefined
+    const panels = thirdHull ? [...this.panels, thirdHull] : this.panels
+    if (this.exit) this.exit.hidden = !trial?.exit
+    if (trial?.exit) {
+      if (!this.exit) {
+        this.exit = document.createElement('span')
+        this.exit.className = 'merchant-exit'
+        this.exit.textContent = 'Escort exit'
+        this.layer.append(this.exit)
+      }
+      const cx = (trial.exit.x - scrollX) * scale, cy = (trial.exit.y - scrollY) * scale
+      const atRight = cx > this.size.w / 2
+      const x = Math.max(2, Math.min(this.size.w - 74, atRight ? cx - 68 : cx - 5))
+      const y = Math.max(2, Math.min(this.size.h - 22, cy - 10))
+      this.exit.classList.toggle('at-right', atRight)
+      this.exit.style.transform = `translate(${x}px,${y}px)`
+      if (thirdHull) panels.push({x, y, w: 72, h: 20})
+    }
     if (Math.abs(player.y - enemy.y) * scale > 6) this.playerAbove = player.y < enemy.y
-    const labels = placeShipMarkers(bounds, this.panels, this.size, { w: this.tagWidth, h: 47 }, this.playerAbove)
+    const labels = placeShipMarkers(bounds, panels, this.size, { w: this.tagWidth, h: 47 }, this.playerAbove)
+    const enemyName = trial?.leadSurrendered ? 'Struck prize' : trial?.leadName ?? this.enemyName
+    if (this.enemy.name.textContent !== enemyName) {
+      this.enemy.name.textContent = enemyName
+      this.enemy.tag.setAttribute('aria-label', enemyName)
+    }
+    this.enemy.crew.row.hidden = Boolean(trial?.leadSurrendered)
     this.layer.classList.toggle('boarding', touching)
     for (const [i, side] of sides.entries()) {
       const marker = this[side], ship = ships[i], box = labels[i]
@@ -192,5 +261,38 @@ export class BattleMarkers {
       const cx = (ship.x - scrollX) * scale, cy = (ship.y - scrollY) * scale
       marker.leader.setAttribute('d', ship.hull > 0 ? leaderPath(box, cx, cy, ship.heading, scale) : '')
     }
+    if (!trial || !thirdHull) {
+      if (this.third) {
+        this.third.tag.hidden = true
+        this.third.leader.setAttribute('d', '')
+      }
+      return
+    }
+    this.third ??= shipMarker(this.layer, this.lines, 'third', trial.name)
+    const marker = this.third
+    marker.tag.hidden = false
+    const title = trial.name + (trial.leg ? ' · Leg ' + Math.min(2, trial.leg) + '/2' : '')
+    const status = trial.underFire ? 'Under fire' : ''
+    if (marker.name.textContent !== title) marker.name.textContent = title
+    let warning = marker.tag.querySelector<HTMLElement>('.ship-warning')
+    if (status && !warning) {
+      warning = document.createElement('span')
+      warning.className = 'ship-warning'
+      warning.textContent = 'Under fire'
+      marker.name.after(warning)
+    }
+    if (warning) warning.hidden = !status
+    const accessible = status ? title + ', under fire' : title
+    if (marker.tag.getAttribute('aria-label') !== accessible) marker.tag.setAttribute('aria-label', accessible)
+    marker.crew.row.hidden = !trial.crew
+    setMeter(marker.hull, trial.ship.hull, trial.ship.maxHull)
+    if (trial.crew) setMeter(marker.crew, trial.crew.current, trial.crew.max)
+    const width = trial.leg ? Math.min(168, Math.max(134, this.size.w * .105)) : this.tagWidth
+    const height = (trial.crew ? 47 : 33) + (trial.underFire ? 14 : 0)
+    marker.tag.style.width = width + 'px'
+    marker.tag.style.height = height + 'px'
+    const box = placeThirdMarker(thirdHull, [...panels, ...bounds, ...labels], this.size, {w: width, h: height})
+    marker.tag.style.transform = `translate(${box.x}px,${box.y}px)`
+    marker.leader.setAttribute('d', leaderPath(box, thirdHull.x + thirdHull.w / 2, thirdHull.y + thirdHull.h / 2, trial.ship.heading, scale))
   }
 }

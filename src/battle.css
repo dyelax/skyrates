@@ -143,7 +143,7 @@ body:has(.air-duel) { overflow: hidden; }
 }
 .duel-readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .duel-ship-name { display: block; margin-bottom: 5px; font-size: 13px; }
-.duel-meter-title { display: flex; align-items: baseline; justify-content: space-between; gap: 3px; font-size: 12px; }
+.duel-meter-title { display: flex; align-items: center; justify-content: space-between; gap: 3px; font-size: 12px; }
 .duel-meter-title b { font-variant-numeric: tabular-nums; }
 .duel-hull-track { height: 3px; margin: 2px 0 5px; background: #475b59; }
 .duel-hull-track i { display: block; height: 100%; background: #a2dec9; }
