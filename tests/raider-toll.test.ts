@@ -242,7 +242,7 @@ test('the opening Watch passage is free even for seeds that draw maximum demands
   assert.ok(seed < 25_000)
   const start = initialState(seed)
   const firstPassage = act(start, { type: 'sail', to: 'glasshouse' })
-  assert.equal(firstPassage.drill, 'briefing')
+  assert.equal(firstPassage.drill, null)
   assert.equal(firstPassage.voyage?.pirate, undefined)
   const cleared = act(restore(firstPassage), { type: 'endDrill', skip: true })
   const landed = flyToNextStop(cleared)

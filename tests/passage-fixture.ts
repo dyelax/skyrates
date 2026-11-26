@@ -1,6 +1,6 @@
 // These economic tests choose familiar routes and deliberately approach the
 // named ship or berth. Free-helm, traffic and obstacle handling have dedicated tests.
-import {act,checkpointFlight,encounterId,passageEvent,type Command,type GameState} from '../src/model'
+import {act,checkpointFlight,passageEvent,type Command,type GameState} from '../src/model'
 import {WORLD_PORTS, type WorldFlight} from '../src/world-flight'
 
 function at(state:GameState, destination:{x:number;y:number}):GameState {

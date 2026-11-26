@@ -29,7 +29,7 @@ function checkpoint(s:GameState, ending:BattleEnding | null): BattleSnapshot {
   enemy.hull = 21.25
   if (ending === 'victory' || ending === 'mutualWreck') enemy.hull = 0
   if (ending === 'defeat' || ending === 'mutualWreck') player.hull = 0
-  return { version:1,player,enemy,playerCrew:ending === 'withdrawn' || ending === 'yielded' ? 0 : 4.2,
+  return { version:1,worldActor:s.voyage!.hailed,player,enemy,playerCrew:ending === 'withdrawn' || ending === 'yielded' ? 0 : 4.2,
     enemyCrew:ending === 'withdrawn' || ending === 'boarded' ? 0 : 3,area:{top:0,bottom:400},
     contact:{armed:false,clearSeconds:0.2},projectiles:[],aiDelay:1,course:null,intercepting:false,escaping:false,
     windSight:true,terminal:ending }
@@ -141,7 +141,7 @@ test('a spare captain or either qualified first mate delivers the surviving ship
     assert.equal(s.voyage.prize?.hull,21.25)
     const before=s.coins
     const command={type:'commissionPrize',commander,id} as const
-    s=reload(act(s,command))
+    s=reload(settleThenFlyToPort(s,command))
     assert.equal(s.voyage,null)
     assert.equal(s.port,'sunstep')
     assert.equal(s.coins,before)

@@ -1,4 +1,5 @@
-import { startWorldPursuit,endWorldPursuit,provokeWorldMerchant,nearbyAttackableMerchant,strikeWorldContact,retireWorldContact, WORLD_PORTS, initWorldFlight, moorWorldFlight, nearbyWorldSite, nearbyDock, nearbyHail, resolveHail, restoreWorldContact, validWorldFlight, type WorldFlight } from './world-flight'
+import { merchantShip } from './merchant-ships'
+import { startWorldPursuit,settleWorldContact,provokeWorldMerchant,nearbyAttackableMerchant,strikeWorldContact,retireWorldContact, WORLD_PORTS, initWorldFlight, moorWorldFlight, nearbyDock, nearbyHail, resolveHail, restoreWorldContact, validWorldFlight, type WorldFlight } from './world-flight'
 import { buildShip } from './battle-model'
 import { launchWorldCombat } from './world-combat'
 import { routeWeather } from './weather'
@@ -549,14 +550,14 @@ export function checkpointFlight(state: GameState, id: number, snapshot: WorldFl
     snapshot.spentIds.some(actor => !previous.spentIds.includes(actor) && actor !== leg.hailed)) return state
   let next:GameState = {...state,voyage:{...leg,flight:structuredClone(snapshot)}}
   if (leg.phase === 'battle') {
-    if (!battle || battle.worldActor !== leg.hailed) return state
+    if (!battle || battle.worldActor !== leg.hailed || battle.player.x !== snapshot.player.x || battle.player.y !== snapshot.player.y) return state
     const checked = checkpointBattle(next,encounterId(leg),battle)
     if (checked === next) return state
     next = checked
   } else if (leg.phase === 'raider' || leg.phase === 'merchant') {
     const other = snapshot.traffic.find(actor => actor.id === leg.hailed)
     if (other && Math.hypot(other.ship.x-snapshot.player.x,other.ship.y-snapshot.player.y)>600) {
-      endWorldPursuit(next.voyage!.flight!,other.id)
+      settleWorldContact(next.voyage!.flight!,other.id)
       resumeFlight(next.voyage!)
       next.notice = 'Their signal falls astern.'
     }
@@ -600,17 +601,24 @@ function hailShip(state: GameState, leg: Voyage, id: string, manual: boolean): b
   return true
 }
 
+export function worldOpponent(state:GameState) {
+  const leg=state.voyage
+  const merchant=leg?.aggressor==='player' ? merchantShip(leg.hailed) : undefined
+  return merchant ?? raiderToll(state).profile
+}
 export function worldCombatLoad(state: GameState) {
   const leg = state.voyage
-  if (!leg?.pirate) return
-  return {manifest:prizeManifest(state,leg.pirate.opponent,encounterId(leg)),free:state.ship.hold-cargoUsed(state)}
+  if (!leg) return
+  const merchant=leg.aggressor==='player' ? merchantShip(leg.hailed) : undefined
+  const manifest=merchant ? {...merchant.cargo} : leg.pirate ? prizeManifest(state,leg.pirate.opponent,encounterId(leg)) : undefined
+  return manifest ? {manifest,free:state.ship.hold-cargoUsed(state)} : undefined
 }
 
 function armWorldBattle(state: GameState,leg:Voyage):boolean {
-  if (!leg.flight || !leg.hailed || !leg.pirate) return false
+  if (!leg.flight || !leg.hailed || (!leg.pirate && !merchantShip(leg.hailed))) return false
   const ship = buildShip(leg.flight.player,leg.flight.player.heading,state.ship.guns,
     (state.ship.maxHull-100)/25,state.ship.hull,hasCaptainPerk(state,'gunner'),state.ship.cannons)
-  const battle=launchWorldCombat(leg.flight,leg.hailed,ship,boardingStrength(state),raiderToll(state).profile,leg.battle)
+  const battle=launchWorldCombat(leg.flight,leg.hailed,ship,boardingStrength(state),worldOpponent(state),leg.battle)
   if (!battle) return false
   leg.phase='battle'
   leg.battle=battle
@@ -621,6 +629,11 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
   const voyage = state.voyage
   if (!voyage) return false
   switch (action.type) {
+    case 'practiceDrill':
+      if (voyage.id !== 1 || voyage.phase !== 'underway' || !voyage.flight?.safe || !voyage.flight || voyage.from !== 'sunstep') return false
+      state.drill = 'briefing'
+      state.notice = ''
+      return true
     case 'setWaypoint':
       if (!['underway','raider','merchant','battle'].includes(voyage.phase) || voyage.id !== action.id || !isUnlocked(state,action.port) || voyage.waypoint === action.port) return false
       voyage.to = action.port
@@ -644,14 +657,14 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
       }
       voyage.hailed=action.contact
       voyage.aggressor='player'
-      voyage.pirate=rollPirate(state.pirateSeed,legacyPirateSeed(action.contact),appraise(state).exposedValue)
+      delete voyage.pirate
       if (!armWorldBattle(state,voyage)) return false
-      record(state,'Raised hostile colors against a passing merchant.')
+      record(state,'Raised hostile colors against the ' + worldOpponent(state).name + '.')
       return true
     }
     case 'leaveMerchant':
       if (voyage.phase !== 'merchant' || action.id !== encounterId(voyage)) return false
-      if (voyage.flight && voyage.hailed) endWorldPursuit(voyage.flight,voyage.hailed)
+      if (voyage.flight && voyage.hailed) settleWorldContact(voyage.flight,voyage.hailed)
       resumeFlight(voyage)
       state.notice = ''
       return true
@@ -693,7 +706,7 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
       } else {
         return false
       }
-      if (voyage.flight && voyage.hailed) endWorldPursuit(voyage.flight,voyage.hailed)
+      if (voyage.flight && voyage.hailed) settleWorldContact(voyage.flight,voyage.hailed)
       record(state, toll.crowns ? 'Paid the raider ' + payment + ' for passage.' : 'The raider waved us through without a toll.')
       resumeFlight(voyage)
       return true
@@ -734,7 +747,7 @@ export function checkpointBattle(state: GameState, id: number, snapshot: BattleS
   const old = voyage.battle
   const next = snapshot.salvage
   if (next) {
-    const manifest = prizeManifest(state, raiderToll(state).profile.id, id)
+    const manifest = worldCombatLoad(state)!.manifest
     if (next.sourceId !== 'raider-1' || next.crates.length !== dropCount(manifest) ||
       recovered(next) > state.ship.hold - cargoUsed(state)) return state
   }
@@ -757,7 +770,7 @@ function finishBattle(state: GameState, action: Extract<Command,{type:'resolveBa
   // Legacy clients reported only victory or a successful boarding action.
   if (outcome === 'won') outcome = 'enemyWreck'
   if (outcome === 'boarded') outcome = 'surrendered'
-  const profile = raiderToll(state).profile
+  const profile = worldOpponent(state)
   const ourHull = terminal ? leg.battle!.player.hull : action.hull
   const theirHull = terminal ? leg.battle!.enemy.hull : action.enemyHull ?? profile.hull
   if (!Number.isFinite(theirHull)) return false
@@ -778,22 +791,22 @@ function finishBattle(state: GameState, action: Extract<Command,{type:'resolveBa
       state.notoriety++
       if (leg.aggressor !== 'player') { state.coins += 25; experience(state,12) }
       {
-        const manifest = prizeManifest(state, profile.id, encounterId(leg))
+        const manifest = worldCombatLoad(state)!.manifest
         const pickup = leg.battle?.salvage
         const qty = pickup ? Math.max(0, Math.min(recovered(pickup), dropCount(manifest), state.ship.hold - cargoUsed(state))) : 0
         if (qty > 0) addCargo(state.cargo[manifest.good], qty, 0)
         const report = pickup ? ' ' + salvageLabel(salvageReceipt(manifest, qty)) : ''
-        record(state, (leg.aggressor === 'player' ? 'The merchant sank.' : 'The raider sank. Earned the 25-crown defense award.') + report)
+        record(state, (leg.aggressor === 'player' ? 'The ' + profile.name + ' sank.' : 'The raider sank. Earned the 25-crown defense award.') + report)
       }
       break
     case 'lost':
     case 'yielded':
     case 'ownWreck': {
-      const { settlement } = raiderToll(state)
-      settleToll(state, settlement)
+      const settlement = leg.aggressor === 'player' ? undefined : raiderToll(state).settlement
+      if (settlement) settleToll(state, settlement)
       if (outcome !== 'yielded') state.ship.hull = Math.max(state.ship.hull, Math.ceil(state.ship.maxHull * 0.35))
       const ending = outcome === 'ownWreck' ? 'The Wayfarer fell. A passing tender recovered the crew and patched the keel for the flight to a repair berth.' : 'Struck colors with the crews aboard.'
-      record(state, ending + ' Settled the raider’s claim with ' + tollSettlementLabel(settlement) + '.')
+      record(state, ending + (settlement ? ' Settled the raider’s claim with ' + tollSettlementLabel(settlement) + '.' : ' The ' + profile.name + ' broke clear.'))
       break
     }
     case 'mutualWreck':
@@ -804,14 +817,14 @@ function finishBattle(state: GameState, action: Extract<Command,{type:'resolveBa
       record(state,'Both exhausted crews withdrew. The Wayfarer continued with her cargo and the damage she sustained.')
       break
     case 'escaped':
-      record(state,'Broke contact with the raider and reached friendly skies.')
+      record(state,leg.aggressor === 'player' ? 'The ' + profile.name + ' escaped.' : 'Broke contact with the raider and reached friendly skies.')
       break
     default:
       return false
   }
   if (leg.flight && leg.hailed) {
     if (outcome === 'enemyWreck' || outcome === 'mutualWreck') retireWorldContact(leg.flight,leg.hailed)
-    else endWorldPursuit(leg.flight,leg.hailed)
+    else settleWorldContact(leg.flight,leg.hailed)
   }
   resumeFlight(leg)
   return true
@@ -819,7 +832,7 @@ function finishBattle(state: GameState, action: Extract<Command,{type:'resolveBa
 
 function settlePrize(state: GameState, action: Extract<PrizeCommand,{id:number}>): boolean {
   const leg = state.voyage
-  if (!leg || leg.phase !== 'prize' || encounterId(leg) !== action.id || !leg.prize || !leg.pirate) return false
+  if (!leg || leg.phase !== 'prize' || encounterId(leg) !== action.id || !leg.prize || !worldCombatLoad(state)) return false
   const prize = leg.prize
   if (action.type === 'offerCommand') {
     if (!hasCaptainPerk(state,'articles') || prize.offer !== 'unasked') return false
@@ -828,7 +841,8 @@ function settlePrize(state: GameState, action: Extract<PrizeCommand,{id:number}>
       'The skipper declined the articles. You may appoint your own qualified officer or release the ship.')
     return true
   }
-  const cargo = prizeManifest(state,leg.pirate.opponent,encounterId(leg))
+  const cargo = worldCombatLoad(state)!.manifest
+  const profile = worldOpponent(state)
   if (action.type === 'commissionPrize') {
     let captain: ServingHand | undefined
     switch (action.commander) {
@@ -848,8 +862,8 @@ function settlePrize(state: GameState, action: Extract<PrizeCommand,{id:number}>
         break
       default: return false
     }
-    state.command.prizes.push({ id:encounterId(leg), class:leg.pirate.opponent, hull:prize.hull, commander:action.commander, ...(captain ? {captain} : {}), port:leg.to, cargo })
-    record(state, `${captain ? CREW_PROFILES[captain.id].name : COMMANDER_NAMES[action.commander]} took command of the captured ${leg.pirate.opponent}. Its hull and manifest are registered at the ${PORTS[leg.to].name} shipyard.`)
+    state.command.prizes.push({ id:encounterId(leg), class:profile.id, hull:prize.hull, commander:action.commander, ...(captain ? {captain} : {}), port:leg.to, cargo })
+    record(state, `${captain ? CREW_PROFILES[captain.id].name : COMMANDER_NAMES[action.commander]} took command of the captured ${profile.name}. Its hull and manifest are registered at the ${PORTS[leg.to].name} shipyard.`)
   } else if (action.type === 'releasePrize') {
     if (!Number.isSafeInteger(action.crates) || action.crates < 0 || action.crates > cargo.quantity || action.crates > state.ship.hold - cargoUsed(state)) return false
     if (action.crates) addCargo(state.cargo[cargo.good],action.crates,0)
@@ -858,7 +872,7 @@ function settlePrize(state: GameState, action: Extract<PrizeCommand,{id:number}>
   } else return false
   if (leg.flight && leg.hailed) {
     if (action.type === 'commissionPrize') retireWorldContact(leg.flight,leg.hailed)
-    else endWorldPursuit(leg.flight,leg.hailed)
+    else settleWorldContact(leg.flight,leg.hailed)
   }
   resumeFlight(leg)
   return true
@@ -1043,7 +1057,6 @@ function applyDockCommand(state: GameState, action: Command): boolean {
       const target = action.type === 'sail' ? action.to : null
       if (target && (target === state.port || !isUnlocked(state,target))) return false
       state.voyageCount++
-      if (state.voyageCount === 1 && state.port === 'sunstep') state.drill = 'briefing'
       const leg: Voyage = {id:state.voyageCount,from:state.port,to:target ?? state.port,waypoint:target,phase:'underway'}
       leg.flight = flightFor(state,leg,state.day,worldAtBerth(state))
       state.voyage = leg
@@ -1135,7 +1148,7 @@ export function act(state: GameState, command: Command): GameState {
   }
   const changed = state.voyage ? applyVoyageCommand(next, command) : applyDockCommand(next, command)
   if (!changed) return state
-  if (next.notice) next.pendingNotices.push(next.notice)
+  if (next.notice && command.type !== 'hailFlight' && command.type !== 'attackMerchant') next.pendingNotices.push(next.notice)
   if (state.day !== next.day) {
     for (const notice of expireBuyerOrders(next)) {
       record(next, notice)
@@ -1193,13 +1206,15 @@ function validVoyage(value: unknown, currentPort: unknown, voyageCount: unknown)
       (value.flight === undefined || validWorldFlight(value.flight)) &&
       (value.prepaidDays === undefined || integer(value.prepaidDays)) &&
       (value.encounterId === undefined || integer(value.encounterId,1)) &&
-      (value.hailed === undefined || typeof value.hailed === 'string') &&
+      (value.hailed === undefined || typeof value.hailed === 'string' && value.hailed.length > 0) &&
+      (value.aggressor === undefined || value.aggressor === 'player' && ['battle','prize'].includes(String(value.phase))) &&
       (value.waypoint === undefined || value.waypoint === null || value.waypoint === value.to) &&
       typeof value.phase === 'string' &&
       ['underway', 'merchant', 'tender', 'raider', 'battle', 'prize'].includes(value.phase) &&
       (value.battle === undefined || (value.phase === 'battle' && validCombatCheckpoint(value.battle))) &&
       (value.phase === 'prize'
-        ? object(value.pirate) && validPrizeTerms(value.prize, RAIDER_PROFILES.find(p => p.id === (value.pirate as PirateTerms).opponent))
+        ? validPrizeTerms(value.prize, value.aggressor === 'player' ? merchantShip(String(value.hailed)) :
+          RAIDER_PROFILES.find(p => p.id === (value.pirate as PirateTerms | undefined)?.opponent))
         : value.prize === undefined))
   )
 }
@@ -1364,7 +1379,7 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
           const wealth = appraise(value).exposedValue
           if (leg.pirate !== undefined) {
             if (!validPirateTerms(leg.pirate, wealth)) return initialState()
-          } else if (leg.phase === 'raider' || leg.phase === 'battle') {
+          } else if (leg.phase === 'raider' || (leg.phase === 'battle' && leg.aggressor !== 'player')) {
             // A returning captain may have already seen the previous release's quote.
             leg.pirate = legacyPirateTerms(wealth)
           }

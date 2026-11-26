@@ -134,6 +134,12 @@ function dispatch(command: Command) {
 }
 
 function render() {
+  const leg=state.voyage
+  const battle=leg?.battle
+  if (leg?.phase==='battle' && battle?.terminal && !battle.salvage?.remaining && !state.drill) {
+    dispatch({type:'resolveBattle',id:encounterId(leg),result:CAMPAIGN_RESULTS[battle.terminal],hull:battle.player.hull,enemyHull:battle.enemy.hull})
+    return
+  }
   const token = ++renderToken
   battleUnmount?.()
   battleUnmount = undefined

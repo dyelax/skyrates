@@ -26,7 +26,7 @@ test('a playtest deep link accepts a thread UUID only and encodes the complete d
 
 test('the report describes the moment without serializing the save or private chat history', () => {
   const start = initialState()
-  const sailing = act(start, { type: 'sail', to: 'glasshouse' })
+  const sailing = act(act(start, { type: 'sail', to: 'glasshouse' }),{type:'practiceDrill'})
   const context = describeGame(sailing, 'battle', '')
   assert.match(context, /Sunstep Quay → Glasshouse Reach/)
   assert.match(context, /Watch exercise: briefing/)

@@ -1,3 +1,4 @@
+import { MERCHANT_SHIPS, type MerchantClass } from './merchant-ships'
 import { ABILITIES, GOOD_IDS, PORT_IDS, type AbilityId, type GoodId, type PortId } from './data'
 import { legacyPirateSeed, RAIDER_PROFILES, type RaiderProfile } from './raiders'
 import type { GameState } from './model'
@@ -34,7 +35,7 @@ export interface PrizeTerms { hull: number; offer: 'unasked' | 'refused' | 'acce
 export interface RegisteredPrize {
   id: number
   port: PortId
-  class: RaiderProfile['id']
+  class: RaiderProfile['id'] | MerchantClass
   hull: number
   commander: Commander
   captain?: ServingHand
@@ -185,7 +186,8 @@ export const COMMANDER_NAMES: Record<Commander,string> = {
 
 function object(v:unknown):v is Record<string,unknown> { return v !== null && typeof v === 'object' && !Array.isArray(v) }
 const integer = (v:unknown):v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0
-export function validPrizeTerms(v:unknown, profile:RaiderProfile | undefined): v is PrizeTerms {
+export const prizeProfile = (kind:string) => RAIDER_PROFILES.find(foe=>foe.id===kind) ?? Object.values(MERCHANT_SHIPS).find(merchant=>merchant.id===kind)
+export function validPrizeTerms(v:unknown, profile:{hull:number} | undefined): v is PrizeTerms {
   return !!profile && object(v) && typeof v.hull === 'number' && Number.isFinite(v.hull) && v.hull > 0 &&
     v.hull <= profile.hull && ['unasked','accepted','refused'].includes(String(v.offer))
 }
@@ -220,7 +222,7 @@ export function validRegister(v:unknown, voyages:number, primary:AbilityId | nul
       !PORT_IDS.includes(p.port as PortId) || !Object.hasOwn(COMMANDER_NAMES,String(p.commander)) || !object(p.cargo) ||
       !GOOD_IDS.includes(p.cargo.good as GoodId) || !integer(p.cargo.quantity) || p.cargo.quantity > 10) return false
     if (p.commander === 'mate' ? !checkSailor(p.captain,true) : p.captain !== undefined) return false
-    const profile = RAIDER_PROFILES.find(foe => foe.id === p.class)
+    const profile = prizeProfile(String(p.class))
     ids.add(p.id)
     return !!profile && typeof p.hull === 'number' && Number.isFinite(p.hull) && p.hull > 0 && p.hull <= profile.hull
   })

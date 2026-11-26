@@ -1,3 +1,4 @@
+import { WORLD_PORTS } from './world-flight'
 import { artwork } from './artwork'
 import { armamentLabel } from './battle-model'
 import { seasonalPosting } from './seasonal-trade'
@@ -16,7 +17,7 @@ import { buyerQuantity, buyerTerms, chartObjectives } from './objectives'
 import {
   CAPTAIN_PERKS, CAPTAIN_XP_PER_LEVEL, LAST_CAPTAIN_LEVEL, NEGOTIATION,
   canLearnPerk, captainPoints, handRecord, hasCaptainPerk, qualifiedMate,
-  encounterId, rollPirate, type CaptainPerk, CREW_PROFILES, type SailorId,
+  encounterId, prizeProfile, worldOpponent, worldCombatLoad, rollPirate, type CaptainPerk, CREW_PROFILES, type SailorId,
   GOODS,
   GOOD_IDS,
   INVOICE_COST,
@@ -87,11 +88,14 @@ const safe = (value: string) =>
     /[&<>"']/g,
     (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!,
   )
-const bearing: Record<PortId, [number, number]> = {
-  sunstep: [16, 70],
-  glasshouse: [41, 15],
-  copperfall: [79, 75],
-  meridian: [85, 31],
+function chartProjection(state: GameState) {
+  const ship=state.voyage?.flight?.player
+  const positions=[...Object.values(WORLD_PORTS), ...(ship ? [ship] : [])]
+  const xs=positions.map(p=>p.x), ys=positions.map(p=>p.y)
+  const left=Math.min(...xs), right=Math.max(...xs), top=Math.min(...ys), bottom=Math.max(...ys)
+  // Let the ship sail outside the four-port rectangle without losing it off-chart.
+  const k=Math.min(650/(right-left || 1),440/(bottom-top || 1))
+  return (p:{x:number;y:number}):[number,number]=>[50+(p.x-(left+right)/2)*k/8.8,50+(p.y-(top+bottom)/2)*k/6.24]
 }
 
 interface Controls {
@@ -293,7 +297,7 @@ function mooredPrizes(state: GameState, ui: Controls) {
   const local = state.command.prizes.filter(ship => ship.port === state.port)
   if (!local.length) return ''
   return `<article class="sk-card"><h2>Prize berths</h2><ul class="sk-offers">${local.map(ship => {
-    const profile = RAIDER_PROFILES.find(p => p.id === ship.class)!
+    const profile = prizeProfile(ship.class)!
     const load = Math.min(ship.cargo.quantity,state.ship.hold-cargoUsed(state))
     const cargo = ship.cargo.quantity ? `${ship.cargo.quantity} × ${GOODS[ship.cargo.good].name}` : 'Empty hold'
     return `<li><div><h3>${profile.name} · register ${ship.id}</h3><p>${ship.captain ? handRecord(ship.captain) : COMMANDER_NAMES[ship.commander]} · ${ship.hull.toFixed(1)} / ${profile.hull} hull · ${cargo}</p></div>
@@ -399,11 +403,16 @@ function chart(state: GameState, ui: Controls) {
     ui.settings.destination = null
     ui.refresh()
   }
+  const project=chartProjection(state)
+  const position=state.voyage?.flight?.player
+  const waypoint=state.voyage?.waypoint
+  const marker=position ? project(position) : undefined
+  const shipMarker=marker && position ? `<span class="sk-flight-mark" aria-label="Wayfarer’s position" style="left:${marker[0]}%;top:${marker[1]}%"><i aria-hidden="true" style="transform:rotate(${position.heading}rad)">➤</i> Wayfarer</span>` : ''
   const nodes = PORT_IDS.map((id) => {
-    const [x, y] = bearing[id]
-    const here = id === state.port
+    const [x, y] = project(WORLD_PORTS[id])
+    const here = !state.voyage && id === state.port
     const locked = !isUnlocked(state, id)
-    return `<button type="button" class="sk-chart-node ${here ? 'is-home' : ''} ${locked ? 'is-locked' : ''}" style="left:${x}%;top:${y}%" data-port="${id}" aria-label="${PORTS[id].name}${here ? ', current port' : locked ? ', locked' : ''}" aria-haspopup="dialog" aria-pressed="${id === dest}" data-action="${ui.register(
+    return `<button type="button" class="sk-chart-node ${here ? 'is-home' : ''} ${locked ? 'is-locked' : ''}" style="left:${x}%;top:${y}%" data-port="${id}" aria-label="${PORTS[id].name}${here ? ', current port' : locked ? ', locked' : id === waypoint ? ', waypoint' : ''}" aria-haspopup="dialog" aria-pressed="${id === dest}" data-action="${ui.register(
       () => {
         if (id === dest) close()
         else {
@@ -419,7 +428,7 @@ function chart(state: GameState, ui: Controls) {
     const current = state.port === dest && !state.voyage
     const unlocked = isUnlocked(state, dest)
     const days = routeDays(state.port, dest)
-    const forecast = routeWeather(state.port, dest, state.day)
+    const forecast = state.voyage?.flight?.weather ?? routeWeather(state.port,dest,state.day)
     const related = (offer: BuyerOffer) => offer.source === dest || offer.destination === dest
     const localOrders = signed.filter(related)
     const postings = offers.filter(related)
@@ -435,7 +444,7 @@ function chart(state: GameState, ui: Controls) {
       <p>${current ? 'Local exchange' : unlocked ? `${days}-day passage` : 'Relight the beacon to reach this port'} · ${GOODS[port.specialty].name}</p>
       <p class="sk-forecast">${forecast.summary} · wind toward ${forecast.bearing}, ${forecast.knots} kn</p>
       ${buyerNotes}
-      ${!current && unlocked ? routeLookout(state) : ''}
+      ${!state.voyage && !current && unlocked ? routeLookout(state) : ''}
       <details class="sk-fold"><summary>Climate and trade on arrival</summary><p>${CLIMATES[dest].region}. ${seasonAt(state.day + days)} · day ${state.day + days}.</p>${marketOutlook(dest,state.day+days)}</details>
       <details class="sk-fold"><summary>Port trade &amp; services</summary><p>${CITY_ECONOMY[dest].tradeLead}</p><p>${CITY_ECONOMY[dest].institution} requests ${CITY_ECONOMY[dest].order.quantity} × ${GOODS[CITY_ECONOMY[dest].order.good].name}.</p></details>
       <details class="sk-fold"><summary>Recorded prices</summary>${rememberedPrices(state, dest)}</details>
@@ -472,8 +481,8 @@ function chart(state: GameState, ui: Controls) {
     ${!objectives.length && !offers.length ? '<p>Your docket is clear. Visit a freight desk for another contract.</p>' : ''}
     </div></details>`
   return `<div class="sk-mapstage"><div class="sk-map-scroll"><div class="sk-chart" aria-label="Chart of four skyports">
-      <img src="${artwork('sky-chart')}" alt="" class="sk-chart-art"><canvas aria-hidden="true" data-map width="880" height="624"></canvas>${nodes}</div></div>
-      <div class="sk-chart-plaque"><h1>Sky chart</h1><span>${PORTS[state.port].name} · ${seasonAt(state.day)} · day ${state.day}</span></div>${orders}${popover}</div>`
+      <img src="${artwork('sky-chart')}" alt="" class="sk-chart-art"><canvas aria-hidden="true" data-map width="880" height="624"></canvas>${nodes}${shipMarker}</div></div>
+      <div class="sk-chart-plaque"><h1>Sky chart</h1><span>${state.voyage ? waypoint ? 'Waypoint · ' + PORTS[waypoint].name : 'Free flight' : PORTS[state.port].name} · ${seasonAt(state.day)} · day ${state.day}</span></div>${orders}${popover}</div>`
 }
 
 function freightDesk(state: GameState, ui: Controls) {
@@ -563,7 +572,7 @@ function authority(state: GameState, ui: Controls) {
   return `<header class="sk-dialogue-heading"><div class="sk-kicker">${contact.name} · Port authority</div><div class="sk-identity">
     ${portrait ? `<img src="${artwork(portrait)}" alt="">` : ''}<h1>${speaker}</h1></div></header>
     <div class="sk-office-dialogue" data-npc-id="${npc.id}"><p class="sk-kicker" aria-label="Relationship"> ${npc.relationship.label}</p><blockquote class="sk-quote">${safe(quote)}</blockquote><details class="sk-fold" data-contact-topic><summary>How did you come to this work?</summary><p>${safe(npc.publicHistory)}</p></details>${memories}${lastTalk}</div>
-    ${job}${canPay && state.coins < INVOICE_COST ? '<details class="sk-fold sk-ledger-fold"><summary>A word from the loading dock</summary><p>A glazier chalks <i>Copperfall</i> on a stack of panes. “Their winter gardens are framed and roofless. I can cut all week and the yard still wants more.”</p></details>' : ''}
+    ${job}${state.port==='sunstep' && state.voyageCount===0 ? ui.button('Take the free Harbor Watch exercise',()=>ui.act({type:'practiceDrill'}),{secondary:true}) : ''}${canPay && state.coins < INVOICE_COST ? '<details class="sk-fold sk-ledger-fold"><summary>A word from the loading dock</summary><p>A glazier chalks <i>Copperfall</i> on a stack of panes. “Their winter gardens are framed and roofless. I can cut all week and the yard still wants more.”</p></details>' : ''}
     ${freightDesk(state, ui)}`
 }
 
@@ -638,14 +647,14 @@ function voyage(state: GameState, ui: Controls) {
       (canPayCargo ? ui.button(cargoButton, () => ui.act({ type: 'payToll', id: encounterId(leg), payment: 'cargo' }), {secondary: canPayCash}) : '') +
       ui.button('Refuse · take the helm', () => ui.act({ type: 'engage' }), { secondary: canPayCash || canPayCargo })
     if (!canPayCargo && !canPayCash) copy += ' Your manifest cannot cover the toll.'
-  } else if (leg.phase === 'prize' && leg.pirate && leg.prize) {
-    const profile = RAIDER_PROFILES.find(p => p.id === leg.pirate!.opponent)!
-    const manifest = prizeManifest(state,profile.id,encounterId(leg))
+  } else if (leg.phase === 'prize' && leg.prize) {
+    const profile = worldOpponent(state)
+    const manifest = worldCombatLoad(state)!.manifest
     const max = Math.min(manifest.quantity,state.ship.hold-cargoUsed(state))
     const skipper = skipperTerms(state,encounterId(leg))
     const decision = leg.prize.offer
     const command = (who:Commander,label:string) => ui.button(label,() => ui.act({type:'commissionPrize',id:encounterId(leg),commander:who}))
-    title = 'The raider surrenders'
+    title = leg.aggressor === 'player' ? profile.name + ' surrenders' : 'The raider surrenders'
     line = 'The gunports close. Across the rail, the skipper lowers the colors.'
     copy = `The ${profile.name.toLowerCase()} is afloat with ${leg.prize.hull.toFixed(1)} / ${profile.hull} hull and ${manifest.quantity} crates of ${GOODS[manifest.good].name.toLowerCase()}.
       A commander can take this ship and its cargo to a berth at ${PORTS[leg.to].name}.`
@@ -880,12 +889,22 @@ function drawMap(canvas: HTMLCanvasElement, state: GameState, dest: PortId | nul
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   const { width: w, height: h } = canvas
-  const point = (id: PortId): [number, number] => [(w * bearing[id][0]) / 100, (h * bearing[id][1]) / 100]
+  const project=chartProjection(state)
+  const pixels=(p:{x:number;y:number}):[number,number] => {
+    const [x,y]=project(p)
+    return [w*x/100,h*y/100]
+  }
+  const point=(id:PortId)=>pixels(WORLD_PORTS[id])
+  const sky=state.voyage?.flight, waypoint=state.voyage?.waypoint
+  if (sky && waypoint) {
+    ctx.beginPath(); ctx.setLineDash([6,3]); ctx.strokeStyle='#f9d588'; ctx.lineWidth=3
+    ctx.moveTo(...pixels(sky.player)); ctx.lineTo(...point(waypoint)); ctx.stroke()
+  }
   for (let i = 0; i < PORT_IDS.length; i++)
     for (let j = i + 1; j < PORT_IDS.length; j++) {
       const a = PORT_IDS[i],
         b = PORT_IDS[j]
-      const active = (a === state.port && b === dest) || (a === dest && b === state.port)
+      const active = !state.voyage && ((a === state.port && b === dest) || (a === dest && b === state.port))
       const locked = !isUnlocked(state, a) || !isUnlocked(state, b)
       const [x1, y1] = point(a),
         [x2, y2] = point(b)

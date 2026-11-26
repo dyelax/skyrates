@@ -369,8 +369,10 @@ test('unacknowledged notices survive later actions, travel, and reload in order'
   assert.equal(loadGame({ getItem: () => JSON.stringify(old) }).mission, 'accepted')
 })
 
-test('first sailing orders start the watch drill once and checkpoints survive reload', () => {
+test('the Watch can be chosen after a safe first castoff and checkpoints survive reload', () => {
   let state = act(initialState(), { type: 'sail', to: 'glasshouse' })
+  assert.equal(state.drill,null)
+  state=act(state,{type:'practiceDrill'})
   assert.equal(state.drill, 'briefing')
   assert.equal(flyToNextStop(state), state)
   assert.equal(act(state, { type: 'endDrill', skip: false }), state)

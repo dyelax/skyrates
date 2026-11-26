@@ -8,13 +8,13 @@ Take the helm of the Wayfarer, a wooden schooner that rides a glowing lift keel 
 
 ## At the quay
 
-Point at a person or a building in the harbor painting. Click the market to trade, talk to the porter for a lead, or visit Harbormaster Vale for your commission. **H** reveals place names. On a narrow screen, swipe along the quay or use its pan arrows. Inside a shop, select the person to speak, the counter for business, or the door to go back outside. Select the moored Wayfarer to inspect your hold, hull, and crew.
+The Wayfarer starts at her berth in Sunstep Quay. Select a building to approach its landing and trade, refit, speak with a local, or collect a commission. Closing the ledger returns you to the same quay. You can steer between the port buildings without spending a travel day.
 
-Open the sky chart with **M** or the compass. Select an island for passage time, recorded prices, and sailing orders. The captain’s log opens with **J**. Decisions, cargo, and completed encounters save automatically in this browser. Sound and fullscreen are available from the small options control at the quay.
+Cast off and fly with the helm, or choose an island as a waypoint. Turn with **A/D** or the arrow keys and set throttle with **W/S**. You can change course, turn back, or visit another unlocked port. Slow down alongside a berth and dock to deliver bonded mail or settle a passage. Direct trips take the sailing days shown in the chart; long diversions can carry into another day. Your position, heading, cargo and encounters survive a reload.
 
-## In a fight
+Independent ships travel the same sky. A merchant can exchange signals. A nearby raider can demand cargo or crowns while you keep control of the helm. Payment buys passage past that ship. Refusing starts a pursuit. Fire a broadside in the navigation view, board by bringing the rails together, or open enough distance to escape. You can also choose to raise hostile colors against a merchant. Defense bounties apply to raiders that attacked you.
 
-On your first departure from Sunstep, the Harbor Watch runs a chalk-round exercise. Dodge a signaled chalk shot, fire your single port cannon, then make rail contact, push off, and return for the Watch’s surrender. The exercise saves at each lesson. You can skip it or practice again at a shipyard.
+Harbormaster Vale and the shipyard offer a free Harbor Watch chalk-round exercise. You can cast off from Sunstep immediately for a protected first voyage. Dodge a signaled chalk shot, fire your single port cannon, then make rail contact, push off, and return for the Watch’s surrender. The exercise saves at each lesson. You can skip it or practice again at a shipyard.
 
 | Order | Control |
 | --- | --- |

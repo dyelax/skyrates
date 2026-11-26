@@ -50,6 +50,7 @@ test('terminal save resumes the same wreck and awards only the collected part, o
   const salvage = launchCargo('raider-1', manifest, player, wreck, area)
   const snapshot: BattleSnapshot = {
     version: 1,
+    worldActor: state.voyage!.hailed,
     player: buildShip(player, 0, 0, 0),
     enemy: foe,
     playerCrew: 6,
