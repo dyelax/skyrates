@@ -1,3 +1,4 @@
+import { healthGlyph } from './health-glyph'
 import { launchCargo, collectCargo, fallingPoint, recovered, salvageReceipt, type SalvageLoad, type SalvageState, type SalvageReceipt } from './salvage'
 import { SalvageView } from './salvage-view'
 import Phaser from 'phaser'
@@ -120,7 +121,7 @@ function drawingSize(container: HTMLElement) {
 }
 
 function hullCard(title: string, id: string): string {
-  const meter = (label: string, key: string) => `<div class="duel-meter-title"><span id="gauge-${key}">${label}</span><b data-read="${key}"></b></div><div class="duel-hull-track" role="meter" aria-labelledby="vessel-${id} gauge-${key}" aria-valuemin="0"><i data-fill="${key}"></i></div>`
+  const meter = (label: 'Hull' | 'Crew health', key: string) => `<div class="duel-meter-title"><span title="${label}">${healthGlyph(label === 'Hull' ? 'Hull' : 'Crew')}<span class="duel-sr-only" id="gauge-${key}">${label}</span></span><b data-read="${key}"></b></div><div class="duel-hull-track" role="meter" aria-labelledby="vessel-${id} gauge-${key}" aria-valuemin="0"><i data-fill="${key}"></i></div>`
   return `<div class="duel-ship-readout"><strong class="duel-ship-name" id="vessel-${id}">${title}</strong>${meter('Hull', id)}${meter('Crew health', id + 'Crew')}</div>`
 }
 

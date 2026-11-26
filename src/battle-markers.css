@@ -49,11 +49,19 @@
 }
 .duel-markers .ship-meter {
   display: grid;
-  grid-template-columns: 2.65em minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr);
   column-gap: 5px;
   align-items: center;
   height: 14px;
 }
+.air-duel .health-glyph {
+  display: block;
+  width: 18px;
+  height: 14px;
+  color: #b0ecdc;
+  filter: drop-shadow(0 1px 1px #10262b);
+}
+.air-duel .health-glyph-crew { color: #ffd584; }
 .duel-markers .ship-meter i {
   display: block;
   box-sizing: border-box;

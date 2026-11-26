@@ -1,3 +1,4 @@
+import { healthGlyph } from './health-glyph'
 import { SKY, type Point, type Vessel } from './battle-model'
 import type { CrewPair } from './contact-combat'
 
@@ -100,7 +101,8 @@ function shipMarker(layer: HTMLElement, lines: SVGSVGElement, side: Side | 'thir
     row.setAttribute('role', 'meter')
     row.setAttribute('aria-label', label)
     row.setAttribute('aria-valuemin', '0')
-    row.innerHTML = label + ' <i><b></b></i>'
+    row.title = label
+    row.innerHTML = healthGlyph(label) + '<i><b></b></i>'
     tag.append(row)
     return { row, fill: row.querySelector('b')!, now: NaN, max: NaN }
   }
