@@ -6,7 +6,7 @@ import { armamentLabel, buildShip } from './battle-model'
 import { RAIDER_PROFILES } from './raiders'
 import { setSessionSound } from './audio'
 import type { BattleEnding } from './battle-state'
-import type { WeatherReport } from './weather'
+import { routeWeather } from './weather'
 import './battle-test.css'
 
 const fittings = [
@@ -15,10 +15,12 @@ const fittings = [
   { name: 'Broadside gunship', hullLevel: 2, gunLevel: 3, hands: 6, veterans: 1 },
 ]
 
-const weather: WeatherReport = {
-  kind: 'clear', season: 'spring', wind: { x: 0, y: 0 }, severity: 0,
-  summary: 'Clear skies', bearing: 'calm', knots: 0,
-}
+// Actual chart forecasts. Every trial with a given selection opens the same sky.
+const forecasts = [
+  { name: 'Calm', report: routeWeather('glasshouse', 'copperfall', 17) },
+  { name: 'Windy', report: routeWeather('meridian', 'copperfall', 1) },
+  { name: 'Storm', report: routeWeather('copperfall', 'meridian', 30) },
+]
 
 const outcomeText: Record<BattleEnding, string> = {
   victory: 'Enemy ship wrecked', defeat: 'Your ship wrecked', mutualWreck: 'Both ships wrecked',
@@ -37,6 +39,7 @@ const desk = document.querySelector<HTMLElement>('#battle-desk')!
 desk.style.setProperty('--test-sky', `url("${artwork('cloud-sea')}")`)
 let fitIndex = 0
 let enemyIndex = 0
+let weatherIndex = 0
 let sound = false
 let match = 0
 let leaveBattle: (() => void) | undefined
@@ -57,6 +60,7 @@ function showDesk(result?: TrialEnd, error = '') {
   const fit = fittings[fitIndex]
   const enemy = RAIDER_PROFILES[enemyIndex]
   const ship = buildShip({ x: 0, y: 0 }, 0, fit.gunLevel, fit.hullLevel)
+  const weather = forecasts[weatherIndex].report
   const strength = fit.hands + 1.5 * fit.veterans
   const options = (names: string[], selected: number) => names.map((name, i) =>
     `<option value="${i}"${i === selected ? ' selected' : ''}>${name}</option>`).join('')
@@ -80,7 +84,8 @@ function showDesk(result?: TrialEnd, error = '') {
     <div class="desk-sheet"><div class="desk-title"><p>${result ? 'Battle result' : 'Harbor Watch'}</p><h1>${result ? outcomeText[result.outcome] : 'Battle test'}</h1>
     ${result ? '' : '<p class="intro">Choose two ships and take the helm. Practice battles leave your campaign save untouched.</p>'}</div>
     <div class="matchup">${shipCard(true)}${shipCard(false)}</div>
-    <footer><div class="conditions">Clear skies · No wind · Full hulls at the start</div>
+    <footer><div class="conditions">${result ? '' : `<label for="trial-weather">Weather</label><select id="trial-weather">${options(forecasts.map(f => f.name),weatherIndex)}</select>`}
+      <span>${weather.summary} · ${weather.knots} kn ${weather.bearing} · ${weather.season}</span></div>
     <div class="actions">${result ? '<button id="change">Change ships</button>' : `<label class="sound"><input type="checkbox" id="sounds"${sound ? ' checked' : ''}> Battle sound</label>`}
     <button id="fight" class="fight">${result ? 'Rematch' : 'Fight'}</button></div></footer>
     ${error ? '<p role="alert">The battle chart could not load. Try Fight again.</p>' : ''}
@@ -88,7 +93,8 @@ function showDesk(result?: TrialEnd, error = '') {
   function change(event: Event) {
     const select = event.currentTarget as HTMLSelectElement
     if (select.id === 'your-fit') fitIndex = select.selectedIndex
-    else enemyIndex = select.selectedIndex
+    else if (select.id === 'opponent-fit') enemyIndex = select.selectedIndex
+    else weatherIndex = select.selectedIndex
     showDesk()
     desk.querySelector<HTMLElement>('#' + select.id)?.focus()
   }
