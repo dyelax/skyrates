@@ -1,5 +1,6 @@
 import type Phaser from 'phaser'
 import type { WeatherReport } from './weather'
+import type { Point } from './battle-model'
 
 type RGB = readonly [number, number, number]
 const sunlight: Record<WeatherReport['season'], RGB> = {
@@ -154,6 +155,23 @@ function paintTextures(scene: Phaser.Scene, report: WeatherReport, hasTerrain: b
   }
 }
 
+// The tactical chart is bounded. Leave enough of the one continuous regional
+// painting behind every edge for an entire crossing, plus the collision shake.
+const LAND_TRAVEL = 0.2
+const SHAKE_MARGIN = 8
+export function terrainPlacement(width: number, height: number, imageWidth: number, imageHeight: number, x: number, y: number) {
+  const scale = Math.max(
+    (width * (1 + LAND_TRAVEL) + 2 * SHAKE_MARGIN) / imageWidth,
+    (height * (1 + LAND_TRAVEL) + 2 * SHAKE_MARGIN) / imageHeight,
+  )
+  const pan = (travel: number, room: number) => Math.max(-room, Math.min(room, travel * LAND_TRAVEL))
+  return {
+    scale,
+    x: width / 2 - pan(x, (imageWidth * scale - width) / 2 - SHAKE_MARGIN),
+    y: height / 2 - pan(y, (imageHeight * scale - height) / 2 - SHAKE_MARGIN),
+  }
+}
+
 export class CloudDeck {
   private readonly terrain?: Phaser.GameObjects.Image
   private readonly atmosphere?: Phaser.GameObjects.Rectangle
@@ -162,6 +180,8 @@ export class CloudDeck {
   private readonly reduced = window.matchMedia('(prefers-reduced-motion: reduce)')
   private staticAir = this.reduced.matches
   private elapsed = 0
+  private flightX: number
+  private flightY: number
   private width = 0
   private height = 0
 
@@ -171,7 +191,10 @@ export class CloudDeck {
     private drill: boolean,
     width: number,
     height: number,
+    player: Point,
   ) {
+    this.flightX = this.staticAir ? 0 : player.x - width / 2
+    this.flightY = this.staticAir ? 0 : player.y - height / 2
     // A missing optional location plate leaves the original opaque cloud sea.
     // Scene teardown releases the images and their per-battle canvas textures.
     if (scene.textures.exists('battle-terrain')) {
@@ -191,13 +214,13 @@ export class CloudDeck {
 
   resize(width: number, height: number) {
     if (width === this.width && height === this.height) return
+    if (this.width && this.height) {
+      this.flightX *= width / this.width
+      this.flightY *= height / this.height
+    }
     this.width = width
     this.height = height
-    if (this.terrain) {
-      const scale = Math.max(width / this.terrain.width, height / this.terrain.height)
-      this.terrain.setPosition(width / 2, height / 2).setScale(scale)
-      this.atmosphere!.setSize(width, height)
-    }
+    this.atmosphere?.setSize(width, height)
     this.bottom.setSize(width, height).setTileScale(Math.min(2, Math.max(1.05, height / 1040)))
     // Fixed world-size cells keep a tall phone chart from stretching the clouds.
     // Rebuild only on layout changes; the animation reuses the same images.
@@ -239,13 +262,15 @@ export class CloudDeck {
     this.paint()
   }
 
-  update(dt: number) {
+  update(dt: number, dx: number, dy: number) {
     if (this.staticAir !== this.reduced.matches) {
       this.staticAir = this.reduced.matches
       this.paint()
     }
-    if (this.staticAir || this.drill) return
-    this.elapsed += dt
+    if (this.staticAir || (this.drill && !dx && !dy)) return
+    this.flightX += dx
+    this.flightY += dy
+    if (!this.drill) this.elapsed += dt
     this.paint()
   }
 
@@ -254,8 +279,14 @@ export class CloudDeck {
       report = this.weather
     const wind = this.drill ? { x: 0, y: 0 } : report.wind
     const strength = report.severity
-    this.bottom.tilePositionX = 57 - wind.x * t * 3
-    this.bottom.tilePositionY = 41 - wind.y * t * 3
+    if (this.terrain) {
+      const { scale, x, y } = terrainPlacement(this.width, this.height, this.terrain.width, this.terrain.height, this.flightX, this.flightY)
+      this.terrain.setScale(scale).setPosition(x, y)
+    }
+    // Tile position is in source texels and scrolls in the opposite direction.
+    // Keep flight rates in chart units across every viewport and backing scale.
+    this.bottom.tilePositionX = 57 - wind.x * t * 3 + this.flightX * .42 / this.bottom.tileScaleX
+    this.bottom.tilePositionY = 41 - wind.y * t * 3 + this.flightY * .42 / this.bottom.tileScaleY
     // Wrap fully outside the chart. All depths move downwind; shear changes
     // the shape of each bank while the broad openings travel with the air.
     const margin = 365,
@@ -266,8 +297,9 @@ export class CloudDeck {
         phase = b.phase
       const swell = Math.sin(t * 0.22 + phase),
         roll = Math.cos(t * 0.16 + phase * 1.7)
-      const x = wrap(b.u * across + wind.x * t * speed, across) - margin
-      const y = wrap(b.v * down + wind.y * t * speed, down) - margin
+      const travel = b.foreground ? .82 : .56
+      const x = wrap(b.u * across + wind.x * t * speed - this.flightX * travel, across) - margin
+      const y = wrap(b.v * down + wind.y * t * speed - this.flightY * travel, down) - margin
       const angle = -0.25 + 0.26 * Math.sin(phase * 2.2) + roll * 0.045
       const size = b.size * (1 + 0.044 * swell)
       const density = b.foreground ? Math.min(0.94, 0.05 + 1.06 * strength ** 2) : 0.21

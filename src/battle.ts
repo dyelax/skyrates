@@ -337,7 +337,7 @@ class SkyBattle extends Phaser.Scene {
     prepareHull(this, 'schooner')
     prepareHull(this, 'opponent')
     this.setChartZoom()
-    this.clouds = new CloudDeck(this, this.opts.weather, Boolean(this.drill), this.area.width, this.area.height)
+    this.clouds = new CloudDeck(this, this.opts.weather, Boolean(this.drill), this.area.width, this.area.height, this.player)
     this.paths = this.add.graphics().setDepth(2)
     this.boardingWatch = this.add.graphics().setName('boarding-at-rail').setDepth(6.5).setVisible(false)
     this.playerView = new AirshipRig(this, 'schooner', 114)
@@ -1120,7 +1120,7 @@ class SkyBattle extends Phaser.Scene {
     if (!this.ready || this.ended || this.pausedDuel) return
     // Bound catch-up after background throttling; use the same physics tick at all display rates.
     const dt = Math.min(.16, delta / 1000)
-    this.clouds?.update(dt)
+    const beforeX = this.player.x, beforeY = this.player.y, lesson = this.drill
     this.accumulator += dt
     this.paths.clear()
     while (this.accumulator >= PHYSICS_STEP && !this.ended) {
@@ -1128,6 +1128,10 @@ class SkyBattle extends Phaser.Scene {
       this.accumulator -= PHYSICS_STEP
     }
     if (this.ended) return
+    // Measure actual chart movement after collision and boundary resolution.
+    // Reframing the Watch exercise is a placement change, not simulated flight.
+    const flew = lesson === this.drill
+    this.clouds?.update(dt, flew ? this.player.x - beforeX : 0, flew ? this.player.y - beforeY : 0)
     this.bannerTTL -= dt
     if (this.bannerTTL <= 0 && !this.banner.hidden) this.clearBanner()
     this.traceCourse()
