@@ -37,42 +37,42 @@ function paintPose(scene: Phaser.Scene, sourceKey: string, step: number, name: s
   const keelY = height / 2 + (center - .5) * h
   ctx.imageSmoothingQuality = 'high'
 
-  // The deep timber side appears on the rail opposite the leaning mastheads.
-  // Clip it to the painted hull so sails and existing damage never acquire a slab edge.
-  ctx.save()
-  ctx.translate(0, keelY - sin * h * .26)
-  ctx.scale(1, cos)
-  ctx.beginPath()
-  ctx.moveTo(1, 0)
-  ctx.bezierCurveTo(2, -h*.19, POSE_WIDTH*.18, -h*.18, POSE_WIDTH*.50, -h*.16)
-  ctx.bezierCurveTo(POSE_WIDTH*.72, -h*.14, POSE_WIDTH*.81, -h*.075, POSE_WIDTH*.94, 0)
-  ctx.bezierCurveTo(POSE_WIDTH*.78, h*.10, POSE_WIDTH*.62, h*.16, POSE_WIDTH*.48, h*.16)
-  ctx.bezierCurveTo(POSE_WIDTH*.14, h*.19, 2, h*.18, 1, 0)
-  ctx.closePath()
-  ctx.clip()
-  ctx.drawImage(image, 0, 0, sourceWidth, sourceHeight, 0, -center*h, POSE_WIDTH, h)
-  ctx.globalCompositeOperation = 'source-atop'
-  ctx.fillStyle = '#231e20a8'
-  ctx.fillRect(0, -h, POSE_WIDTH, 2*h)
-  ctx.restore()
-
   // Heights are continuous at strip boundaries. Round projected edges once per
   // column so adjacent samples share pixels without seams or doubled alpha.
-  const stations = [0, center-.17, center, center+.17, 1]
+  const stations = [0, center - .17, center, center + .17, 1]
   for (let x = 0; x < POSE_WIDTH; x += 2) {
-    const wing = rigElevation((x+1)/POSE_WIDTH, raider)
-    const heights = [wing*.90, wing*.54, wing*.42, wing*.54, wing*.90]
-    let top = Math.round(keelY + (-center*cos + heights[0]*sin)*h)
+    const u = (x + 1) / POSE_WIDTH
+    const wing = rigElevation(u, raider)
+    const heights = [wing * .90, wing * .36, wing * .29, wing * .36, wing * .90]
+    // Join the raised wooden rail to the narrower keel as one timber surface.
+    // The ends taper before the bowsprit and stern pennants, which have no keel.
+    const beam = Math.sqrt(Math.min(1, u / .065)) * Math.max(0, Math.min(1, (.90 - u) / .36))
+    if (beam > 0) {
+      const side = -Math.sign(sin)
+      const halfBeam = (raider ? .17 : .16) * beam
+      const rail = keelY + h * (side * halfBeam * cos + heights[1] * sin)
+      const keel = keelY + h * (side * halfBeam * .69 * cos - .22 * beam * sin)
+      if ((rail - keel) * sin > 0) {
+        const depth = keel - rail
+        ctx.fillStyle = raider ? '#53322b' : '#715139'
+        ctx.fillRect(x, rail, 2, depth)
+        ctx.fillStyle = raider ? '#34262a' : '#473a2f'
+        ctx.fillRect(x, rail + depth * .52, 2, depth * .48)
+      }
+    }
+    let top = Math.round(keelY + (-center * cos + heights[0] * sin) * h)
     for (let i = 1; i < stations.length; i++) {
-      const bottom = Math.round(keelY + ((stations[i]-center)*cos + heights[i]*sin)*h)
-      ctx.drawImage(image, x*sourceWidth/POSE_WIDTH, stations[i-1]*sourceHeight,
-        2*sourceWidth/POSE_WIDTH, (stations[i]-stations[i-1])*sourceHeight, x, top, 2, bottom-top)
+      const bottom = Math.round(keelY + ((stations[i] - center) * cos + heights[i] * sin) * h)
+      const sourceY = stations[i - 1] * sourceHeight
+      const bandHeight = (stations[i] - stations[i - 1]) * sourceHeight
+      ctx.drawImage(image, x * sourceWidth / POSE_WIDTH, sourceY, 2 * sourceWidth / POSE_WIDTH,
+        bandHeight, x, top, 2, bottom - top)
       top = bottom
     }
   }
   // Preserve the artist's palette and let the low side pass under a soft shadow.
   const shade = ctx.createLinearGradient(0, keelY - h*.44, 0, keelY + h*.44)
-  const dark = 'rgba(23,31,42,' + Math.abs(sin)*.43 + ')'
+  const dark = 'rgba(23,31,42,' + Math.abs(sin) * .43 + ')'
   shade.addColorStop(0, sin < 0 ? dark : 'transparent')
   shade.addColorStop(1, sin > 0 ? dark : 'transparent')
   ctx.globalCompositeOperation = 'source-atop'
@@ -85,7 +85,7 @@ export class AirshipRig {
   readonly hull: Phaser.GameObjects.Image
   readonly shadow: Phaser.GameObjects.Image
   private source: string
-  private poses = new Map<number, string>()
+  private poses = new Set<string>()
 
   constructor(private scene: Phaser.Scene, key: string, private length: number) {
     this.source = key
@@ -102,25 +102,22 @@ export class AirshipRig {
     const source = this.shadow.texture.key
     if (this.source !== source) {
       this.hull.setTexture(source)
-      for (const key of this.poses.values()) this.scene.textures.remove(key)
+      for (const key of this.poses) this.scene.textures.remove(key)
       this.poses.clear()
       this.source = source
     }
     const step = Math.max(-MAX_POSE, Math.min(MAX_POSE, Math.round(ship.heel / BANK_STEP)))
-    let pose = source
-    if (step) {
-      pose = this.poses.get(step) ?? source + '-bank-' + step
-      if (!this.poses.has(step)) {
-        paintPose(this.scene, source, step, pose)
-        this.poses.set(step, pose)
-      }
+    const pose = step ? source + '-bank-' + step : source
+    if (step && !this.poses.has(pose)) {
+      paintPose(this.scene, source, step, pose)
+      this.poses.add(pose)
     }
     if (this.hull.texture.key !== pose) this.hull.setTexture(pose)
     const scale = this.length / this.hull.width
     this.hull.setPosition(ship.x, ship.y).setRotation(ship.heading).setScale(scale)
     const shadowScale = this.length / this.shadow.width
     const keel = -Math.sin(step * BANK_STEP) * 4
-    this.shadow.setPosition(ship.x + 3.5 - Math.sin(ship.heading)*keel, ship.y + 8 + Math.cos(ship.heading)*keel)
-      .setRotation(ship.heading).setScale(shadowScale, shadowScale*Math.cos(step*BANK_STEP))
+    this.shadow.setPosition(ship.x + 3.5 - Math.sin(ship.heading) * keel, ship.y + 8 + Math.cos(ship.heading) * keel)
+      .setRotation(ship.heading).setScale(shadowScale, shadowScale * Math.cos(step * BANK_STEP))
   }
 }
