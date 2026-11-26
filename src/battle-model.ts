@@ -1,4 +1,4 @@
-import { GUN_POSITIONS, stationOffset } from './drill'
+import { FITTED_CANNONS, GUN_POSITIONS, stationOffset } from './drill'
 
 export interface BattleOpponent {
   name: string
@@ -27,6 +27,7 @@ export interface Gun {
   station: number
   cooldown: number
   reload: number
+  salvoIn?: number
 }
 export interface Vessel extends Point {
   heading: number
@@ -72,6 +73,7 @@ export function armamentLabel(cannons: number): string {
   if (cannons === 2) return '2 guns, one on each rail'
   if (cannons === 4) return '4 guns, two on each rail'
   if (cannons === 6) return '6 guns, three on each rail'
+  if (cannons > 6 && cannons % 2 === 0) return `${cannons} guns, ${cannons / 2} on each rail`
   const stations = GUN_POSITIONS.slice(0, cannons)
   const port = stations.filter(gun => gun.side === 'port').length
   return `${stations.length} guns, ${port} port and ${stations.length - port} starboard`
@@ -90,7 +92,7 @@ export function buildShip(
   hullLevel: number,
   remainingHull?: number,
   quickGunnery = false,
-  cannons = Math.min(GUN_POSITIONS.length, 1 + gunLevel),
+  cannons: number = FITTED_CANNONS[Math.min(gunLevel, FITTED_CANNONS.length - 1)],
 ): Vessel {
   const reload = Math.max(2.1, 4.2 - gunLevel * 0.26) * (quickGunnery ? 0.8 : 1)
   const guns: Gun[] = GUN_POSITIONS.slice(0, cannons).map(({ side, station }) => ({
@@ -230,17 +232,58 @@ export function gunBearsOn(ship: Vessel, gun: Gun, target: HullPose): boolean {
     distanceToSegment(muzzle, a, b) <= 15 || distanceToSegment(end, a, b) <= 15
 }
 
-// The rail returns its full complement in one reload. New work goes behind
-// the last unfinished gun, retaining even a fraction of its loading time.
+// Reserve only the barrels loaded at the moment of the order. Each barrel's
+// own countdown is saved on the vessel. Its muzzle pose is sampled when it fires.
 export function fireBroadside(ship: Vessel, side: Side, tier: number): Shot[] {
   const rail = ship.guns.filter(gun => gun.side === side)
-  let tail = Math.max(0, ...rail.map(gun => gun.cooldown))
+  let loaded = rail.filter(gun => gun.cooldown <= 0 && gun.salvoIn === undefined)
+  if (!loaded.length) return []
+  if (loaded.length > 3) {
+    loaded.sort((a, b) => stationOffset(b.station) - stationOffset(a.station))
+    const third = Math.ceil(loaded.length / 3)
+    const bow = loaded.slice(0, third)
+    const middle = loaded.slice(third, loaded.length - third)
+    const stern = loaded.slice(loaded.length - third).reverse()
+    loaded = []
+    for (let rank = 0; rank < third; rank++) {
+      loaded.push(bow[rank], stern[rank])
+      if (middle[rank]) loaded.push(middle[rank])
+    }
+  }
   const shots: Shot[] = []
-  for (const gun of rail) {
-    if (gun.cooldown > 0) continue
+  let tail = Math.max(0, ...rail.map(gun => gun.cooldown))
+  for (const [i, gun] of loaded.entries()) {
     tail += gun.reload / rail.length
     gun.cooldown = tail
-    shots.push(launchRound(ship, gun, tier))
+    const delay = salvoDelay(i, loaded.length)
+    if (delay > 0) gun.salvoIn = delay
+    else shots.push(launchRound(ship, gun, tier))
+  }
+  return shots
+}
+
+const GROUP_ENDS = [.10, .19, .35, .47, .55, .73, .86, 1]
+const CADENCE = [0, .10, .22, .38, .49, .65, .82, 1]
+function salvoDelay(index: number, count: number): number {
+  if (count <= 3) return index * .07
+  const phase = index / (count - 1)
+  const group = GROUP_ENDS.findIndex(end => phase <= end)
+  const span = Math.min(.86, (count - 1) * .06)
+  const first = group ? Math.floor(GROUP_ENDS[group - 1] * (count - 1)) + 1 : 0
+  // Neighbouring ports in a group fire just apart. The last gun closes its beat.
+  const beatOffset = group === CADENCE.length - 1 ? index - (count - 1) : index - first
+  return CADENCE[group] * span + beatOffset * .016
+}
+
+export function advanceBroadside(ship: Vessel, dt: number, tier: number): Shot[] {
+  const shots: Shot[] = []
+  for (const gun of ship.guns) {
+    if (gun.salvoIn === undefined) continue
+    if (gun.salvoIn > dt + 1e-9) gun.salvoIn -= dt
+    else {
+      delete gun.salvoIn
+      shots.push(launchRound(ship, gun, tier))
+    }
   }
   return shots
 }
@@ -249,14 +292,15 @@ function launchRound(ship: Vessel, gun: Gun, tier: number): Shot {
   const muzzle = gunMuzzle(ship, gun)
   const bearing = sideBearing(ship, gun.side)
   const vx = Math.cos(bearing), vy = Math.sin(bearing)
-  ship.vx -= vx * 4
-  ship.vy -= vy * 4
-  ship.angularSpeed += -Math.sign(stationOffset(gun.station)) * (gun.side === 'port' ? -0.035 : 0.035)
+  const massFactor = Math.min(1, 6 / ship.guns.length)
+  ship.vx -= vx * 4 * massFactor
+  ship.vy -= vy * 4 * massFactor
+  ship.angularSpeed += -massFactor * Math.sign(stationOffset(gun.station)) * (gun.side === 'port' ? -0.035 : 0.035)
   return {
     ...muzzle,
     vx: vx * SHOT_SPEED,
     vy: vy * SHOT_SPEED,
-    damage: 15 + tier * 3,
+    damage: 15 + Math.min(tier, 5) * 3,
     lifetime: SHOT_LIFETIME,
   }
 }

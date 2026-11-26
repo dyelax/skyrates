@@ -95,7 +95,7 @@ export class TrialProtection {
         - Math.hypot(b.ship.x - player.x, b.ship.y - player.y))[0]?.ship
   }
 
-  stepFlight(player: Vessel, area: Area, wind: Point, dt: number, fire: Order) {
+  stepFlight(player: Vessel, area: Area, wind: Point, dt: number, fire: Order, advanceRail?: (ship: Vessel) => void) {
     this.warning = undefined
     if (this.extra.role === 'merchant' && this.exit) {
       const ship = this.extra.ship
@@ -122,6 +122,9 @@ export class TrialProtection {
         const heading = approach ? angleBetween(ship, quarry) : headingForBroadside(ship, gun, predicted)
         moveShip(ship, helmForHeading(ship, heading), dt, wind)
       } else steerRaider(ship, player, area, false, dt, wind)
+      ship.x = bound(ship.x, 26, area.width - 26)
+      ship.y = bound(ship.y, area.top + 23, area.bottom - 23)
+      advanceRail?.(ship)
       const canFire = distance < 510 && actor.delay <= 0 && !gun.cooldown
       if (quarry !== player && canFire && distance < 430) {
         actor.aim += dt
@@ -132,8 +135,6 @@ export class TrialProtection {
         actor.aim = 0
         actor.delay = 1.6
       }
-      ship.x = bound(ship.x, 26, area.width - 26)
-      ship.y = bound(ship.y, area.top + 23, area.bottom - 23)
     }
   }
 
@@ -190,10 +191,14 @@ export class TrialProtection {
       return { ending: !player.hull ? 'defeat' : !playerCrew ? 'yielded' : 'escaped' }
     }
     for (const actor of [this.lead, this.extra]) {
-      if (actor.ship.hull <= 0) actor.role = 'wreck'
+      if (actor.ship.hull <= 0 && actor.role !== 'wreck') {
+        actor.role = 'wreck'
+        for (const gun of actor.ship.guns) delete gun.salvoIn
+      }
       else if (actor.role === 'hostile' && actor.crew <= 0) {
         actor.role = 'struck'
         actor.ship.throttle = 0
+        for (const gun of actor.ship.guns) delete gun.salvoIn
       }
     }
     if (this.scenario === 'merchant-escort') {

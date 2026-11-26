@@ -31,8 +31,7 @@ attribute vec3 position, normal, tint, pivot;
 attribute vec2 uv, finish;
 uniform vec4 vessel;       // chart x, chart y, compass heading, heel
 uniform vec4 pose;         // time, rotor rate, sail reef, deck elevation
-uniform vec4 recoil;
-uniform vec2 midRecoil;
+uniform float gunKick[48];
 uniform float spanScale;
 uniform vec4 camera;
 uniform vec4 viewport;     // camera translation followed by canvas dimensions
@@ -56,10 +55,10 @@ void main() {
     p.y = pivot.y+(p.y-pivot.y)*(1.0-0.75*pose.z);
     n.yz=rotated(n.yz,wave);
   } else if(m>=3.0 && m<=6.0) {
-    float kick=m<3.5?recoil.x:m<4.5?recoil.y:m<5.5?recoil.z:recoil.w;
+    float kick=gunKick[int(m-2.5)];
     p.z-=sign(pivot.z)*kick*2.1;
   } else if(m>=11.0) {
-    float kick=m<11.5?midRecoil.x:midRecoil.y;
+    float kick=gunKick[int(m-6.5)];
     p.z-=sign(pivot.z)*kick*2.1;
   } else if(m>=7.0) {
     float arm=step(8.5,m), flip=mod(m,2.0)*2.0-1.0;
@@ -185,8 +184,7 @@ function createProgram(gl: WebGLRenderingContext, geometry: Float32Array[]): Fle
       [
         'vessel',
         'pose',
-        'recoil',
-        'midRecoil',
+        'gunKick[0]',
         'spanScale',
         'camera',
         'viewport',
@@ -213,7 +211,8 @@ export class VoxelFleet {
   private gpu: FleetProgram | null = null
   private extern: Phaser.GameObjects.Extern
   private readonly geometry: Float32Array[]
-  private recoil = new WeakMap<Gun, { cooldown: number; firedAt: number }>()
+  private recoil = new WeakMap<Gun, { cooldown: number; pending: boolean; firedAt: number }>()
+  private gunKick = new Float32Array(48)
   private pose: FleetPose
   private gl: WebGLRenderingContext
   private renderer: Renderer
@@ -306,16 +305,17 @@ export class VoxelFleet {
         const heel = ship.heel * 0.21 + Math.sin(phase * 1.6) * 0.028
         gl.uniform4f(u.vessel, ship.x, ship.y, ship.heading, heel)
         gl.uniform4f(u.pose, phase, 8 + ship.throttle * 3, Math.min(0.87, f.boardSeconds * 0.82), float)
-        const kick = [0, 0, 0, 0, 0, 0]
+        const kick = this.gunKick.fill(0)
         for (const gun of ship.guns) {
           const k = gun.station * 2 + (gun.side === 'port' ? 0 : 1)
           const previous = this.recoil.get(gun)
-          const firedAt = previous && gun.cooldown > previous.cooldown ? f.time : previous?.firedAt ?? -Infinity
-          this.recoil.set(gun, { cooldown: gun.cooldown, firedAt })
+          const pending = gun.salvoIn !== undefined
+          const fired = previous && !pending && (previous.pending || gun.cooldown > previous.cooldown)
+          const firedAt = fired ? f.time : previous?.firedAt ?? -Infinity
+          this.recoil.set(gun, { cooldown: gun.cooldown, pending, firedAt })
           kick[k] = Math.max(0, 1 - (f.time - firedAt) * 4.5)
         }
-        gl.uniform4f(u.recoil, kick[0], kick[1], kick[2], kick[3])
-        gl.uniform2f(u.midRecoil, kick[4], kick[5])
+        gl.uniform1fv(u['gunKick[0]'], kick)
         const range = gpu.ranges[index]
         gl.drawArrays(gl.TRIANGLES, range.offset, range.count)
       }

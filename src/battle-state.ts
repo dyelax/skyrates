@@ -39,7 +39,8 @@ function vessel(v: unknown): boolean {
     && nonnegative(v.throttle) && Number.isInteger(v.throttle) && v.throttle <= 3
     && Array.isArray(v.guns) && v.guns.length >= 1 && v.guns.length <= GUN_POSITIONS.length
     && v.guns.every(g => record(g) && (g.side === 'port' || g.side === 'starboard')
-      && (g.station === 0 || g.station === 1 || g.station === 2) && nonnegative(g.cooldown) && finite(g.reload) && g.reload > 0)
+      && (nonnegative(g.station) && Number.isInteger(g.station) && g.station < GUN_POSITIONS.length / 2) && nonnegative(g.cooldown) && finite(g.reload) && g.reload > 0
+      && (g.salvoIn === undefined || (nonnegative(g.salvoIn) && g.salvoIn <= 1)))
 }
 
 export function validBattleSnapshot(v: unknown): v is BattleSnapshot {
@@ -47,7 +48,7 @@ export function validBattleSnapshot(v: unknown): v is BattleSnapshot {
     && nonnegative(v.playerCrew) && nonnegative(v.enemyCrew)
     && record(v.area) && finite(v.area.top) && finite(v.area.bottom) && v.area.bottom > v.area.top
     && record(v.contact) && typeof v.contact.armed === 'boolean' && nonnegative(v.contact.clearSeconds)
-    && Array.isArray(v.projectiles) && v.projectiles.length <= 128 && v.projectiles.every(s =>
+    && Array.isArray(v.projectiles) && v.projectiles.length <= 256 && v.projectiles.every(s =>
       record(s) && point(s) && finite(s.vx) && finite(s.vy) && nonnegative(s.damage) && nonnegative(s.lifetime) && typeof s.enemy === 'boolean')
     && finite(v.aiDelay) && (v.course === null || point(v.course))
     && [v.intercepting, v.escaping].every(f => typeof f === 'boolean')

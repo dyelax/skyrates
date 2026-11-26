@@ -25,6 +25,7 @@ import {
   buildShip,
   closestSide,
   fireBroadside,
+  advanceBroadside,
   hitsShip,
   gunBearsOn,
   gunMuzzle,
@@ -680,18 +681,30 @@ class SkyBattle extends Phaser.Scene {
 
   private shootRail(ship: Vessel, side: Side, tier: number, enemy: boolean): boolean {
     const shots = fireBroadside(ship, side, tier)
-    if (!shots.length) return false
+    this.emitRounds(ship, shots, enemy)
+    return shots.length > 0
+  }
+
+  private cannonSoundAt = new WeakMap<Vessel, number>()
+
+  private emitRounds(ship: Vessel, shots: Shot[], enemy: boolean) {
+    if (!shots.length) return
+    const heavy = ship.guns.length > 6
     for (const shot of shots) {
       if (enemy) shot.damage = 8
       this.shots.push(this.trial ? { ...shot, enemy, source: ship } : { ...shot, enemy })
-      this.burst(shot, enemy ? COPPER : GOLD, 11, 51)
+      this.burst(shot, enemy ? COPPER : GOLD, heavy ? 4 : 8, 51)
     }
-    battleSound('cannon', 0.75 + (shots.length - 1) * 0.125)
-    return true
+    const now = this.time.now
+    if (now - (this.cannonSoundAt.get(ship) ?? -Infinity) >= (heavy ? 145 : 90)) {
+      battleSound('cannon', Math.min(1, .72 + shots.length * .08))
+      this.cannonSoundAt.set(ship, now)
+    }
   }
 
   private burst(p: Point, color: number, n: number, speed: number) {
-    for (let i = 0; i < n; i++) {
+    const count = Math.min(n, 180 - this.sparks.length)
+    for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2,
         m = (0.15 + Math.random() * 0.85) * speed
       const duration = 0.16 + Math.random() * 0.52
@@ -882,6 +895,7 @@ class SkyBattle extends Phaser.Scene {
       player = this.player
     const range = Math.hypot(enemy.x - player.x, enemy.y - player.y)
     const side = steerRaider(enemy, player, this.area, this.escaping, dt, this.wind)
+    this.emitRounds(enemy, advanceBroadside(enemy, dt, 0), true)
     this.aiDelay -= dt
     if (this.aiDelay > 0 || range > 520) return
     const target = raiderLookout(enemy, player)
@@ -1113,14 +1127,13 @@ class SkyBattle extends Phaser.Scene {
         .fillCircle(s.x, s.y, s.size * (0.45 + (s.ttl / s.duration) * 0.55))
     }
     for (const shot of this.shots) {
-      const tint = shot.enemy ? COPPER : GOLD
-      gfx
-        .lineStyle(3.4, tint, 0.52)
-        .lineBetween(shot.x - shot.vx * 0.057, shot.y - shot.vy * 0.057, shot.x, shot.y)
-      gfx
-        .lineStyle(1.5, 0xfff0c4, 1)
-        .lineBetween(shot.x - shot.vx * 0.034, shot.y - shot.vy * 0.034, shot.x, shot.y)
-      gfx.fillStyle(0xfff0c4, 1).fillCircle(shot.x, shot.y, 2.5)
+      const { x, y, vx, vy } = shot
+      const glint = shot.enemy ? 0xffc496 : 0xffdfab
+      gfx.lineStyle(2.2, glint, .22).lineBetween(x - vx * .024, y - vy * .024, x, y)
+      gfx.fillStyle(0xc7c3ac, .72).fillCircle(x, y, 3.8)
+      gfx.fillStyle(0x222e33).fillCircle(x, y + .2, 3.15)
+      gfx.fillStyle(0x526068).fillCircle(x - .55, y - .45, 2.15)
+      gfx.fillStyle(glint, .94).fillCircle(x - 1.05, y - 1.15, .95)
     }
   }
 
@@ -1160,7 +1173,8 @@ class SkyBattle extends Phaser.Scene {
     }
     if (this.drill) this.exerciseHelm(dt)
     else if (this.trial) this.trial.stepFlight(this.player, this.area, this.wind, dt,
-      (ship, side) => { this.shootRail(ship, side, 0, true) })
+      (ship, side) => { this.shootRail(ship, side, 0, true) },
+      ship => this.emitRounds(ship, advanceBroadside(ship, dt, 0), true))
     else this.enemyHelm(dt)
     const p = this.player
     const atEscapeEdge = this.escaping &&
@@ -1171,6 +1185,7 @@ class SkyBattle extends Phaser.Scene {
     p.y = this.drill
       ? clamp(p.y, Math.max(this.area.top + 22, mid - 134), Math.min(this.area.bottom - 22, mid + 134))
       : clamp(p.y, this.area.top + 22, this.area.bottom - 22)
+    this.emitRounds(p, advanceBroadside(p, dt, this.opts.gunLevel), false)
     for (let i = this.shots.length - 1; i >= 0; i--) {
       const s = this.shots[i]
       const from = this.trial ? { x: s.x, y: s.y } : undefined

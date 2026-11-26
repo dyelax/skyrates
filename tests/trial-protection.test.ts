@@ -1,11 +1,31 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildShip, fireBroadside, STILL_AIR } from '../src/battle-model'
+import { advanceBroadside, buildShip, fireBroadside, STILL_AIR } from '../src/battle-model'
 import { RAIDER_PROFILES } from '../src/raiders'
 import { TrialProtection } from '../src/trial-protection'
 
 const area = { width: 940, height: 560, top: 30, bottom: 520 }
 const playerShip = () => buildShip({ x: 0, y: 0 }, 0, 5, 2)
+
+test('a raider striking colors cancels its reserved guns while the other rail finishes its order', () => {
+  const player = playerShip()
+  const trial = new TrialProtection('prize-protection', player, { ...RAIDER_PROFILES[1], cannons: 48 }, area)
+  const lead = trial.lead, wing = trial.extra
+  const wingCount = wing.ship.guns.filter(g => g.side === 'port').length
+  const fromWing = fireBroadside(wing.ship, 'port', 0)
+  assert.equal(fireBroadside(lead.ship, 'port', 0).length, 1)
+  assert.ok(lead.ship.guns.some(g => g.salvoIn !== undefined))
+  lead.crew = 0
+  trial.resolve(player, 5, false, area)
+  assert.ok(lead.ship.guns.every(g => g.salvoIn === undefined))
+  for (let i = 0; i < 60; i++) {
+    trial.stepFlight(player, area, STILL_AIR, 1 / 60, () => {}, ship => {
+      assert.equal(ship, wing.ship)
+      fromWing.push(...advanceBroadside(ship, 1 / 60, 0))
+    })
+  }
+  assert.equal(fromWing.length, wingCount)
+})
 
 test('both patrol ships move and fire before surrender; the prize keeps its hull and drops out of combat', () => {
   const player = playerShip()
