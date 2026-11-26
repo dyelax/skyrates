@@ -1,5 +1,6 @@
 import { PORTS, type PortId } from './data'
 import type { GameState } from './model'
+import { WORLD_PORTS } from './world-flight'
 
 export const SEASONS = ['spring', 'summer', 'autumn', 'winter'] as const
 export type Season = (typeof SEASONS)[number]
@@ -152,14 +153,20 @@ export function voyageWeather(
   state: Pick<GameState, 'voyage' | 'port' | 'day'>,
 ) {
   const leg = state.voyage
-  return leg
+  return leg?.flight?.weather ?? (leg
     ? routeWeather(leg.from, leg.to, state.day - PORTS[leg.from].daysTo[leg.to])
-    : portWeather(state.port, state.day)
+    : portWeather(state.port, state.day))
 }
 
 // Raiders meet the ship on approach to its destination. The Watch begins its
 // first exercise at castoff; repeat exercises fly over the home port.
 export function battleLocation(state: Pick<GameState, 'voyage' | 'port' | 'drill'>): PortId {
   if (!state.voyage) return state.port
-  return state.drill ? state.voyage.from : state.voyage.to
+  if (state.drill) return state.voyage.from
+  const position = state.voyage.flight?.player
+  if (!position) return state.voyage.to
+  return (Object.keys(WORLD_PORTS) as PortId[]).reduce((nearest,port) => {
+    const distance = (p:PortId) => Math.hypot(WORLD_PORTS[p].x-position.x,WORLD_PORTS[p].y-position.y)
+    return distance(port) < distance(nearest) ? port : nearest
+  },state.voyage.from)
 }

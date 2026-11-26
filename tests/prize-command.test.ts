@@ -1,3 +1,4 @@
+import { flyToNextStop, settleThenFlyToPort } from './passage-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { act, CAMPAIGN_RESULTS, checkpointBattle, initialState, loadGame, prizeManifest, raiderToll, skipperTerms, canLearnPerk, captainPoints, hasCaptainPerk, qualifiedMate, handLevel, priceAt, type Preparation, type SailorId, type PortId, type GameState } from '../src/model'
@@ -9,15 +10,15 @@ function departure(seed=5): GameState {
   let s = initialState(seed)
   s = act(s,{type:'sail',to:'glasshouse'})
   s = act(s,{type:'endDrill',skip:true})
-  s = act(s,{type:'continueVoyage'})
+  s = flyToNextStop(s)
   s = act(s,{type:'sail',to:'copperfall'})
-  s = act(s,{type:'continueVoyage'})
-  s = act(s,{type:'tender',help:true})
+  s = flyToNextStop(s)
+  s = settleThenFlyToPort(s,{type:'tender',help:true})
   return {...s,coins:200}
 }
 function toBattle(s:GameState) {
   let n = act(s,{type:'sail',to:s.port === 'sunstep' ? 'copperfall' : 'sunstep'})
-  n = act(n,{type:'continueVoyage'})
+  n = flyToNextStop(n)
   n = act(n,{type:'engage'})
   assert.equal(n.voyage?.phase,'battle')
   return n
@@ -61,7 +62,7 @@ function finish(s:GameState, ending:BattleEnding) {
   const restored=reload(saved)
   assert.deepEqual(restored,saved)
   assert.equal(checkpointBattle(restored,id,checkpoint(s,null)),restored)
-  return act(restored,{type:'resolveBattle',id,result:CAMPAIGN_RESULTS[ending],hull:99,enemyHull:60})
+  return settleThenFlyToPort(restored,{type:'resolveBattle',id,result:CAMPAIGN_RESULTS[ending],hull:99,enemyHull:60})
 }
 const prepare = (s:GameState,course:Preparation,sailor?:SailorId) => act(s,{type:'prepareCommand',course,sailor})
 const learn = (s:GameState,ability:Parameters<typeof canLearnPerk>[1]) => act(s,{type:'chooseAbility',ability})
@@ -69,10 +70,10 @@ const sailor = (s:GameState,id:SailorId) => s.command.aboard.find(member => memb
 
 function passage(state:GameState,to:PortId):GameState {
   let s=act(state,{type:'sail',to})
-  s=act(s,{type:'continueVoyage'})
+  s=flyToNextStop(s)
   if (s.voyage?.phase==='raider') {
     s=act(s,{type:'engage'})
-    s=act(s,{type:'resolveBattle',result:'escaped',id:s.voyage!.id,hull:s.ship.hull})
+    s=settleThenFlyToPort(s,{type:'resolveBattle',result:'escaped',id:s.voyage!.id,hull:s.ship.hull})
   }
   assert.equal(s.port,to)
   assert.equal(s.voyage,null)
@@ -176,16 +177,16 @@ test('new captains can claim only agreed cargo that fits or grant free passage o
   const id=s.voyage!.id, manifest=prizeManifest(s,s.voyage!.pirate!.opponent,id)
   assert.equal(act(s,{type:'offerCommand',id}),s)
   for (const commander of ['hired','mate','skipper'] as const)
-    assert.equal(act(s,{type:'commissionPrize',id,commander}),s)
-  assert.equal(act(s,{type:'releasePrize',id,crates:2}),s)
-  assert.equal(act(s,{type:'releasePrize',id,crates:-1}),s)
-  const passage=act(s,{type:'releasePrize',id,crates:0})
+    assert.equal(settleThenFlyToPort(s,{type:'commissionPrize',id,commander}),s)
+  assert.equal(settleThenFlyToPort(s,{type:'releasePrize',id,crates:2}),s)
+  assert.equal(settleThenFlyToPort(s,{type:'releasePrize',id,crates:-1}),s)
+  const passage=settleThenFlyToPort(s,{type:'releasePrize',id,crates:0})
   assert.deepEqual(passage.cargo,start.cargo)
-  s=reload(act(s,{type:'releasePrize',id,crates:1}))
+  s=reload(settleThenFlyToPort(s,{type:'releasePrize',id,crates:1}))
   assert.equal(s.cargo[manifest.good].quantity,start.cargo[manifest.good].quantity+1)
   assert.deepEqual(s.freight,start.freight)
   assert.deepEqual(s.command.prizes,[])
-  assert.equal(act(s,{type:'releasePrize',id,crates:1}),s)
+  assert.equal(settleThenFlyToPort(s,{type:'releasePrize',id,crates:1}),s)
 })
 
 function earnLevel(s:GameState) {
@@ -234,10 +235,10 @@ test('new and returning captains can spend three separately earned perks; old sp
     assert.equal(act(answer,offer),answer)
     assert.deepEqual(act(reload(s),offer),answer)
     if (choice==='accepted')
-      assert.equal(act(answer,{type:'commissionPrize',id,commander:'skipper'}).command.prizes[0].commander,'skipper')
+      assert.equal(settleThenFlyToPort(answer,{type:'commissionPrize',id,commander:'skipper'}).command.prizes[0].commander,'skipper')
     else {
-      assert.equal(act(answer,{type:'commissionPrize',id,commander:'skipper'}),answer)
-      assert.equal(act(answer,{type:'commissionPrize',id,commander:'hired'}).command.prizes[0].commander,'hired')
+      assert.equal(settleThenFlyToPort(answer,{type:'commissionPrize',id,commander:'skipper'}),answer)
+      assert.equal(settleThenFlyToPort(answer,{type:'commissionPrize',id,commander:'hired'}).command.prizes[0].commander,'hired')
     }
   }
   assert.deepEqual(seen,new Set(['accepted','refused']))
@@ -271,5 +272,5 @@ test('wrecks, failed boarding, withdrawal and escape have distinct settlements, 
   const bad=checkpoint(battle,'boarded');bad.enemy.hull=0
   assert.equal(checkpointBattle(battle,battle.voyage!.id,bad),battle)
   const saved=checkpointBattle(battle,battle.voyage!.id,checkpoint(battle,'mutualWreck'))
-  assert.equal(act(saved,{type:'resolveBattle',id:saved.voyage!.id,result:'surrendered',hull:90,enemyHull:60}),saved)
+  assert.equal(settleThenFlyToPort(saved,{type:'resolveBattle',id:saved.voyage!.id,result:'surrendered',hull:90,enemyHull:60}),saved)
 })

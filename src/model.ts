@@ -1,3 +1,7 @@
+import { startWorldPursuit,endWorldPursuit,provokeWorldMerchant,nearbyAttackableMerchant,strikeWorldContact,retireWorldContact, WORLD_PORTS, initWorldFlight, moorWorldFlight, nearbyWorldSite, nearbyDock, nearbyHail, resolveHail, restoreWorldContact, validWorldFlight, type WorldFlight } from './world-flight'
+import { buildShip } from './battle-model'
+import { launchWorldCombat } from './world-combat'
+import { routeWeather } from './weather'
 import { dropCount, recovered, salvageLabel, salvageReceipt } from './salvage'
 import { validBattleSnapshot, type BattleEnding, type BattleSnapshot } from './battle-state'
 import { acceptsCommand, newRegister, officerOffer, prizeManifest, COMMANDER_NAMES, validPrizeTerms, validRegister,
@@ -76,7 +80,13 @@ export interface Voyage {
   id: number
   from: PortId
   to: PortId
-  phase: 'underway' | 'tender' | 'raider' | 'battle' | 'prize'
+  phase: 'underway' | 'merchant' | 'tender' | 'raider' | 'battle' | 'prize'
+  flight?: WorldFlight
+  prepaidDays?: number
+  waypoint?: PortId | null
+  hailed?: string
+  aggressor?: 'player'
+  encounterId?: number
   battle?: BattleSnapshot
   prize?: PrizeTerms
   pirate?: PirateTerms
@@ -100,6 +110,8 @@ export interface GameState {
   certificate: 'none' | 'aboard' | 'paid'
   tender: 'unseen' | 'helped' | 'passed'
   specialFreightTaken: boolean
+  mooredFlight?: WorldFlight
+  lastEncounterId?: number
   voyageCount: number
   voyage: Voyage | null
   drill: DrillStage | null
@@ -128,6 +140,11 @@ export type Command =
   | { type: 'endDrill'; skip: boolean }
   | { type: 'buy' | 'sell'; good: GoodId; quantity: number }
   | { type: 'sail'; to: PortId }
+  | { type: 'castOff' }
+  | { type: 'setWaypoint' | 'dockFlight'; id:number; port: PortId }
+  | { type: 'hailFlight'; id:number; contact:string; manual?:boolean }
+  | { type: 'leaveMerchant'; id:number }
+  | { type: 'attackMerchant'; id:number; contact:string }
   | { type: 'tender'; help: boolean }
   | { type: 'resolveBattle'; id: number; result: BattleResult; hull: number; enemyHull?: number }
   | { type: 'upgrade'; upgrade: UpgradeId }
@@ -386,11 +403,18 @@ export function awardTradeExperience(state: GameState, realizedProfit: number): 
   experience(state, earned)
 }
 
-function arrive(state: GameState, encounterOutcome = '') {
+function arrive(state: GameState, port: PortId) {
   const voyage = state.voyage
   if (!voyage) return
   const previous = voyage.from
-  state.port = voyage.to
+  if (!voyage.flight) return
+  const a = WORLD_PORTS[previous], b = WORLD_PORTS[port]
+  const extraDistance = Math.max(0, voyage.flight.distance - Math.hypot(a.x-b.x, a.y-b.y))
+  const sailingDays = Math.max(1, routeDays(previous,port)) + Math.floor(extraDistance / Math.hypot(WORLD_PORTS.glasshouse.x-WORLD_PORTS.sunstep.x,WORLD_PORTS.glasshouse.y-WORLD_PORTS.sunstep.y))
+  state.day += Math.max(0,sailingDays - (voyage.prepaidDays ?? 0))
+  moorWorldFlight(voyage.flight, port)
+  state.mooredFlight = voyage.flight
+  state.port = port
   state.voyage = null
   rememberMarket(state)
   record(state, 'Docked at ' + PORTS[state.port].name + ' after leaving ' + PORTS[previous].name + '.')
@@ -418,7 +442,6 @@ function arrive(state: GameState, encounterOutcome = '') {
       `Skipper Neri remembers your tow. A freight run to ${PORTS[contract.to].name} is yours for ${contract.pay} crowns.`,
     )
   }
-  if (encounterOutcome) state.notice = encounterOutcome + ' ' + state.notice
 }
 
 function addCargo(lot: CargoLot, quantity: number, cost: number) {
@@ -487,22 +510,154 @@ export function passageEvent(id: number, tender: GameState['tender']): 'safe' | 
   return id % ENCOUNTERS.raiderInterval === 0 ? 'raider' : 'safe'
 }
 
+export function encounterId(leg: Voyage): number {
+  return leg.encounterId ?? leg.id
+}
+
+function flightFor(state: GameState, leg: Voyage, departureDay: number, previous?: WorldFlight) {
+  const suggest = leg.from === 'sunstep' ? 'glasshouse' : 'sunstep'
+  const destination = leg.from === leg.to ? suggest : leg.to
+  const safe = leg.id <= ENCOUNTERS.safeOpeningVoyages
+  const encounter = safe ? 'none' : state.tender === 'unseen' ? 'tender' : 'raiders'
+  return initWorldFlight({seed:(state.pirateSeed ^ Math.imul(leg.id,0x9e3779b1)) >>> 0,
+    origin:leg.from,destination,weather:routeWeather(leg.from,destination,departureDay),
+    encounter: leg.phase === 'battle' || leg.phase === 'raider' || leg.phase === 'prize' ? 'raiders' : encounter,
+    load:cargoUsed(state) / state.ship.hold,safe,previous})
+}
+
+/** The old port screen has no position; an existing berth always wins on reload. */
+export function worldAtBerth(state: GameState): WorldFlight {
+  return state.mooredFlight ?? initWorldFlight({seed:state.pirateSeed,origin:state.port,destination:state.port,
+    weather:routeWeather(state.port,state.port,state.day),encounter:'none',safe:state.voyageCount === 0})
+}
+
+export function checkpointBerth(state: GameState, flight: WorldFlight): GameState {
+  if (state.voyage || state.drill || !validWorldFlight(flight) || flight.origin !== state.port) return state
+  const old = state.mooredFlight
+  if (old && (flight.seed !== old.seed || flight.elapsed < old.elapsed)) return state
+  return {...state,mooredFlight:structuredClone(flight)}
+}
+
+export function checkpointFlight(state: GameState, id: number, snapshot: WorldFlight,battle?:BattleSnapshot): GameState {
+  const leg = state.voyage
+  const previous = leg?.flight
+  if (!leg || !previous || leg.id !== id || !['underway','raider','merchant','battle'].includes(leg.phase) || state.drill || !validWorldFlight(snapshot)
+    || snapshot.seed !== previous.seed || snapshot.elapsed < previous.elapsed || snapshot.distance < previous.distance
+    || previous.spentIds.some(actor => !snapshot.spentIds.includes(actor)) ||
+    snapshot.spentIds.some(actor => !previous.spentIds.includes(actor) && actor !== leg.hailed)) return state
+  let next:GameState = {...state,voyage:{...leg,flight:structuredClone(snapshot)}}
+  if (leg.phase === 'battle') {
+    if (!battle || battle.worldActor !== leg.hailed) return state
+    const checked = checkpointBattle(next,encounterId(leg),battle)
+    if (checked === next) return state
+    next = checked
+  } else if (leg.phase === 'raider' || leg.phase === 'merchant') {
+    const other = snapshot.traffic.find(actor => actor.id === leg.hailed)
+    if (other && Math.hypot(other.ship.x-snapshot.player.x,other.ship.y-snapshot.player.y)>600) {
+      endWorldPursuit(next.voyage!.flight!,other.id)
+      resumeFlight(next.voyage!)
+      next.notice = 'Their signal falls astern.'
+    }
+  }
+  return next
+}
+
+function resumeFlight(leg: Voyage) {
+  leg.phase = 'underway'
+  delete leg.battle
+  delete leg.prize
+  delete leg.hailed
+  delete leg.pirate
+  delete leg.encounterId
+  delete leg.aggressor
+}
+
+function hailShip(state: GameState, leg: Voyage, id: string, manual: boolean): boolean {
+  const sky = leg.flight
+  if (leg.phase !== 'underway' || !sky) return false
+  const contact = nearbyHail(sky,manual)
+  if (!contact || contact.id !== id) return false
+  const leadPatrol = sky.contactId === id
+  if (contact.kind === 'tender' && !resolveHail(sky,id)) return false
+  leg.hailed = id
+  leg.encounterId = Math.max(leg.id,(state.lastEncounterId ?? 0)+1)
+  state.lastEncounterId = leg.encounterId
+  if (contact.kind === 'tender') {
+    leg.phase = 'tender'
+    state.notice = 'Skipper Neri signals for a tow.'
+  } else if (contact.kind === 'raiders') {
+    const actor=sky.traffic.find(ship=>ship.id===id)!
+    actor.behavior='watching'
+    leg.phase = 'raider'
+    leg.pirate = rollPirate(state.pirateSeed,leadPatrol ? leg.id : legacyPirateSeed(id),appraise(state).exposedValue)
+    state.notice = 'A raider signals its toll.'
+  } else {
+    leg.phase = 'merchant'
+    state.notice = ''
+  }
+  return true
+}
+
+export function worldCombatLoad(state: GameState) {
+  const leg = state.voyage
+  if (!leg?.pirate) return
+  return {manifest:prizeManifest(state,leg.pirate.opponent,encounterId(leg)),free:state.ship.hold-cargoUsed(state)}
+}
+
+function armWorldBattle(state: GameState,leg:Voyage):boolean {
+  if (!leg.flight || !leg.hailed || !leg.pirate) return false
+  const ship = buildShip(leg.flight.player,leg.flight.player.heading,state.ship.guns,
+    (state.ship.maxHull-100)/25,state.ship.hull,hasCaptainPerk(state,'gunner'),state.ship.cannons)
+  const battle=launchWorldCombat(leg.flight,leg.hailed,ship,boardingStrength(state),raiderToll(state).profile,leg.battle)
+  if (!battle) return false
+  leg.phase='battle'
+  leg.battle=battle
+  return true
+}
+
 function applyVoyageCommand(state: GameState, action: Command): boolean {
   const voyage = state.voyage
   if (!voyage) return false
   switch (action.type) {
-    case 'continueVoyage': {
-      if (voyage.phase !== 'underway') return false
-      const event = passageEvent(voyage.id, state.tender)
-      if (event === 'safe') {
-        arrive(state)
-      } else if (event === 'tender') {
-        voyage.phase = 'tender'
-        state.notice = 'A tender hangs under a torn solar sail. Its skipper signals for a tow.'
-      } else {
-        voyage.phase = 'raider'
-        state.notice = 'A raider blocks your passage and signals its toll.'
+    case 'setWaypoint':
+      if (!['underway','raider','merchant','battle'].includes(voyage.phase) || voyage.id !== action.id || !isUnlocked(state,action.port) || voyage.waypoint === action.port) return false
+      voyage.to = action.port
+      voyage.waypoint = action.port
+      state.notice = ''
+      return true
+    case 'dockFlight':
+      if (voyage.phase !== 'underway' || !voyage.flight || voyage.id !== action.id ||
+        !isUnlocked(state,action.port) || nearbyDock(voyage.flight) !== action.port) return false
+      arrive(state,action.port)
+      return true
+    case 'hailFlight':
+      return voyage.id === action.id && hailShip(state,voyage,action.contact,!!action.manual)
+    case 'attackMerchant': {
+      if (!voyage.flight || voyage.id!==action.id || !['underway','merchant'].includes(voyage.phase) ||
+        (voyage.phase==='merchant' && voyage.hailed!==action.contact) || !nearbyAttackableMerchant(voyage.flight,action.contact)) return false
+      if (!provokeWorldMerchant(voyage.flight,action.contact)) return false
+      if (voyage.phase==='underway') {
+        voyage.encounterId=Math.max(voyage.id,(state.lastEncounterId ?? 0)+1)
+        state.lastEncounterId=voyage.encounterId
       }
+      voyage.hailed=action.contact
+      voyage.aggressor='player'
+      voyage.pirate=rollPirate(state.pirateSeed,legacyPirateSeed(action.contact),appraise(state).exposedValue)
+      if (!armWorldBattle(state,voyage)) return false
+      record(state,'Raised hostile colors against a passing merchant.')
+      return true
+    }
+    case 'leaveMerchant':
+      if (voyage.phase !== 'merchant' || action.id !== encounterId(voyage)) return false
+      if (voyage.flight && voyage.hailed) endWorldPursuit(voyage.flight,voyage.hailed)
+      resumeFlight(voyage)
+      state.notice = ''
+      return true
+    case 'continueVoyage': {
+      // Older clients may ask to land. Only the physically reachable berth accepts.
+      const port = voyage.phase === 'underway' && voyage.flight && nearbyDock(voyage.flight)
+      if (!port || !isUnlocked(state,port)) return false
+      arrive(state,port)
       return true
     }
     case 'tender':
@@ -521,10 +676,10 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
         state.tender = 'passed'
         record(state, 'Passed the stranded tender and kept to the sailing schedule.')
       }
-      arrive(state, state.notice)
+      resumeFlight(voyage)
       return true
     case 'payToll': {
-      if (voyage.phase !== 'raider' || action.id !== voyage.id) return false
+      if (voyage.phase !== 'raider' || action.id !== encounterId(voyage)) return false
       const toll = raiderToll(state)
       let payment: string
       if (action.payment === 'cargo' && toll.settlement.cargo.length > 0 && toll.exposedValue >= toll.crowns) {
@@ -536,15 +691,16 @@ function applyVoyageCommand(state: GameState, action: Command): boolean {
       } else {
         return false
       }
+      if (voyage.flight && voyage.hailed) endWorldPursuit(voyage.flight,voyage.hailed)
       record(state, toll.crowns ? 'Paid the raider ' + payment + ' for passage.' : 'The raider waved us through without a toll.')
-      arrive(state, state.notice)
+      resumeFlight(voyage)
       return true
     }
     case 'evade': // An older client's escape order still requires taking the helm.
     case 'engage':
       if (voyage.phase !== 'raider') return false
-      voyage.phase = 'battle'
-      state.notice = 'Battle stations. The raider is closing.'
+      if (!voyage.flight || !voyage.hailed || !startWorldPursuit(voyage.flight,voyage.hailed) || !armWorldBattle(state,voyage)) return false
+      state.notice = ''
       return true
     case 'offerCommand':
     case 'commissionPrize':
@@ -572,7 +728,7 @@ function validCombatCheckpoint(value: unknown): value is BattleSnapshot {
 
 export function checkpointBattle(state: GameState, id: number, snapshot: BattleSnapshot): GameState {
   const voyage = state.voyage
-  if (!voyage || voyage.id !== id || voyage.phase !== 'battle' || !validCombatCheckpoint(snapshot)) return state
+  if (!voyage || encounterId(voyage) !== id || voyage.phase !== 'battle' || !validCombatCheckpoint(snapshot)) return state
   const old = voyage.battle
   const next = snapshot.salvage
   if (next) {
@@ -592,7 +748,7 @@ export function checkpointBattle(state: GameState, id: number, snapshot: BattleS
 
 function finishBattle(state: GameState, action: Extract<Command,{type:'resolveBattle'}>): boolean {
   const leg = state.voyage
-  if (!leg || leg.phase !== 'battle' || leg.id !== action.id || !Number.isFinite(action.hull)) return false
+  if (!leg || leg.phase !== 'battle' || encounterId(leg) !== action.id || !Number.isFinite(action.hull)) return false
   const terminal = leg.battle?.terminal
   let outcome = action.result
   if (terminal && CAMPAIGN_RESULTS[terminal] !== outcome) return false
@@ -610,22 +766,22 @@ function finishBattle(state: GameState, action: Extract<Command,{type:'resolveBa
     leg.prize = { hull: theirHull, offer: 'unasked' }
     delete leg.battle
     state.notoriety++
-    experience(state,12)
+    if (leg.aggressor !== 'player') experience(state,12)
+    if (leg.flight && leg.hailed) strikeWorldContact(leg.flight,leg.hailed)
     record(state, `The ${profile.name.toLowerCase()} struck its colors. Both ships are afloat. The skipper awaits your terms.`)
     return true
   }
   switch (outcome) {
     case 'enemyWreck':
       state.notoriety++
-      state.coins += 25
-      experience(state,12)
+      if (leg.aggressor !== 'player') { state.coins += 25; experience(state,12) }
       {
-        const manifest = prizeManifest(state, profile.id, leg.id)
+        const manifest = prizeManifest(state, profile.id, encounterId(leg))
         const pickup = leg.battle?.salvage
         const qty = pickup ? Math.max(0, Math.min(recovered(pickup), dropCount(manifest), state.ship.hold - cargoUsed(state))) : 0
         if (qty > 0) addCargo(state.cargo[manifest.good], qty, 0)
         const report = pickup ? ' ' + salvageLabel(salvageReceipt(manifest, qty)) : ''
-        record(state, 'The raider sank. Claimed the 25-crown defense award at the next berth.' + report)
+        record(state, (leg.aggressor === 'player' ? 'The merchant sank.' : 'The raider sank. Earned the 25-crown defense award.') + report)
       }
       break
     case 'lost':
@@ -634,7 +790,7 @@ function finishBattle(state: GameState, action: Extract<Command,{type:'resolveBa
       const { settlement } = raiderToll(state)
       settleToll(state, settlement)
       if (outcome !== 'yielded') state.ship.hull = Math.max(state.ship.hull, Math.ceil(state.ship.maxHull * 0.35))
-      const ending = outcome === 'ownWreck' ? 'The Wayfarer fell. A salvage tender brought the crew and shattered keel to a repair berth.' : 'Struck colors with the crews aboard.'
+      const ending = outcome === 'ownWreck' ? 'The Wayfarer fell. A passing tender recovered the crew and patched the keel for the flight to a repair berth.' : 'Struck colors with the crews aboard.'
       record(state, ending + ' Settled the raider’s claim with ' + tollSettlementLabel(settlement) + '.')
       break
     }
@@ -651,22 +807,26 @@ function finishBattle(state: GameState, action: Extract<Command,{type:'resolveBa
     default:
       return false
   }
-  arrive(state,state.notice)
+  if (leg.flight && leg.hailed) {
+    if (outcome === 'enemyWreck' || outcome === 'mutualWreck') retireWorldContact(leg.flight,leg.hailed)
+    else endWorldPursuit(leg.flight,leg.hailed)
+  }
+  resumeFlight(leg)
   return true
 }
 
 function settlePrize(state: GameState, action: Extract<PrizeCommand,{id:number}>): boolean {
   const leg = state.voyage
-  if (!leg || leg.phase !== 'prize' || leg.id !== action.id || !leg.prize || !leg.pirate) return false
+  if (!leg || leg.phase !== 'prize' || encounterId(leg) !== action.id || !leg.prize || !leg.pirate) return false
   const prize = leg.prize
   if (action.type === 'offerCommand') {
     if (!hasCaptainPerk(state,'articles') || prize.offer !== 'unasked') return false
-    prize.offer = acceptsCommand(state,leg.id) ? 'accepted' : 'refused'
+    prize.offer = acceptsCommand(state,encounterId(leg)) ? 'accepted' : 'refused'
     record(state, prize.offer === 'accepted' ? 'The skipper signed the articles. You can commission the prize under their command.' :
       'The skipper declined the articles. You may appoint your own qualified officer or release the ship.')
     return true
   }
-  const cargo = prizeManifest(state,leg.pirate.opponent,leg.id)
+  const cargo = prizeManifest(state,leg.pirate.opponent,encounterId(leg))
   if (action.type === 'commissionPrize') {
     let captain: ServingHand | undefined
     switch (action.commander) {
@@ -686,7 +846,7 @@ function settlePrize(state: GameState, action: Extract<PrizeCommand,{id:number}>
         break
       default: return false
     }
-    state.command.prizes.push({ id:leg.id, class:leg.pirate.opponent, hull:prize.hull, commander:action.commander, ...(captain ? {captain} : {}), port:leg.to, cargo })
+    state.command.prizes.push({ id:encounterId(leg), class:leg.pirate.opponent, hull:prize.hull, commander:action.commander, ...(captain ? {captain} : {}), port:leg.to, cargo })
     record(state, `${captain ? CREW_PROFILES[captain.id].name : COMMANDER_NAMES[action.commander]} took command of the captured ${leg.pirate.opponent}. Its hull and manifest are registered at the ${PORTS[leg.to].name} shipyard.`)
   } else if (action.type === 'releasePrize') {
     if (!Number.isSafeInteger(action.crates) || action.crates < 0 || action.crates > cargo.quantity || action.crates > state.ship.hold - cargoUsed(state)) return false
@@ -694,7 +854,11 @@ function settlePrize(state: GameState, action: Extract<PrizeCommand,{id:number}>
     record(state, action.crates ? `Took ${action.crates} crates of ${GOODS[cargo.good].name.toLowerCase()} under the surrender terms and released the ship with the rest of its manifest.` :
       'Granted safe passage and released the surrendered ship with its whole manifest.')
   } else return false
-  arrive(state,state.notice)
+  if (leg.flight && leg.hailed) {
+    if (action.type === 'commissionPrize') retireWorldContact(leg.flight,leg.hailed)
+    else endWorldPursuit(leg.flight,leg.hailed)
+  }
+  resumeFlight(leg)
   return true
 }
 
@@ -872,17 +1036,19 @@ function applyDockCommand(state: GameState, action: Command): boolean {
       state.drill = 'briefing'
       state.notice = ''
       return true
-    case 'sail':
-      if (action.to === state.port || !isUnlocked(state, action.to)) return false
-      state.voyageCount += 1
-      state.day += routeDays(state.port, action.to)
+    case 'castOff':
+    case 'sail': {
+      const target = action.type === 'sail' ? action.to : null
+      if (target && (target === state.port || !isUnlocked(state,target))) return false
+      state.voyageCount++
       if (state.voyageCount === 1 && state.port === 'sunstep') state.drill = 'briefing'
-      state.voyage = { id: state.voyageCount, from: state.port, to: action.to, phase: 'underway' }
-      if (passageEvent(state.voyageCount, state.tender) === 'raider') {
-        state.voyage.pirate = rollPirate(state.pirateSeed, state.voyageCount, appraise(state).exposedValue)
-      }
-      state.notice = 'Underway for ' + PORTS[action.to].name + '.'
+      const leg: Voyage = {id:state.voyageCount,from:state.port,to:target ?? state.port,waypoint:target,phase:'underway'}
+      leg.flight = flightFor(state,leg,state.day,worldAtBerth(state))
+      state.voyage = leg
+      delete state.mooredFlight
+      state.notice = target ? 'Underway for ' + PORTS[target].name + '.' : ''
       return true
+    }
     case 'takeFreight': {
       const offer = freightOffer(state)
       if (!offer) return false
@@ -1021,9 +1187,14 @@ function validVoyage(value: unknown, currentPort: unknown, voyageCount: unknown)
       value.id === voyageCount &&
       value.from === currentPort &&
       isPort(value.to) &&
-      value.from !== value.to &&
+      (value.from !== value.to || value.flight !== undefined) &&
+      (value.flight === undefined || validWorldFlight(value.flight)) &&
+      (value.prepaidDays === undefined || integer(value.prepaidDays)) &&
+      (value.encounterId === undefined || integer(value.encounterId,1)) &&
+      (value.hailed === undefined || typeof value.hailed === 'string') &&
+      (value.waypoint === undefined || value.waypoint === null || value.waypoint === value.to) &&
       typeof value.phase === 'string' &&
-      ['underway', 'tender', 'raider', 'battle', 'prize'].includes(value.phase) &&
+      ['underway', 'merchant', 'tender', 'raider', 'battle', 'prize'].includes(value.phase) &&
       (value.battle === undefined || (value.phase === 'battle' && validCombatCheckpoint(value.battle))) &&
       (value.phase === 'prize'
         ? object(value.pirate) && validPrizeTerms(value.prize, RAIDER_PROFILES.find(p => p.id === (value.pirate as PirateTerms).opponent))
@@ -1128,8 +1299,10 @@ function validSave(value: unknown): value is GameState {
     quantity += lot.quantity
   }
   return (
-    validRegister(value.command, value.voyageCount, value.ability as AbilityId | null, value.level) &&
-    !(object(value.voyage) && value.command.prizes.some(ship => ship.id === value.voyageCount)) &&
+    (value.lastEncounterId === undefined || integer(value.lastEncounterId)) &&
+    (value.mooredFlight === undefined || (value.voyage === null && validWorldFlight(value.mooredFlight))) &&
+    validRegister(value.command, Math.max(value.voyageCount, Number(value.lastEncounterId ?? 0)), value.ability as AbilityId | null, value.level) &&
+    !(object(value.voyage) && value.voyage.phase === 'prize' && value.command.prizes.some(ship => ship.id === encounterId(value.voyage as unknown as Voyage))) &&
     validGarden(value.garden, value.day) &&
     validBuyerLedger(value.buyers, cargo as Record<GoodId, CargoLot>, value.day) &&
     quantity <= value.ship.hold &&
@@ -1192,9 +1365,22 @@ export function loadGame(storage?: Pick<Storage, 'getItem'>): GameState {
           } else if (leg.phase === 'raider' || leg.phase === 'battle') {
             // A returning captain may have already seen the previous release's quote.
             leg.pirate = legacyPirateTerms(wealth)
-          } else if (leg.phase === 'underway' && passageEvent(leg.id, value.tender) === 'raider') {
-            leg.pirate = rollPirate(value.pirateSeed, leg.id, wealth)
           }
+          if (!leg.flight) {
+            leg.prepaidDays = routeDays(leg.from,leg.to)
+            leg.flight = flightFor(value,leg,Math.max(1,value.day-leg.prepaidDays))
+            leg.waypoint = leg.to
+            if (leg.phase !== 'underway') {
+              leg.hailed = restoreWorldContact(leg.flight)
+              if (leg.hailed && leg.phase === 'tender') resolveHail(leg.flight,leg.hailed)
+              leg.encounterId = leg.id
+              value.lastEncounterId = Math.max(value.lastEncounterId ?? 0,leg.id)
+            }
+          }
+        }
+        if (leg?.phase === 'battle' && !leg.battle?.worldActor && leg.hailed && leg.flight) {
+          startWorldPursuit(leg.flight,leg.hailed)
+          armWorldBattle(value,leg)
         }
         if (legacyContacts) for (const port of value.exchange.orders) witnessCityOrder(value, port)
         return value

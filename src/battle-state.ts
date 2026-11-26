@@ -12,6 +12,7 @@ export interface ContactClock {
 
 export interface BattleSnapshot {
   version: 1
+  worldActor?: string
   player: Vessel
   enemy: Vessel
   playerCrew: number
@@ -43,7 +44,7 @@ function vessel(v: unknown): boolean {
 }
 
 export function validBattleSnapshot(v: unknown): v is BattleSnapshot {
-  return record(v) && v.version === 1 && vessel(v.player) && vessel(v.enemy)
+  return record(v) && v.version === 1 && (v.worldActor === undefined || typeof v.worldActor === 'string' && v.worldActor.length > 0 && v.worldActor.length <= 100) && vessel(v.player) && vessel(v.enemy)
     && nonnegative(v.playerCrew) && nonnegative(v.enemyCrew)
     && record(v.area) && finite(v.area.top) && finite(v.area.bottom) && v.area.bottom > v.area.top
     && record(v.contact) && typeof v.contact.armed === 'boolean' && nonnegative(v.contact.clearSeconds)

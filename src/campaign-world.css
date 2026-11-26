@@ -1,0 +1,17 @@
+.campaign-sky { position: fixed; inset: 0; }
+.campaign-surface { position: fixed; z-index: 4; right: max(1rem, env(safe-area-inset-right)); top: max(1rem, env(safe-area-inset-top)); width: min(32rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; overscroll-behavior: contain; border-radius: .7rem; background: #14232bf5; color: #ece4d3; box-shadow: 0 8px 36px #101b2670; }
+.campaign-surface[hidden], .campaign-sky[hidden] { display: none; }
+.campaign-surface:has(.context-ledger) { padding: 1rem; }
+.campaign-surface.map-surface { width: min(55rem, calc(100vw - 2rem)); }
+.campaign-surface.battle-surface { inset: 0; border-radius: 0; width: 100%; height: 100%; max-height: none; }
+.campaign-surface .context-ledger .sk-room-overlay, .campaign-surface .context-ledger .sk-room-ledger { display: block; padding: 0; margin: 0; min-height: 0; width: 100%; max-height: none; background: transparent; position: static; overflow: visible; }
+.campaign-surface .context-ledger .sk-voyage { display: block; }
+.campaign-surface .context-ledger .sk-voyage .sk-scene { min-height: 0; padding: 0; }
+.campaign-surface .context-ledger .sk-voyage .sk-scene img, .campaign-surface .context-ledger .sk-voyage .scene-weather { display: none; }
+.campaign-surface .context-ledger .sk-scene header { position: relative; inset: auto; }
+.campaign-surface:has(> .dock-talk) { min-height: min(27rem, 75dvh); }
+.campaign-surface > .dock-talk { position: relative; inset: auto; width: 100%; transform: none; }
+@media(max-width:600px) {
+  .campaign-surface { right: 0; left: 0; width: 100%; bottom: 0; top: auto; max-height: 73dvh; padding-bottom: env(safe-area-inset-bottom); border-radius: .7rem .7rem 0 0; }
+  .campaign-surface.map-surface { width: 100%; }
+}

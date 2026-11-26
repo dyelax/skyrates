@@ -1,3 +1,4 @@
+import { settleThenFlyToPort, flyToNextStop } from './passage-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { act, appraise, initialState, LEVY_BANDS, loadGame, raiderForecast, raiderToll, rollPirate, tollSettlementLabel, type GameState } from '../src/model'
@@ -26,8 +27,8 @@ function preparedManifest(seed: number, coins: number) {
 }
 
 const restore = (state: GameState) => loadGame({ getItem: () => JSON.stringify(state) })
-const pay = (s: GameState, payment: 'cargo' | 'crowns') => act(s, { type: 'payToll', id: 3, payment })
-const defeat = (s: GameState) => act(restore(act(s, { type: 'engage' })), { type: 'resolveBattle', id: 3, result: 'lost', hull: 0 })
+const pay = (s: GameState, payment: 'cargo' | 'crowns') => settleThenFlyToPort(s, { type: 'payToll', id: 3, payment })
+const defeat = (s: GameState) => settleThenFlyToPort(restore(act(s, { type: 'engage' })), { type: 'resolveBattle', id: 3, result: 'lost', hull: 0 })
 
 test('an earlier save at the hail keeps its quoted ship and whole-crown demand within the new half-wealth ceiling', () => {
   for (const [wealth, tier, percentage, cannons, hull, crew] of [
@@ -61,7 +62,7 @@ test('return exact change for a single expensive crate, preserving cost basis, m
   assert.match(tollSettlementLabel(toll.settlement), /1 crate of prism blanks.*20 crowns in change/)
   assert.match(assessPlaytest('What does the raider want?', s, 'voyage').answer, /75 crowns.*scout demands 5 crowns/i)
   assert.equal(pay(s, 'crowns'), s)
-  assert.equal(act(s, { type: 'payToll', id: 9, payment: 'cargo' }), s)
+  assert.equal(settleThenFlyToPort(s, { type: 'payToll', id: 9, payment: 'cargo' }), s)
   const paid = pay(restore(s), 'cargo')
   assert.equal(paid.port, 'copperfall')
   assert.equal(paid.cargo.prisms.quantity, 2)
@@ -96,7 +97,7 @@ test('the lookout lists all high-value goods first, followed by any cash still d
     assert.equal(appraise(settled).exposedValue, toll.exposedValue - toll.crowns)
   }
   const resumed = restore(lost)
-  assert.equal(act(resumed, { type: 'resolveBattle', id: 3, result: 'lost', hull: 0 }), resumed)
+  assert.equal(settleThenFlyToPort(resumed, { type: 'resolveBattle', id: 3, result: 'lost', hull: 0 }), resumed)
 })
 
 test('a fractional toll on a large lot never confiscates the whole cargo or rewards a refusal', () => {
@@ -123,7 +124,7 @@ test('refusal requires live combat; winning or escaping keeps the cargo and pays
   assert.equal(act(s, { type: 'evade' }).voyage?.phase, 'battle')
   assert.equal(pay(battle, 'cargo'), battle)
   for (const [result, bounty] of [['escaped',0],['won',25],['boarded',0]] as const) {
-    const arrived = act(battle, { type: 'resolveBattle', id: 3, result, hull: 57 })
+    const arrived = settleThenFlyToPort(battle, { type: 'resolveBattle', id: 3, result, hull: 57 })
     if (result === 'boarded') assert.equal(arrived.voyage?.phase, 'prize')
     assert.deepEqual(arrived.cargo, s.cargo)
     assert.equal(arrived.ship.hull, 57)
@@ -160,7 +161,7 @@ test('every posted tender conserves appraised wealth, including multiple whole c
           docked.cargo.machinery = { quantity: machinery, cost: machinery * 15 }
           docked.cargo.prisms = { quantity: prisms, cost: prisms * 28 }
           const sailing = act(docked, { type: 'sail', to: 'copperfall' })
-          const s = act(sailing, { type: 'continueVoyage' })
+          const s = flyToNextStop(sailing)
           const toll = raiderToll(s)
           const paid = toll.settlement.cargo.length ? pay(s, 'cargo') : defeat(s)
           assert.equal(paid.voyage, null)
@@ -214,10 +215,10 @@ test('the departure draw survives hail, engagement, reload and a replay of the s
   assert.deepEqual([forecast.low, forecast.high], [10, 100])
   assert.match(assessPlaytest('What might a raider ask?', docked, 'chart').answer, /10–100 crowns/)
   const sailed = act(docked, { type: 'sail', to: 'copperfall' })
-  const snapshot = sailed.voyage!.pirate!
+  const snapshot = flyToNextStop(sailed).voyage!.pirate!
   assert.deepEqual(snapshot, rollPirate(7, 3, forecast.exposedValue))
-  assert.deepEqual(act(restore(docked), { type: 'sail', to: 'glasshouse' }).voyage!.pirate, snapshot)
-  const hailed = act(restore(sailed), { type: 'continueVoyage' })
+  assert.deepEqual(flyToNextStop(act(restore(docked), { type: 'sail', to: 'glasshouse' })).voyage!.pirate, snapshot)
+  const hailed = flyToNextStop(restore(sailed))
   const quote = raiderToll(hailed)
   assert.equal(quote.profile.id, snapshot.opponent)
   assert.equal(quote.crowns, snapshot.crowns)
@@ -232,7 +233,7 @@ test('the departure draw survives hail, engagement, reload and a replay of the s
   const migrated = restore(old)
   assert.deepEqual(restore(old), migrated)
   assert.deepEqual(restore(migrated), migrated)
-  assert.equal(act(migrated, { type: 'continueVoyage' }).voyage?.phase, 'raider')
+  assert.equal(flyToNextStop(migrated).voyage?.phase, 'raider')
 })
 
 test('the opening Watch passage is free even for seeds that draw maximum demands later', () => {
@@ -244,12 +245,12 @@ test('the opening Watch passage is free even for seeds that draw maximum demands
   assert.equal(firstPassage.drill, 'briefing')
   assert.equal(firstPassage.voyage?.pirate, undefined)
   const cleared = act(restore(firstPassage), { type: 'endDrill', skip: true })
-  const landed = act(cleared, { type: 'continueVoyage' })
+  const landed = flyToNextStop(cleared)
   assert.equal(landed.port, 'glasshouse')
   assert.equal(landed.coins, start.coins)
   for (const coins of [0, 1, 2, 3, 17, 200]) {
     const sailed = act(preparedManifest(seed, coins), { type: 'sail', to: 'copperfall' })
-    const hail = act(restore(sailed), { type: 'continueVoyage' })
+    const hail = flyToNextStop(restore(sailed))
     assert.equal(hail.voyage?.pirate?.rate, 50)
     assert.equal(raiderToll(hail).crowns, Math.floor(coins / 2))
     assert.equal(pay(hail, 'crowns').coins, coins - Math.floor(coins / 2))
