@@ -31,7 +31,7 @@ import { type ContactWriter } from './characters'
 import { mountHarbor } from './harbor'
 import { mountPlaytestChat } from './playtest-chat'
 import { openPrologue } from './prologue'
-import { voyageWeather } from './weather'
+import { battleLocation, voyageWeather } from './weather'
 import { beginAmbience, bell, loadSoundPreference } from './audio'
 
 loadSoundPreference()
@@ -201,6 +201,7 @@ function render() {
           skill: boardingStrength(state) / state.ship.crew,
           gunLevel: state.ship.guns,
           cannons: state.ship.cannons,
+          location: battleLocation(state),
           weather: voyageWeather(state),
           drill: state.drill
             ? {

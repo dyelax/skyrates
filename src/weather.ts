@@ -156,3 +156,10 @@ export function voyageWeather(
     ? routeWeather(leg.from, leg.to, state.day - PORTS[leg.from].daysTo[leg.to])
     : portWeather(state.port, state.day)
 }
+
+// Raiders meet the ship on approach to its destination. The Watch begins its
+// first exercise at castoff; repeat exercises fly over the home port.
+export function battleLocation(state: Pick<GameState, 'voyage' | 'port' | 'drill'>): PortId {
+  if (!state.voyage) return state.port
+  return state.drill ? state.voyage.from : state.voyage.to
+}

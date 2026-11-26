@@ -2,6 +2,7 @@ import '@fontsource/barlow/latin-400.css'
 import '@fontsource/barlow/latin-600.css'
 import '@fontsource/cormorant-garamond/latin-600.css'
 import { artwork } from './artwork'
+import { PORTS, PORT_IDS, type PortId } from './data'
 import { armamentLabel, buildShip, STILL_AIR } from './battle-model'
 import { RAIDER_PROFILES } from './raiders'
 import { setSessionSound } from './audio'
@@ -15,14 +16,16 @@ const fittings = [
   { name: 'Broadside gunship', hullLevel: 2, gunLevel: 3, hands: 6, veterans: 1 },
 ]
 
-// Calm is the zero-drift gunnery reference. Windy and Storm use actual chart forecasts.
+// Keep the windy preset's repeatable chart wind, with clear visibility so both
+// nonstorm presets can be compared against the same passing squall.
 const calm: WeatherReport = {
   kind: 'clear', season: 'spring', wind: STILL_AIR, severity: 0,
   summary: 'Clear skies', bearing: 'calm', knots: 0,
 }
+const { wind, knots, bearing } = routeWeather('meridian', 'copperfall', 1)
 const forecasts = [
   { name: 'Calm', report: calm },
-  { name: 'Windy', report: routeWeather('meridian', 'copperfall', 1) },
+  { name: 'Windy', report: { ...calm, wind, knots, bearing } },
   { name: 'Storm', report: routeWeather('copperfall', 'meridian', 30) },
 ]
 
@@ -44,6 +47,7 @@ desk.style.setProperty('--test-sky', `url("${artwork('cloud-sea')}")`)
 let fitIndex = 0
 let enemyIndex = 0
 let weatherIndex = 0
+let trialLocation: PortId = 'sunstep'
 let sound = false
 let match = 0
 let leaveBattle: (() => void) | undefined
@@ -88,9 +92,12 @@ function showDesk(result?: TrialEnd, error = '') {
     <div class="desk-sheet"><div class="desk-title"><p>${result ? 'Battle result' : 'Harbor Watch'}</p><h1>${result ? outcomeText[result.outcome] : 'Battle test'}</h1>
     ${result ? '' : '<p class="intro">Choose two ships and take the helm. Practice battles leave your campaign save untouched.</p>'}</div>
     <div class="matchup">${shipCard(true)}${shipCard(false)}</div>
-    <footer><div class="conditions">${result ? '' : `<label for="trial-weather">Weather</label><select id="trial-weather">${options(forecasts.map(f => f.name),weatherIndex)}</select>`}
-      <span>${weather.summary} · ${weather.knots} kn ${weather.bearing} · ${weather.season}</span></div>
-    <div class="actions">${result ? '<button id="change">Change ships</button>' : `<label class="sound"><input type="checkbox" id="sounds"${sound ? ' checked' : ''}> Battle sound</label>`}
+    <footer><div class="conditions">${result ? '' : `<div class="condition-fields">
+      <label>Location<select id="trial-location">${PORT_IDS.map(id => `<option value="${id}"${id === trialLocation ? ' selected' : ''}>${PORTS[id].name}</option>`).join('')}</select></label>
+      <label>Weather<select id="trial-weather">${options(forecasts.map(f => f.name),weatherIndex)}</select></label>
+    </div>`}
+      <span>${result ? PORTS[trialLocation].name + ' · ' : ''}${weather.summary} · ${weather.knots} kn ${weather.bearing} · ${weather.season}</span></div>
+    <div class="actions">${result ? '<button id="change">Change setup</button>' : `<label class="sound"><input type="checkbox" id="sounds"${sound ? ' checked' : ''}> Battle sound</label>`}
     <button id="fight" class="fight">${result ? 'Rematch' : 'Fight'}</button></div></footer>
     ${error ? '<p role="alert">The battle chart could not load. Try Fight again.</p>' : ''}
     </div></section>`
@@ -98,7 +105,8 @@ function showDesk(result?: TrialEnd, error = '') {
     const select = event.currentTarget as HTMLSelectElement
     if (select.id === 'your-fit') fitIndex = select.selectedIndex
     else if (select.id === 'opponent-fit') enemyIndex = select.selectedIndex
-    else weatherIndex = select.selectedIndex
+    else if (select.id === 'trial-location') trialLocation = PORT_IDS[select.selectedIndex]
+    else if (select.id === 'trial-weather') weatherIndex = select.selectedIndex
     showDesk()
     desk.querySelector<HTMLElement>('#' + select.id)?.focus()
   }
@@ -120,7 +128,7 @@ function showDesk(result?: TrialEnd, error = '') {
       leaveBattle = mountBattle(desk, {
         opponent: enemy, crew: fit.hands, skill: strength / fit.hands, gunLevel: fit.gunLevel,
         cannons: ship.guns.length, hullLevel: fit.hullLevel, shipName: fit.name,
-        weather, combatRandom: trialRandom(),
+        location: trialLocation, weather, combatRandom: trialRandom(),
         onExit: () => { if (id === match) { showDesk(); desk.querySelector<HTMLButtonElement>('#fight')?.focus() } },
         onUnavailable: () => { if (id === match) showDesk(undefined, 'unavailable') },
         onFinish: (outcome, hull, enemyHull, crew) => {
