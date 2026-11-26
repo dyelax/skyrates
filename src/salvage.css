@@ -5,7 +5,7 @@
   bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   box-sizing: border-box;
-  width: min(282px, 94vw);
+  width: min(316px, calc(100vw - 24px));
   padding: 9px 12px 10px;
   color: #f6ecd1;
   background: #152f34f0;
@@ -32,19 +32,26 @@
 .salvage-watch nav {
   margin-top: 6px;
 }
-.salvage-watch button {
-  flex: 1;
+.air-duel .salvage-watch button {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 6px 10px;
+  white-space: nowrap;
+  text-shadow: none;
   border-radius: 5px;
   border: 1px solid #b7a879;
   background: #20464b;
   color: #fff1ce;
-  min-height: 34px;
+  min-height: 36px;
   font:
-    600 13px Barlow,
+    600 15px/1.15 Barlow,
     sans-serif;
   cursor: pointer;
 }
-.salvage-watch button:focus-visible {
+.air-duel .salvage-watch button:focus-visible {
   outline: 2px solid #ffe5a8;
   outline-offset: 2px;
 }
@@ -53,7 +60,7 @@
   visibility: hidden;
 }
 @media (pointer: coarse) {
-  .salvage-watch button {
+  .air-duel .salvage-watch button {
     min-height: 44px;
   }
 }
