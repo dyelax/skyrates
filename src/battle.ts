@@ -143,7 +143,7 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
   const windStation = options.drill
     ? ''
     : `<figure class="duel-wind"><div class="duel-anemoscope" aria-hidden="true"><i style="transform:rotate(${windAngle}deg)">➜</i></div><figcaption><strong>${weather.knots} kn · ${weather.bearing}</strong><span>${weather.kind} · ${weather.season}</span></figcaption>${options.onExit ? '<button type="button" data-exit-test>Leave test</button>' : ''}</figure>`
-  root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause"><kbd>P</kbd> Pause</button></div>
+  root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause" aria-label="Pause or resume battle" aria-keyshortcuts="P" aria-pressed="false"><kbd>P</kbd> Pause</button></div>
     <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : options.opponent.name, 'enemy')}</div>
     ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div><div class="duel-markers" aria-hidden="true"></div><div class="duel-banner" role="status"></div></div>
     <div class="duel-console">${battery('port', cannons)}${battery('starboard', cannons)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Steer to contact or push the touching ships apart"><kbd>B</kbd> <span data-read="ramOrder">Close in</span></button><button type="button" data-action="escape"><kbd>R</kbd> <span data-read="escapeOrder">Break away</span></button></div></div></div>
@@ -192,6 +192,7 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
   } catch {
     resize.observe(container)
   }
+  for (const panel of root.querySelectorAll('.duel-readouts, .duel-wind, .duel-console, .drill-coach, .duel-foot')) resize.observe(panel)
   window.addEventListener('resize', resizeChart)
   return () => {
     resize.disconnect()
@@ -498,8 +499,8 @@ class SkyBattle extends Phaser.Scene {
     if (action === 'pause') {
       this.pausedDuel = !this.pausedDuel
       this.buttons.pause.innerHTML = this.pausedDuel ? '<kbd>P</kbd> Resume' : '<kbd>P</kbd> Pause'
-      if (this.pausedDuel) this.tell('Battle paused.', Infinity)
-      else this.banner.classList.remove('visible')
+      this.buttons.pause.setAttribute('aria-pressed', String(this.pausedDuel))
+      this.clearBanner()
     } else if (!this.pausedDuel) {
       if (action === 'faster') this.player.throttle = Math.min(3, this.player.throttle + 1)
       if (action === 'slower') {
@@ -557,6 +558,12 @@ class SkyBattle extends Phaser.Scene {
     }
     this.save()
     this.syncHUD()
+  }
+
+  private clearBanner() {
+    this.banner.classList.remove('visible')
+    this.banner.textContent = ''
+    this.bannerTTL = 0
   }
 
   private tell(message: string, seconds: number) {
@@ -730,9 +737,7 @@ class SkyBattle extends Phaser.Scene {
       debrief: 'Leave the exercise',
     }[this.drill]
     this.buttons.skip.hidden = this.drill === 'debrief'
-    this.banner.classList.remove('visible')
-    this.banner.textContent = ''
-    this.bannerTTL = 0
+    this.clearBanner()
   }
 
   private teach(stage: DrillStage) {
@@ -1058,7 +1063,10 @@ class SkyBattle extends Phaser.Scene {
         if (wasTouching && !this.touching) this.teach('return')
       } else if (this.drill === 'return' && !this.crew.enemy) this.teach('debrief')
       else if (!this.drill) {
-        if (wasTouching !== this.touching) this.saveIn = 0
+        if (wasTouching !== this.touching) {
+          this.saveIn = 0
+          this.hudIn = 0
+        }
         const ending = combatEnding(p, this.foe, this.crew) ?? (atEscapeEdge ? 'escaped' : null)
         if (ending) { this.finish(ending); return }
       }

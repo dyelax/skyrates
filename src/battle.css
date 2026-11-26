@@ -613,3 +613,16 @@ body:has(.air-duel) {
   .air-duel .duel-ship-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .air-duel .duel-foot:has([data-read='crew']:empty) { visibility: hidden; }
 }
+.ship-leader {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 1px;
+  background: #e9e3c8ba;
+  transform-origin: left center;
+  z-index: -1;
+}
+@media (max-width: 360px) {
+  .air-duel .duel-readouts,
+  .air-duel.is-drill .duel-readouts { gap: 4px; padding-right: 74px; }
+}
