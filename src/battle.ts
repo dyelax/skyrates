@@ -4,6 +4,7 @@ import type { PortId } from './data'
 import { mountBattleFx } from './battle-fx'
 import { prepareHull } from './battle-damage'
 import { AirshipRig } from './battle-rig'
+import { drawBoarders } from './boarding-art'
 import { BattleMarkers } from './battle-markers'
 import './battle-fx.css'
 import type { WeatherReport } from './weather'
@@ -243,6 +244,9 @@ class SkyBattle extends Phaser.Scene {
   private clouds?: CloudDeck
   private overlays!: Phaser.GameObjects.Graphics
   private paths!: Phaser.GameObjects.Graphics
+  private boardingWatch!: Phaser.GameObjects.Graphics
+  private boardingTime = 0
+  private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
   private shots: Projectile[] = []
   private sparks: Spark[] = []
   private aiDelay = 3.5
@@ -335,12 +339,14 @@ class SkyBattle extends Phaser.Scene {
     this.setChartZoom()
     this.clouds = new CloudDeck(this, this.opts.weather, Boolean(this.drill), this.area.width, this.area.height)
     this.paths = this.add.graphics().setDepth(2)
+    this.boardingWatch = this.add.graphics().setName('boarding-at-rail').setDepth(6.5).setVisible(false)
     this.playerView = new AirshipRig(this, 'schooner', 114)
     this.foeView = new AirshipRig(this, 'opponent', 110)
     mountBattleFx(this, this.root, { player: this.playerView, enemy: this.foeView }, { player: this.player, enemy: this.foe })
     this.root.dataset.shipRenderer = 'illustrated'
     this.playerView.update(this.player)
     this.foeView.update(this.foe)
+    this.showBoarding(0)
     this.overlays = this.add.graphics().setDepth(7)
     this.ready = true
     if (this.terminal) { this.finish(this.terminal, true); return }
@@ -374,6 +380,19 @@ class SkyBattle extends Phaser.Scene {
     if (this.drill) this.drawCoach()
     this.syncMarkers()
     this.syncHUD()
+  }
+
+  private showBoarding(dt: number) {
+    const fighting = this.touching && !this.ended && this.crew.player > 0 && this.crew.enemy > 0 &&
+      this.player.hull > 0 && this.foe.hull > 0
+    this.boardingWatch.setVisible(fighting)
+    if (!fighting) {
+      this.boardingTime = 0
+      return
+    }
+    this.boardingTime += dt
+    const scale = clamp(this.area.width / Math.max(1, this.scale.displaySize.width), .92, 2.6)
+    drawBoarders(this.boardingWatch, hullContact(this.player, this.foe), scale, this.boardingTime, this.reducedMotion.matches)
   }
 
   private setChartZoom() {
@@ -891,6 +910,7 @@ class SkyBattle extends Phaser.Scene {
     if (this.ended) return
     this.ended = true
     this.terminal = outcome
+    this.showBoarding(0)
     this.save()
     this.listeners.abort()
     this.syncHUD()
@@ -1117,6 +1137,7 @@ class SkyBattle extends Phaser.Scene {
     this.syncMarkers()
     this.playerView.update(this.player)
     this.foeView.update(this.foe)
+    this.showBoarding(dt)
     this.effects(dt)
     this.hudIn -= dt
     if (this.hudIn <= 0) {
