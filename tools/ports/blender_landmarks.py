@@ -15,6 +15,8 @@ GLOW = "Lantern light"
 WARM = "Warm glass"
 GLASS = ["Sea-glass", "Turquoise glass", "Celadon glass", "Cobalt reflection"]
 PALETTE = {
+    "Vine stem": ("596746", .01, .81), "Vine leaf": ("648341", .02, .71),
+    "Petal violet": ("a889c9", .0, .69), "Petal light": ("efceed", .0, .69),
     WARM: ("f6b55e", .09, .22),
     IVORY: ("cfc1a1", 0.03, .73), LIP: ("ebdfbf", .03, .62), SHADE: ("786e59", .08, .78),
     GOLD: ("d8ac60", .65, .33), BRASS: ("937345", .55, .45), GLOW: ("ffcb73", .12, .27),
@@ -29,6 +31,12 @@ PALETTE = {
     "Wicker": ("917144", .02, .87), "Midnight glass": ("304856", .17, .36),
     "Door timber": ("605644", .02, .80),
 }
+
+
+VINE_COLORS = {"Vine stem", "Vine leaf", "Velvet foliage", "Silver leaf", "Petal light", "Wisteria violet",
+               "Wisteria lilac", "Petal violet", "Pale wisteria"}
+VINE_PAINT = "Wisteria petal and leaf colors"
+PALETTE[VINE_PAINT] = ("ffffff", 0.0, .73)
 
 
 def material(name):
@@ -47,6 +55,10 @@ def material(name):
     bsdf.inputs["Base Color"].default_value = rgba
     bsdf.inputs["Metallic"].default_value = metal
     bsdf.inputs["Roughness"].default_value = roughness
+    if name == VINE_PAINT:
+        attribute = mat.node_tree.nodes.new('ShaderNodeVertexColor')
+        attribute.layer_name = 'Vine colors'
+        mat.node_tree.links.new(attribute.outputs['Color'], bsdf.inputs['Base Color'])
     if name in GLASS:
         bsdf.inputs["Alpha"].default_value = .62 + .045*GLASS.index(name)
         bsdf.inputs["Transmission Weight"].default_value = .21
@@ -68,11 +80,18 @@ class Mason:
         self.angle = angle
         self.verts, self.faces, self.slots = [], [], []
         self.materials = {}
+        self.vine_colors = None
 
     def polygon(self, vertices, coat):
         start = len(self.verts)
         self.verts.extend(vertices)
         self.faces.append(tuple(range(start, start + len(vertices))))
+        if self.vine_colors is not None:
+            painted = coat in VINE_COLORS
+            color = PALETTE[coat][0] if painted else "ffffff"
+            self.vine_colors.extend([color] * len(vertices))
+            if painted:
+                coat = VINE_PAINT
         self.slots.append(self.materials.setdefault(coat, len(self.materials)))
 
     def solid(self, rings, coat, ends=True):
@@ -119,6 +138,10 @@ class Mason:
         for name in self.materials:
             data.materials.append(material(name))
         data.polygons.foreach_set("material_index",self.slots)
+        if self.vine_colors:
+            colors = data.color_attributes.new(name="Vine colors", type='BYTE_COLOR', domain='POINT')
+            palette = {key: tuple(int(key[i:i+2],16)/255 for i in (0,2,4))+(1,) for key in set(self.vine_colors)}
+            colors.data.foreach_set("color_srgb", [v for color in self.vine_colors for v in palette[color]])
         data.update()
         obj=bpy.data.objects.new(self.name,data)
         bpy.context.collection.objects.link(obj)
@@ -237,22 +260,92 @@ def lantern(x,y,z):
     dial(m,13.88,1.30);m.finish()
 
 
+# All stems, leaflets and blossoms are batched into their host structure's
+# mesh. The repeated folded shapes share these same material slots in glTF.
+def leaflet(m, base, angle, length, width, droop, coat):
+    x,y,z=base
+    dx,dy=math.cos(angle),math.sin(angle)
+    shoulder=(x+dx*length*.45, y+dy*length*.45, z+length*.12)
+    left=(shoulder[0]-dy*width, shoulder[1]+dx*width, shoulder[2])
+    right=(shoulder[0]+dy*width, shoulder[1]-dx*width, shoulder[2]-.018)
+    tip=(x+dx*length,y+dy*length,z-droop)
+    m.polygon((base,right,tip),coat)
+    m.polygon((base,tip,left),coat)
+
+
+def leaf_spray(rng,m,base,angle,length):
+    x,y,z=base
+    dx,dy=math.cos(angle),math.sin(angle)
+    rise=rng.uniform(.09,.22)*length
+    tip=(x+dx*length,y+dy*length,z+rise)
+    m.rod(base,tip,.012,"Velvet foliage",3)
+    for i,t in enumerate((.20,.47,.72)):
+        size=length*(.38-i*.034)
+        for sign in (-1,1):
+            a=angle+sign*rng.uniform(.66,1.16)
+            start=(x+dx*length*t,y+dy*length*t,z+rise*t)
+            leaflet(m,start,a,size,.235*size,rng.uniform(.04,.19)*size,rng.choice(("Velvet foliage","Silver leaf","Vine leaf")))
+    leaflet(m,tip,angle,length*.24,length*.059,length*.025,"Silver leaf")
+
+
+def pea_flower(m,base,angle,size,shade):
+    # A pea blossom faces outward. The raised, notched banner catches skylight
+    # above a paler pair of wings and a folded keel.
+    x,y,z=base
+    co,si=math.cos(angle),math.sin(angle)
+    def point(out,side,up):
+        return (x+size*(co*out-si*side),y+size*(si*out+co*side),z+size*up)
+    throat=point(.36,0,-.13)
+    left,notch,right=point(.61,.67,.42),point(.77,0,.34),point(.64,-.67,.37)
+    m.polygon((throat,left,notch),shade)
+    m.polygon((throat,notch,right),shade)
+    tip=point(1.02,0,-.29)
+    m.polygon((base,point(.57,.47,.09),tip),"Petal light")
+    m.polygon((base,tip,point(.55,-.46,-.18)),"Wisteria violet")
+
+
+def raceme(rng,m,base,length,width):
+    x,y,z=base
+    leanx,leany=rng.uniform(-.14,.14),rng.uniform(-.095,.095)
+    twist=rng.uniform(0,TAU)
+    def rachis(t):
+        return (x+length*(leanx*t+.054*math.sin(math.pi*t+twist)-.054*math.sin(twist)),
+                y+length*(leany*t+.044*math.sin(TAU*t)*t), z-length*t)
+    m.line([rachis(t) for t in (0,.46,.79,1)],max(.009,width*.09),"Vine stem",3)
+    density=max(10,round(length/.047))
+    for i in range(density):
+        t=(i+.55)/density
+        a=twist+i*2.39996+rng.uniform(-.29,.29)
+        # An open collar, a dense middle and an uneven strand of lower buds.
+        taper=(1-t)**.60
+        r=width*taper*(.8+.52*math.sin(math.pi*t))*rng.uniform(.77,1.14)
+        sx,sy,sz=rachis(t)
+        base=(sx+math.cos(a)*r*.78,sy+math.sin(a)*r*.78,sz)
+        color=rng.choice(("Wisteria lilac","Petal violet","Pale wisteria","Wisteria lilac"))
+        pea_flower(m,base,a,width*(.45+1.1*taper)*rng.uniform(.78,1.2),color)
+
+
 def drape(rng,m,x,y,height,length):
-    for i in range(ceil_steps(length,.47)):
-        u=x+i*.47
-        m.bead((u,y,height+.05*rng.random()),(.47,.32,.24),rng.choice(["Velvet foliage","Silver leaf"]),3,6)
-        for _ in range(2):
-            dx=rng.uniform(-.23,.22);dy=rng.uniform(-.18,.18);fall=rng.uniform(.46,1.55)
-            m.bead((u+dx,y+dy,height-.33*fall),(.165,.155,.42*fall),rng.choice(["Wisteria violet","Wisteria lilac","Pale wisteria"]),4,5)
-            m.bead((u+dx+.04,y+dy,height-.72*fall),(.092,.085,.24*fall),"Wisteria violet",3,5)
-
-
-def ceil_steps(length,step):
-    return max(1,math.ceil(length/step))
+    # Two twisting leaders weave between the posts, with occasional breaks
+    # between hanging racemes so their pointed ends silhouette separately.
+    segments=max(4,round(length/.52))
+    for lane in range(2):
+        nodes=[]
+        for i in range(segments+1):
+            u=x+length*i/segments
+            phase=i*.83+lane*math.pi
+            v=y+math.cos(phase)*.18
+            h=height+.10*math.sin(phase)
+            nodes.append((u,v,h))
+            leaf_spray(rng,m,(u,v,h),rng.choice((-1,1))*rng.uniform(.6,2.3),rng.uniform(.62,.96))
+            if rng.random()<(.90 if lane==0 else .60):
+                raceme(rng,m,(u,v,h),rng.uniform(.62,1.34),rng.uniform(.135,.20))
+        m.line(nodes,.029,"Vine stem",4)
 
 
 def pergola(x,y,z):
     rng=random.Random(331);m=Mason("Wisteria walk and glass cupola",x,y,z,-.18)
+    m.vine_colors=[]
     for x0 in (-3.6,-1.2,1.2,3.6):
         for y0 in (-1.55,1.55):
             m.drum(x0,y0,[(-.25,.3),(.2,.34),(.38,.23),(2.8,.19),(2.99,.34)],IVORY,10)
@@ -392,6 +485,7 @@ def build_architecture(port,sites):
         rng=random.Random(7342)
         for n,(x,y,length) in enumerate([(-5.4,-2.85,7.8),(2.9,4.4,4.6),(8.0,-6.6,4.0),(-10.5,4.0,5.1)]):
             m=Mason("Trailing wisteria "+str(n+1),x,y,ground(x,y),-.15)
+            m.vine_colors=[]
             m.block((length/2,0,.5),(length,.67,1.0),IVORY)
             drape(rng,m,0,-.3,1.14,length)
             m.finish()
@@ -423,17 +517,31 @@ def practical(name, x, y, z, energy, size):
 def wisteria_stand(x,y,z,seed,spread):
     rng=random.Random(seed)
     m=Mason("Century wisteria "+str(seed),x,y,z,rng.uniform(-.5,.5))
+    m.vine_colors=[]
     m.drum(0,0,[(-.25,.91),(.14,1.02),(.40,.92),(.50,1.0)],IVORY)
     m.line([(0,0,.45),(.16,-.08,1.5),(-.11,.08,2.5),(.24,0,3.1)],.20,"Door timber",7)
-    for i in range(7):
-        a=TAU*i/7+rng.uniform(-.24,.24);r=spread*rng.uniform(.59,.99)
-        u,v=r*math.cos(a),r*math.sin(a);h=rng.uniform(2.8,3.7)
-        m.line([(.10,0,2.05),(.48*u,.48*v,h-.30),(u,v,h)],.105,"Door timber")
-        for k in range(4):
-            px=u+rng.uniform(-.61,.61);py=v+rng.uniform(-.48,.48);pz=h+rng.uniform(-.24,.25)
-            m.bead((px,py,pz),(.58,.53,.36),rng.choice(["Velvet foliage","Silver leaf","Wisteria lilac","Wisteria violet"]),3,6)
-            m.bead((px+.24,py-.20,pz-.28),(.35,.34,.52),rng.choice(["Wisteria lilac","Wisteria violet","Pale wisteria"]),4,6)
-            m.bead((px+.22,py-.23,pz-.72),(.18,.16,.30),"Wisteria lilac",3,5)
+    for i in range(8):
+        a=i*TAU/8+rng.uniform(-.16,.16)
+        h=rng.uniform(2.72,3.64)
+        length=spread*rng.uniform(.75,1.17)
+        def limb(t,bend=0):
+            v=a+bend
+            return (length*t*math.cos(v),length*t*math.sin(v),h-(1-t)*.36)
+        m.line([(.10,0,2.05),limb(.45,-.14),limb(.82),limb(1,.12)],.067,"Door timber",5)
+        for j in range(5):
+            t=.42+.13*j
+            root=limb(t)
+            twig=a+(1 if j%2 else -1)*rng.uniform(.47,1.04)
+            reach=rng.uniform(.38,.78)
+            tip=(root[0]+reach*math.cos(twig),root[1]+reach*math.sin(twig),root[2]+rng.uniform(-.32,.20))
+            m.rod(root,tip,.021,"Vine stem",4)
+            leaf_spray(rng,m,root,twig+.70,rng.uniform(.67,1.08))
+            leaf_spray(rng,m,tip,twig-.57,rng.uniform(.64,.99))
+            raceme(rng,m,tip,rng.uniform(.65,1.37),rng.uniform(.153,.225))
+            if j in (1,4):
+                fork=(tip[0]+.22*math.cos(twig+.9),tip[1]+.22*math.sin(twig+.9),tip[2]-.05)
+                m.rod(tip,fork,.015,"Vine stem",3)
+                raceme(rng,m,fork,rng.uniform(.46,.82),rng.uniform(.11,.16))
     m.finish()
 
 

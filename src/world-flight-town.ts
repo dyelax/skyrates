@@ -67,9 +67,11 @@ export class FlightTown {
     if (this.pending === port) return
     this.pending = port
     const n = ++this.generation
-    const url = new URL(import.meta.env.BASE_URL + 'art/flight-town-' + port + '.glb', document.baseURI).href
+    // Public GLBs keep their file names across art revisions.
+    const url = new URL(import.meta.env.BASE_URL + 'art/flight-town-' + port + '.glb', document.baseURI)
+    url.searchParams.set('v', '2')
     void new GLTFLoader()
-      .loadAsync(url)
+      .loadAsync(url.href)
       .then(({ scene: model }) => {
         if (n !== this.generation) {
           disposeMeshes(model, paints(), [])

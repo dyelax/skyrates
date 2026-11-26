@@ -5,6 +5,7 @@ import random
 from functools import lru_cache
 from pathlib import Path
 import bpy
+from port_cliffs import build_fractures, shelf_cover
 from mathutils import Vector
 
 PORTS = ("sunstep", "glasshouse", "copperfall", "meridian")
@@ -230,19 +231,13 @@ class Batch:
             # Baked pigment is multiplied by the packed albedo in both Blender and glTF.
             # The original local variation tints the paint without darkening it twice.
             for i, col in enumerate(self.colors):
-                dark = 0.37 if tile == "strata" else 0.47
+                dark = 0.20 if self.label.startswith("Fractured bedrock") else 0.47
                 self.colors[i] = tuple(dark + (1 - dark) * min(1, c * 2.45) for c in col[:3]) + (1.0,)
             uv = m.uv_layers.new(name="Hand-painted UV")
             for poly in m.polygons:
                 ps = [self.vertices[m.loops[k].vertex_index] for k in poly.loop_indices]
-                first = math.atan2(ps[0][1], ps[0][0])
                 for k, (x, y, z) in zip(poly.loop_indices, ps):
-                    if self.label.startswith("Layered"):
-                        ang = first + math.atan2(
-                            math.sin(math.atan2(y, x) - first), math.cos(math.atan2(y, x) - first)
-                        )
-                        pair = (ang / TAU * 19.0, z / 4.7 + 0.19 * math.sin(3 * ang))
-                    elif abs(poly.normal.z) > 0.62:
+                    if abs(poly.normal.z) > 0.62:
                         pair = (x / 4.5, y / 4.5)
                     elif abs(poly.normal.x) > abs(poly.normal.y):
                         pair = (y / 3.2, z / 3.2)
@@ -307,7 +302,7 @@ def solid_ground(port, r, stone):
             else:
                 top.face(rings[-1][k], row[k], row[q], rings[-1][q])
         rings.append(row)
-    cliff = Batch("Layered cliff and undermined strata")
+    cliff = Batch("Fractured bedrock and hanging outcrops")
     edge = [Vector(top.vertices[i]) for i in rings[-1]]
     profiles = {
         "sunstep": (1.00, 0.10),
@@ -448,7 +443,8 @@ def solid_ground(port, r, stone):
                         "#e1decb" if port == "meridian" else p["seam"],
                         r.uniform(0.90, 1.02),
                     )
-    return top, cliff
+    crowns = build_fractures(port, cliff, edge, shelves, depths)
+    return top, cliff, crowns
 
 
 def rounded_path(points, samples=6):
@@ -1132,7 +1128,7 @@ def foreground(port, r, paving, trees, flowers, hedge):
 def build_landscape(port):
     r = random.Random(3119 + 231 * PORTS.index(port))
     boulder = Batch("Outcrop spurs and stratified talus")
-    top, cliff = solid_ground(port, r, boulder)
+    top, cliff, crowns = solid_ground(port, r, boulder)
     road = Batch("Stepped lanes and inlaid courts")
     stone = Batch("Stonework, arcade and retaining walls")
     dock = Batch("Quays and working piers")
@@ -1143,9 +1139,10 @@ def build_landscape(port):
     make_paths(port, r, road, stone)
     docks(port, r, dock, acc)
     gardens(port, r, wood, green, flowers)
+    shelf_cover(green, crowns, port)
     foreground(port, r, stone, wood, flowers, green)
     mat = paint_material()
-    strata = "strata" if port in ("sunstep", "copperfall") else "limestone"
+    strata = "strata" if port == "copperfall" else "limestone"
     textured = {key: paint_material(key) for key in {"meadow", strata, "limestone", "masonry"}}
     for batch, tile in (
         (top, "limestone" if port == "meridian" else "meadow"),
