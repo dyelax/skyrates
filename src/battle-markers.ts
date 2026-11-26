@@ -287,7 +287,11 @@ export class BattleMarkers {
     marker.crew.row.hidden = !trial.crew
     setMeter(marker.hull, trial.ship.hull, trial.ship.maxHull)
     if (trial.crew) setMeter(marker.crew, trial.crew.current, trial.crew.max)
-    const box = placeThirdMarker(thirdHull, [...panels, ...bounds, ...labels], this.size, {w: this.tagWidth, h: (trial.crew ? 47 : 33) + (trial.underFire ? 13 : 0)})
+    const width = trial.leg ? Math.min(168, Math.max(134, this.size.w * .105)) : this.tagWidth
+    const height = (trial.crew ? 47 : 33) + (trial.underFire ? 14 : 0)
+    marker.tag.style.width = width + 'px'
+    marker.tag.style.height = height + 'px'
+    const box = placeThirdMarker(thirdHull, [...panels, ...bounds, ...labels], this.size, {w: width, h: height})
     marker.tag.style.transform = `translate(${box.x}px,${box.y}px)`
     marker.leader.setAttribute('d', leaderPath(box, thirdHull.x + thirdHull.w / 2, thirdHull.y + thirdHull.h / 2, trial.ship.heading, scale))
   }
