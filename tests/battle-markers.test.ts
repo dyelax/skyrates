@@ -20,3 +20,14 @@ test('boarding tags clear the HUD, batteries, hulls and each other at the chart 
     assert.ok(!crosses(markers[0], markers[1]))
   }
 })
+
+test('an open-sky contact gives each ship a clear leader and a separate two-meter label', () => {
+  for (const width of [320, 390, 1366]) {
+    const player = { x: width * .42, y: 286, w: width * .09, h: width * .035 }
+    const enemy = { x: player.x + 6, y: player.y + player.h - 3, w: player.w, h: player.h }
+    const [you, scout] = placeShipMarkers([player,enemy], [], { w: width, h: 750 }, { w: 98, h: 47 }, true)
+    assert.ok(you.y + you.h + 10 <= player.y)
+    assert.ok(scout.y >= enemy.y + enemy.h + 10)
+    assert.ok(!crosses(you,scout))
+  }
+})
