@@ -12,8 +12,10 @@ SHADE = "Stone recess"
 GOLD = "Gilt bronze"
 BRASS = "Aged brass"
 GLOW = "Lantern light"
+WARM = "Warm glass"
 GLASS = ["Sea-glass", "Turquoise glass", "Celadon glass", "Cobalt reflection"]
 PALETTE = {
+    WARM: ("f6b55e", .09, .22),
     IVORY: ("cfc1a1", 0.03, .73), LIP: ("ebdfbf", .03, .62), SHADE: ("786e59", .08, .78),
     GOLD: ("d8ac60", .65, .33), BRASS: ("937345", .55, .45), GLOW: ("ffcb73", .12, .27),
     "Dark bronze": ("443e37", .48, .52), "Roof highlight": ("bed7c2", .24, .36),
@@ -51,9 +53,9 @@ def material(name):
         bsdf.inputs["IOR"].default_value = 1.45
         bsdf.inputs["Coat Weight"].default_value = .36
         mat.surface_render_method = 'BLENDED'
-    if name == GLOW:
+    if name in (GLOW,WARM):
         bsdf.inputs["Emission Color"].default_value = rgba
-        bsdf.inputs["Emission Strength"].default_value = 1.25
+        bsdf.inputs["Emission Strength"].default_value = 1.50 if name == WARM else 1.25
     return mat
 
 
@@ -157,6 +159,11 @@ def conservatory(name,x,y,z,length,r,wall,heading=0):
             pane.extend((mid-.89*h*math.cos(math.pi*j/10),v+side*.04,spring-.62+.48*math.sin(math.pi*j/10)) for j in range(11))
             pane.append((x1-.10,v+side*.035,floor+.1))
             m.line(pane,.045,GOLD)
+            if i%4==1:
+                yy=v+side*.054
+                m.polygon(((mid-.31,yy,floor+.39),(mid+.31,yy,floor+.39),
+                           (mid+.31,yy,spring-.57),(mid,yy,spring-.33),(mid-.31,yy,spring-.57)),WARM)
+                m.rod((mid,yy+side*.02,floor+.38),(mid,yy+side*.02,spring-.33),.027,BRASS)
             m.block((mid,v+side*.055,floor+.30),(x1-x0-.2,.035,.20),GLOW if i%4==1 else SHADE)
     for i in range(n+1):
         u=-a+length*i/n
@@ -272,7 +279,7 @@ def observatory(name,x,y,z,r):
         lon=i*TAU/32; end=(i+1)*TAU/32
         for j in range(10):
             a=j*math.pi/20;b=(j+1)*math.pi/20
-            coat="Midnight glass" if i in (24,25,26) else ("Snowlight" if (i+j)%4 else IVORY)
+            coat=(WARM if i==25 and j in (2,3,4) else "Midnight glass") if i in (24,25,26) else ("Snowlight" if (i+j)%4 else IVORY)
             m.polygon((globe(lon,a),globe(end,a),globe(end,b),globe(lon,b)),coat)
         if i%4==0 or i==27:m.line([globe(lon,j*math.pi/20) for j in range(11)],.10 if i in (24,27) else .065,GOLD)
     for lat in (.05,.44,.88): m.line([globe(TAU*i/40,lat) for i in range(41)],.07,BRASS)
