@@ -245,7 +245,10 @@ export function fireBroadside(ship: Vessel, side: Side, tier: number): Shot[] {
     const middle = loaded.slice(third, loaded.length - third)
     const stern = loaded.slice(loaded.length - third).reverse()
     loaded = []
-    for (let rank = 0; rank < third; rank++) {
+    // Stagger ports within each third so a stationary ship's volley still
+    // fills the width of the rail instead of drawing three diagonal rows.
+    for (const rank of [0, 4, 2, 6, 1, 5, 3, 7]) {
+      if (rank >= third) continue
       loaded.push(bow[rank], stern[rank])
       if (middle[rank]) loaded.push(middle[rank])
     }

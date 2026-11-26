@@ -11,8 +11,10 @@ test('a raider striking colors cancels its reserved guns while the other rail fi
   const player = playerShip()
   const trial = new TrialProtection('prize-protection', player, { ...RAIDER_PROFILES[1], cannons: 48 }, area)
   const lead = trial.lead, wing = trial.extra
+  wing.ship.guns = playerShip().guns
   const wingCount = wing.ship.guns.filter(g => g.side === 'port').length
   const fromWing = fireBroadside(wing.ship, 'port', 0)
+  assert.ok(wing.ship.guns.some(g => g.salvoIn !== undefined))
   assert.equal(fireBroadside(lead.ship, 'port', 0).length, 1)
   assert.ok(lead.ship.guns.some(g => g.salvoIn !== undefined))
   lead.crew = 0
