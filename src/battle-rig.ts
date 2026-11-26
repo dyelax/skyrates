@@ -2,9 +2,9 @@ import type Phaser from 'phaser'
 import type { Vessel } from './battle-model'
 import { hullCanvas } from './battle-damage'
 
-const POSE_WIDTH = 512
-const BANK_STEP = .075
-const MAX_POSE = 9
+export const POSE_WIDTH = 512
+export const BANK_STEP = .075
+export const MAX_POSE = 9
 
 // Each sail plan follows the mast and sail positions in its original painting.
 // The y values below are elevations above the keel, in units of the painted beam.
@@ -30,7 +30,12 @@ function paintPose(scene: Phaser.Scene, sourceKey: string, step: number, name: s
   const h = POSE_WIDTH * sourceHeight / sourceWidth
   const height = Math.ceil(h * 1.45)
   const tex = hullCanvas(scene, name, POSE_WIDTH, height)!
-  const ctx = tex.context
+  drawBankedHull(tex.context, image, sourceWidth, sourceHeight, step)
+  tex.refresh()
+}
+
+export function drawBankedHull(ctx: CanvasRenderingContext2D, image: HTMLCanvasElement | HTMLImageElement, sourceWidth: number, sourceHeight: number, step: number) {
+  const h = POSE_WIDTH * sourceHeight / sourceWidth, height = Math.ceil(h * 1.45)
   const roll = step * BANK_STEP, sin = Math.sin(roll), cos = Math.cos(roll)
   const raider = sourceHeight / sourceWidth > .37
   const center = raider ? .51 : .60
@@ -78,7 +83,6 @@ function paintPose(scene: Phaser.Scene, sourceKey: string, step: number, name: s
   ctx.globalCompositeOperation = 'source-atop'
   ctx.fillStyle = shade
   ctx.fillRect(0, 0, POSE_WIDTH, height)
-  tex.refresh()
 }
 
 export class AirshipRig {

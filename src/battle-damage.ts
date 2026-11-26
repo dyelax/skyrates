@@ -44,6 +44,12 @@ export function damagedHull(scene: Phaser.Scene, key: string, stage: number): st
   if (!texture) return key
   const ctx = texture.context
   ctx.drawImage(original.getSourceImage() as HTMLCanvasElement, 0, 0)
+  paintHullDamage(ctx,width,height,stage,key === 'opponent')
+  texture.refresh()
+  return name
+}
+
+export function paintHullDamage(ctx:CanvasRenderingContext2D,width:number,height:number,stage:number,raider:boolean){
   ctx.save()
   ctx.scale(width / 240, height / 80)
   ctx.globalCompositeOperation = 'source-atop'
@@ -78,7 +84,7 @@ export function damagedHull(scene: Phaser.Scene, key: string, stage: number): st
     ctx.stroke()
   }
   // The raider's red mainsail sits farther aft than the Wayfarer's solar mainsail.
-  const main = key === 'opponent' && height / width > 0.37 ? 105 : 137
+  const main = raider && height / width > 0.37 ? 105 : 137
   tear([
     [main - 19, -3],
     [main + 2, -3],
@@ -146,6 +152,4 @@ export function damagedHull(scene: Phaser.Scene, key: string, stage: number): st
     scar(main, 39, 14)
   }
   ctx.restore()
-  texture.refresh()
-  return name
 }
