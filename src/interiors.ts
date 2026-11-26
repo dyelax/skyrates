@@ -17,7 +17,7 @@ import { buyerQuantity, buyerTerms, chartObjectives } from './objectives'
 import {
   CAPTAIN_PERKS, CAPTAIN_XP_PER_LEVEL, LAST_CAPTAIN_LEVEL, NEGOTIATION,
   canLearnPerk, captainPoints, handRecord, hasCaptainPerk, qualifiedMate,
-  encounterId, prizeProfile, worldOpponent, worldCombatLoad, rollPirate, type CaptainPerk, CREW_PROFILES, type SailorId,
+  encounterId, laneTraffic, prizeProfile, worldOpponent, worldCombatLoad, rollPirate, type CaptainPerk, CREW_PROFILES, type SailorId,
   GOODS,
   GOOD_IDS,
   INVOICE_COST,
@@ -444,7 +444,7 @@ function chart(state: GameState, ui: Controls) {
       <p>${current ? 'Local exchange' : unlocked ? `${days}-day passage` : 'Relight the beacon to reach this port'} · ${GOODS[port.specialty].name}</p>
       <p class="sk-forecast">${forecast.summary} · wind toward ${forecast.bearing}, ${forecast.knots} kn</p>
       ${buyerNotes}
-      ${!state.voyage && !current && unlocked ? routeLookout(state) : ''}
+      ${!state.voyage && !current && unlocked ? routeLookout(state,dest) : ''}
       <details class="sk-fold"><summary>Climate and trade on arrival</summary><p>${CLIMATES[dest].region}. ${seasonAt(state.day + days)} · day ${state.day + days}.</p>${marketOutlook(dest,state.day+days)}</details>
       <details class="sk-fold"><summary>Port trade &amp; services</summary><p>${CITY_ECONOMY[dest].tradeLead}</p><p>${CITY_ECONOMY[dest].institution} requests ${CITY_ECONOMY[dest].order.quantity} × ${GOODS[CITY_ECONOMY[dest].order.good].name}.</p></details>
       <details class="sk-fold"><summary>Recorded prices</summary>${rememberedPrices(state, dest)}</details>
@@ -576,7 +576,7 @@ function authority(state: GameState, ui: Controls) {
     ${freightDesk(state, ui)}`
 }
 
-function routeLookout(state: GameState): string {
+function routeLookout(state: GameState,dest:PortId): string {
   const forecast = raiderForecast(state)
   const { exposedValue, cargoValue, low, high } = forecast
   const manifest = `Carried wealth ${exposedValue} crowns · ${state.coins} in your purse + ${cargoValue} in appraised trade cargo.`
@@ -586,12 +586,15 @@ function routeLookout(state: GameState): string {
   const leg = state.voyageCount + 1
   let intelligence = ''
   if (hasCaptainPerk(state,'readRoom')) {
-    if (state.tender !== 'unseen') {
+    const traffic=laneTraffic(state,state.port,dest,state.day,leg)
+    if (traffic==='raiders') {
       const profile = rollPirate(state.pirateSeed,leg,exposedValue)
-      const cargo = prizeManifest(state,profile.opponent,leg)
-      const skipper = skipperTerms(state,leg)
+      const contactId = Math.max(leg,(state.lastEncounterId ?? 0)+1)
+      const cargo = prizeManifest(state,profile.opponent,contactId)
+      const skipper = skipperTerms(state,contactId)
       intelligence = `<p><b>Read the Room.</b> On the raider patrol, look for a ${profile.opponent} carrying ${cargo.quantity} crates of ${GOODS[cargo.good].name.toLowerCase()}. ${skipper.motive} ${skipper.evidence} Chance of signing articles: ${Math.round(skipper.chance*100)}%.</p>`
-    } else intelligence = '<p><b>Read the Room.</b> A tender has signaled distress along this route. Other traffic may cross your course.</p>'
+    } else if (traffic==='tender') intelligence = '<p><b>Read the Room.</b> A tender has signaled distress along this route. Other traffic may cross your course.</p>'
+    else intelligence='<p><b>Read the Room.</b> No patrol has been posted on this route. Ships working nearby can still cross your course.</p>'
   }
   const range = low === high ? String(low) : low + '–' + high
   return `<details class="sk-fold"><summary>Raider lookout · ${range} crowns if hailed</summary><p>${manifest}</p><p>${forecastText(forecast)}</p>${intelligence}<p>${commandReadiness(state)}</p></details>`

@@ -261,6 +261,7 @@ render()
 drawNotice()
 
 if (state.firstWatch === 'new' && !state.voyage && state.day === 1) {
+  sky.inert = true
   openPrologue(() => {
     state = { ...state, firstWatch: 'arrived' }
     stored = saveGame(state)

@@ -507,10 +507,14 @@ function trade(state: GameState, action: Extract<Command, { good: GoodId }>): bo
   return true
 }
 
-export function passageEvent(id: number, tender: GameState['tender']): 'safe' | 'tender' | 'raider' {
-  if (id <= ENCOUNTERS.safeOpeningVoyages) return 'safe'
-  if (tender === 'unseen' && id >= ENCOUNTERS.tenderFromVoyage) return 'tender'
-  return id % ENCOUNTERS.raiderInterval === 0 ? 'raider' : 'safe'
+export function laneTraffic(state:GameState, departure:PortId, destination:PortId, day:number, voyage:number):'none'|'tender'|'raiders' {
+  if (voyage <= ENCOUNTERS.safeOpeningVoyages) return 'none'
+  if (state.tender === 'unseen') return 'tender'
+  // The first patrol introduces the toll. Later routes may have a known patrol
+  // as well as the independent traffic already moving across the entire world.
+  if (voyage === ENCOUNTERS.tenderFromVoyage + 1) return 'raiders'
+  const scout = legacyPirateSeed(`lookout/${state.pirateSeed}/${day}/${departure}/${destination}`)
+  return scout % 100 < 38 ? 'raiders' : 'none'
 }
 
 export function encounterId(leg: Voyage): number {
@@ -521,7 +525,7 @@ function flightFor(state: GameState, leg: Voyage, departureDay: number, previous
   const suggest = leg.from === 'sunstep' ? 'glasshouse' : 'sunstep'
   const destination = leg.from === leg.to ? suggest : leg.to
   const safe = leg.id <= ENCOUNTERS.safeOpeningVoyages
-  const encounter = safe ? 'none' : state.tender === 'unseen' ? 'tender' : 'raiders'
+  const encounter = leg.pirate ? 'raiders' : laneTraffic(state,leg.from,destination,departureDay,leg.id)
   return initWorldFlight({seed:(state.pirateSeed ^ Math.imul(leg.id,0x9e3779b1)) >>> 0,
     origin:leg.from,destination,weather:routeWeather(leg.from,destination,departureDay),
     encounter: leg.phase === 'battle' || leg.phase === 'raider' || leg.phase === 'prize' ? 'raiders' : encounter,
