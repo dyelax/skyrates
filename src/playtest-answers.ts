@@ -40,7 +40,7 @@ export function assessPlaytest(text: string, state: GameState, view: string) {
     if (!reply && /\b(hold|crates|capacity)\b/i.test(question))
       reply = `Your hold carries ${cargoUsed(state)} of ${state.ship.hold} crates. Sunstep’s liftwrights fit cargo racks. Bonded mail travels in its own locker.`
     if (!reply && /\b(dodge|cannon|gun|broadside|fire|shoot)\b/i.test(question))
-      reply = `You have ${state.ship.cannons} fitted cannon${state.ship.cannons === 1 ? '' : 's'}. Steer out of the incoming fire line, then turn until a fitted gun bears on the other ship. Tap Port or Starboard to fire every ready gun on that rail. Guns reload one at a time on each side. Shoot early or hold for the whole broadside. Copperfall can fit up to six cannons. Practice the sequence at a shipyard.`
+      reply = `You have ${state.ship.cannons} fitted cannon${state.ship.cannons === 1 ? '' : 's'}. Steer out of the incoming fire line, then turn until a fitted gun bears on the other ship. Tap Port or Starboard to fire every ready gun on that rail. Guns reload one at a time on each side. Shoot early or hold for the whole broadside. Later Copperfall refits add matched banks, up to 24 guns per rail. Practice the sequence at a shipyard.`
     if (!reply && /\b(board|boarding|melee|grapple)\b/i.test(question))
       reply =
         'Steer alongside or choose Close in. The crew meters drain only while the hulls touch. Steer clear or use Push off to disengage. New hands and veterans increase your starting strength. If the enemy crew yields while its hull is afloat, you can negotiate over the prize.'

@@ -393,7 +393,7 @@ test('first sailing orders start the watch drill once and checkpoints survive re
   assert.equal(left.voyageCount, landed.voyageCount)
 })
 
-test('Copperfall sells each real fitting up to three per rail with the advertised price and persistent count', () => {
+test('Copperfall sells fittings up to 24 per rail with the advertised price and persistent count', () => {
   let state = { ...land(initialState(), 'copperfall'), coins: 1000 }
   for (const cost of [70, 110, 150, 190, 230]) {
     assert.deepEqual([upgradeOffer(state, 'guns').available, upgradeOffer(state, 'guns').cost], [true, cost])
@@ -403,6 +403,14 @@ test('Copperfall sells each real fitting up to three per rail with the advertise
     assert.equal(state.coins, before.coins - cost)
   }
   assert.equal(state.ship.cannons, 6)
+  state = { ...state, coins: 30000 }
+  for (const count of [10, 16, 24, 36, 48]) {
+    const price = upgradeOffer(state, 'guns').cost
+    const before = state.coins
+    state = reload(act(state, { type: 'upgrade', upgrade: 'guns' }))
+    assert.equal(state.ship.cannons, count)
+    assert.equal(state.coins, before - price)
+  }
   assert.equal(upgradeOffer(state, 'guns').available, false)
   assert.equal(act(state, { type: 'upgrade', upgrade: 'guns' }), state)
 })

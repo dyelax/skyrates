@@ -256,18 +256,19 @@ export function buildAirframe(livery: Livery, guns: Pick<Gun, 'side' | 'station'
     }
     b.triangle([x, h + 3.6, 0], [x - 7, h + 3, 0.7], [x, h + 1.2, 0], paint(p.trim, cloth))
   }
+  const width = Math.min(1, 12 / guns.length)
   for (const gun of guns) {
     const z = gun.side === 'port' ? -1 : 1,
       x = stationOffset(gun.station)
-    const index = gun.station * 2 + (z < 0 ? 0 : 1)
-    b.box(x, 1.15, z * 9, 4, 1.5, 5, paint('#653c2e'))
-    for (const dx of [-1.7, 1.7]) b.box(x + dx, 1.3, z * 8, 0.8, 1.1, 3.6, gunmetal)
+    const bankIndex = gun.station * 2 + (z < 0 ? 0 : 1)
+    b.box(x, 1.15, z * 9, 4 * width, 1.5, 5, paint('#653c2e'))
+    for (const dx of [-1.7, 1.7]) b.box(x + dx * width, 1.3, z * 8, 0.8 * width, 1.1, 3.6, gunmetal)
     // Joint IDs 7–10 already animate the boarding party.
-    const recoil = gun.station === 2 ? 11 + (z < 0 ? 0 : 1) : 3 + index,
+    const recoil = bankIndex + (gun.station < 2 ? 3 : 7),
       pivot: Vec = [x, 2.8, z]
-    b.beam([x, 2.6, z * 6], [x, 3.3, z * 14.6], 2.2, paint('#42595c', metal, recoil, pivot))
-    b.box(x, 3.3, z * 13.7, 2.7, 2.7, 1, paint('#d4a650', metal, recoil, pivot))
-    b.box(x, 3.3, z * 14.2, 1.48, 1.48, 0.95, paint('#23292b', metal, recoil, pivot))
+    b.beam([x, 2.6, z * 6], [x, 3.3, z * 14.6], 2.2 * width, paint('#42595c', metal, recoil, pivot))
+    b.box(x, 3.3, z * 13.7, 2.7 * width, 2.7 * width, 1, paint('#d4a650', metal, recoil, pivot))
+    b.box(x, 3.3, z * 14.2, 1.48 * width, 1.48 * width, 0.95, paint('#23292b', metal, recoil, pivot))
   }
   return b.data()
 }

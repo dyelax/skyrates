@@ -7,7 +7,7 @@ export * from './prize-command'
 import { RAIDER_PROFILES, appraise, legacyPirateSeed, legacyPirateTerms, raiderToll, rollPirate, tollSettlementLabel, validPirateTerms, type PirateTerms, type TollSettlement } from './raiders'
 export * from './raiders'
 import { seasonalAdjustment } from './seasonal-trade'
-import { DRILL_STAGES, GUN_POSITIONS, nextStage, type DrillStage } from './drill'
+import { DRILL_STAGES, FITTED_CANNONS, GUN_POSITIONS, nextCannonFit, nextStage, type DrillStage } from './drill'
 import {
   ABILITY_IDS,
   BEACON_COMMISSION,
@@ -324,17 +324,19 @@ function shipOffer(state: GameState, upgrade: UpgradeId): UpgradeOffer {
         cost: 65 + (ship.maxHull - 100),
         available: ship.maxHull < 200,
       }
-    case 'guns':
+    case 'guns': {
+      const fitted = nextCannonFit(ship.cannons, ship.guns)
+      const added = fitted - ship.cannons
+      const early = ['', 'Add a starboard bow gun.', 'Fit a second port gun for a broadside.',
+        'Fit a second starboard gun for a broadside.', 'Fit a third port gun amidships.', 'Fit a third starboard gun amidships.']
       return {
-        name: ship.cannons < GUN_POSITIONS.length ? 'Fit another cannon' : 'Cannon refit',
-        description: [
-          '', 'Add a starboard bow gun.', 'Fit a second port gun for a broadside.',
-          'Fit a second starboard gun for a broadside.', 'Fit a third port gun amidships.',
-          'Fit a third starboard gun amidships.', 'Improve power and reload speed on all six guns.',
-        ][ship.cannons],
-        cost: 70 + 40 * ship.guns,
-        available: ship.cannons < GUN_POSITIONS.length || ship.guns < GUN_POSITIONS.length - 1,
+        name: added > 1 ? `Fit ${added} cannons` : added ? 'Fit another cannon' : 'Cannon refit',
+        description: early[ship.cannons] || (added ? `Build out both rails to ${fitted / 2} cannons each.` :
+          ship.guns < 5 ? 'Improve the guns already fitted on both rails.' : 'Both rails carry their full battery.'),
+        cost: (70 + 40 * ship.guns) * Math.max(1, added),
+        available: ship.guns < FITTED_CANNONS.length - 1 || added > 0,
       }
+    }
     case 'crew':
       return {
         name: 'Hire deckhands',
@@ -915,8 +917,8 @@ function applyDockCommand(state: GameState, action: Command): boolean {
           ship.hull += 25
           break
         case 'guns':
+          ship.cannons = nextCannonFit(ship.cannons, ship.guns)
           ship.guns += 1
-          ship.cannons = Math.min(GUN_POSITIONS.length, ship.cannons + 1)
           break
         case 'crew':
           ship.crew += 2
