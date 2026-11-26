@@ -1,6 +1,7 @@
 import { healthGlyph } from './health-glyph'
 import { launchCargo, collectCargo, fallingPoint, recovered, salvageReceipt, type SalvageLoad, type SalvageState, type SalvageReceipt } from './salvage'
-import { SalvageView } from './salvage-view'
+import { SalvageView, drawFallingCrates } from './salvage-view'
+import { TrialCargo, type TrialCargoReceipt } from './trial-cargo'
 import Phaser from 'phaser'
 import { battery, syncBattery } from './battle-battery'
 import { artwork } from './artwork'
@@ -73,7 +74,7 @@ export interface BattleOptions {
   trialScenario?: TrialScenario
   onTrialReport?: (report: TrialProtectionReport) => void
   salvageLoad?: SalvageLoad
-  onFinish: (outcome: BattleEnding, remainingHull: number, enemyHull: number, crew: Readonly<CrewPair>, salvage?: SalvageReceipt) => void
+  onFinish: (outcome: BattleEnding, remainingHull: number, enemyHull: number, crew: Readonly<CrewPair>, salvage?: SalvageReceipt, trialCargo?: TrialCargoReceipt[]) => void
 }
 
 type Projectile = Shot & { enemy: boolean; source?: Vessel }
@@ -262,6 +263,8 @@ class SkyBattle extends Phaser.Scene {
   private accumulator = 0
   private saveIn = .25
   private salvage?: SalvageState
+  private trialCargo?: TrialCargo
+  private readonly cargoInk = new Map<string, Phaser.GameObjects.Graphics>()
   private salvageView?: SalvageView
   private terminal: BattleEnding | null = null
   private listeners = new AbortController()
@@ -293,6 +296,7 @@ class SkyBattle extends Phaser.Scene {
     if (options.trialScenario) {
       this.trial = new TrialProtection(options.trialScenario, this.player, options.opponent, area)
       this.syncTrialLead()
+      if (options.salvageLoad) this.trialCargo = new TrialCargo(options.salvageLoad, options.location)
     }
     if (options.savedBattle && !this.drill) this.restore(options.savedBattle)
     this.banner = root.querySelector('.duel-banner')!
@@ -455,6 +459,7 @@ class SkyBattle extends Phaser.Scene {
     if (previous.height !== next.height || previous.top !== next.top || previous.bottom !== next.bottom) {
       const objects: Point[] = [this.player, this.foe, ...this.sparks, ...this.shots]
       if (this.salvage) objects.push(...this.salvage.crates)
+      if (this.trialCargo) for (const field of this.trialCargo.fields) objects.push(...field.state.crates)
       if (this.trial) objects.push(this.trial.extra.ship)
       if (this.trial?.exit) objects.push(this.trial.exit)
       if (this.buoy) objects.push(this.buoy)
@@ -943,11 +948,12 @@ class SkyBattle extends Phaser.Scene {
       : trialEnd?.status === 'afloat' && this.trial?.scenario === 'merchant-escort' ? 'Merchant delivered'
       : message, Infinity)
     this.buttons.pause.disabled = true
+    const cargoAhead = Boolean(this.salvage?.remaining || (this.trialCargo?.remaining && ['victory', 'boarded'].includes(outcome)))
     let settled = false
     const complete = () => {
       if (settled || !this.root.isConnected) return
       settled = true
-      if (this.salvage?.remaining && this.opts.salvageLoad) this.beginSalvage(resume)
+      if (cargoAhead && this.opts.salvageLoad) this.beginSalvage(resume)
       else this.reportResult(outcome)
     }
     if (resume) { queueMicrotask(complete); return }
@@ -960,7 +966,7 @@ class SkyBattle extends Phaser.Scene {
     if (sunk.length) {
       this.overlays.clear()
       this.banner.hidden = true
-      if (!this.events.emit('sky:terminal', { sunk, complete, nextLabel: this.salvage?.remaining ? 'Continue to cargo' : undefined })) complete()
+      if (!this.events.emit('sky:terminal', { sunk, complete, nextLabel: cargoAhead ? 'Continue to cargo' : undefined })) complete()
     } else this.time.delayedCall(700, complete)
   }
 
@@ -969,11 +975,11 @@ class SkyBattle extends Phaser.Scene {
     const load = this.opts.salvageLoad
     const receipt = this.salvage && load ? salvageReceipt(load.manifest, recovered(this.salvage)) : undefined
     if (this.trial?.report) this.opts.onTrialReport?.(this.trial.report)
-    this.opts.onFinish(outcome, this.player.hull, this.foe.hull, { ...this.crew }, receipt)
+    this.opts.onFinish(outcome, this.player.hull, this.foe.hull, { ...this.crew }, receipt, this.trialCargo?.receipts)
   }
 
   private beginSalvage(resume: boolean) {
-    const state = this.salvage!,
+    const state = this.salvage,
       load = this.opts.salvageLoad!
     this.ended = false
     this.ramming = this.escaping = this.touching = false
@@ -983,8 +989,10 @@ class SkyBattle extends Phaser.Scene {
     this.clearBanner()
     this.paths.clear()
     this.overlays.clear()
-    this.foeView.hull.setVisible(false)
-    this.foeView.shadow.setVisible(false)
+    if (!this.foe.hull) {
+      this.foeView.hull.setVisible(false)
+      this.foeView.shadow.setVisible(false)
+    }
     this.root.classList.add('salvaging')
     this.buttons.pause.disabled = false
     this.salvageView = new SalvageView(
@@ -993,11 +1001,11 @@ class SkyBattle extends Phaser.Scene {
       load,
       () => {
         if (this.pausedDuel) this.order('pause')
-        const targets = state.crates
+        const targets = (state?.crates ?? [])
           .filter((c) => !c.taken)
-          .map((c) => fallingPoint(c, state.remaining, this.wind, this.area))
+          .map((c) => fallingPoint(c, state!.remaining, this.wind, this.area))
         const distance = (p: Point) => Math.hypot(p.x - this.player.x, p.y - this.player.y)
-        this.course = targets.sort((a, b) => distance(a) - distance(b))[0]
+        this.course = this.trialCargo?.nearest(this.player, this.wind, this.area) ?? targets.sort((a, b) => distance(a) - distance(b))[0]
         this.player.throttle = 3
         this.save()
       },
@@ -1007,6 +1015,26 @@ class SkyBattle extends Phaser.Scene {
     this.syncMarkers()
     this.syncHUD()
     this.paintSalvage()
+  }
+
+  private paintTrialCargo() {
+    const cargo = this.trialCargo
+    if (!cargo) return
+    for (const { id, state } of cargo.fields) {
+      let ink = this.cargoInk.get(id)
+      if (!state.remaining) {
+        if (ink) { ink.destroy(); this.cargoInk.delete(id) }
+        continue
+      }
+      if (!ink) {
+        ink = this.add.graphics().setDepth(6.7)
+        this.cargoInk.set(id, ink)
+      }
+      drawFallingCrates(ink, state, this.wind, this.area,
+        clamp(this.area.width / this.scale.displaySize.width, .8, 2.4), this.reducedMotion.matches)
+    }
+    this.salvageView?.summary('Raider cargo', cargo.count,
+      cargo.fields.reduce((sum, f) => sum + f.state.crates.length, 0), cargo.remaining)
   }
 
   private paintSalvage() {
@@ -1020,13 +1048,13 @@ class SkyBattle extends Phaser.Scene {
   }
 
   private endSalvage() {
-    if (!this.salvageView || !this.salvage || this.ended) return
-    this.salvage.remaining = 0
+    if (!this.salvageView || this.ended) return
+    if (this.salvage) this.salvage.remaining = 0
     this.ended = true
     this.save()
     this.salvageView.close()
     this.salvageView = undefined
-    this.reportResult('victory')
+    this.reportResult(this.terminal ?? 'victory')
   }
 
   private traceCourse() {
@@ -1118,12 +1146,16 @@ class SkyBattle extends Phaser.Scene {
       }
     }
     if (this.drill !== 'briefing' && this.drill !== 'debrief') moveShip(this.player, helm, dt, this.wind)
-    if (this.salvage && this.salvageView && this.opts.salvageLoad) {
+    if (this.salvageView && this.opts.salvageLoad) {
       this.player.x = clamp(this.player.x, 24, this.area.width - 24)
       this.player.y = clamp(this.player.y, this.area.top + 22, this.area.bottom - 22)
-      const picked = collectCargo(this.salvage, this.opts.salvageLoad, this.player, this.wind, this.area, dt)
-      if (picked) this.saveIn = 0
-      if (this.salvage.remaining <= 0) this.endSalvage()
+      if (this.salvage) {
+        if (collectCargo(this.salvage, this.opts.salvageLoad, this.player, this.wind, this.area, dt)) this.saveIn = 0
+        if (this.salvage.remaining <= 0) this.endSalvage()
+      } else if (this.trialCargo) {
+        this.trialCargo.advance(this.player, this.wind, this.area, dt)
+        if (!this.trialCargo.remaining) this.endSalvage()
+      }
       return
     }
     if (this.drill) this.exerciseHelm(dt)
@@ -1179,6 +1211,14 @@ class SkyBattle extends Phaser.Scene {
       this.boardingTarget = contact.touching
       this.touching = Boolean(contact.touching)
       for (const hit of contact.impacts) this.events.emit('sky:impact', { ...hit.contact, damage: hit.damage })
+      if (this.trialCargo && p.hull > 0 && this.crew.player > 0 && !atEscapeEdge) {
+        const picked = this.trialCargo.advance(p, this.wind, this.area, dt)
+        if (picked) this.tell('Cargo recovered · ' + this.trialCargo.count + ' aboard', 2)
+        for (const actor of [this.trial.lead, this.trial.extra]) {
+          if (this.trialCargo.drop(actor, p, this.area))
+            this.tell('Falling cargo · Fly through crates to recover them.', 3)
+        }
+      }
       const result = this.trial.resolve(p, this.crew.player, atEscapeEdge, this.area)
       this.syncTrialLead()
       if (result.changed) {
@@ -1246,6 +1286,7 @@ class SkyBattle extends Phaser.Scene {
     this.clouds?.update(dt, flew ? this.player.x - beforeX : 0, flew ? this.player.y - beforeY : 0)
     this.bannerTTL -= dt
     if (this.bannerTTL <= 0 && !this.banner.hidden) this.clearBanner()
+    if (this.trialCargo) this.paintTrialCargo()
     if (this.salvageView) this.paintSalvage()
     else this.traceCourse()
     this.events.emit('sky:ships', { player: this.player, enemy: this.foe })

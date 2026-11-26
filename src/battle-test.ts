@@ -1,3 +1,4 @@
+import type { TrialCargoReceipt } from './trial-cargo'
 import { salvageLabel, type SalvageReceipt } from './salvage'
 import { prizeManifest } from './prize-command'
 import '@fontsource/barlow/latin-400.css'
@@ -49,6 +50,7 @@ interface TrialEnd {
   outcome: BattleEnding
   hull: number
   enemyHull: number
+  trialCargo?: TrialCargoReceipt[]
   salvage?: SalvageReceipt
   crew: Readonly<{ player: number; enemy: number }>
   protection?: TrialProtectionReport
@@ -133,6 +135,7 @@ function showDesk(result?: TrialEnd, error = '') {
       <label>Location<select id="trial-location">${PORT_IDS.map(id => `<option value="${id}"${id === trialLocation ? ' selected' : ''}>${PORTS[id].name}</option>`).join('')}</select></label>
       <label>Weather<select id="trial-weather">${options(forecasts.map(f => f.name),weatherIndex)}</select></label>
     </div>${scenario.order ? '<p class="trial-order">'+scenario.order+'</p>' : ''}`}
+      ${result?.trialCargo?.map(r => '<span class="trial-salvage">' + r.name + ' · ' + salvageLabel(r) + '</span>').join('') ?? ''}
       ${result?.salvage ? '<span class="trial-salvage">'+salvageLabel(result.salvage)+'</span>' : ''}
       <span>${result ? PORTS[trialLocation].name + ' · ' : ''}${weather.summary} · ${weather.knots} kn ${weather.bearing} · ${weather.season}</span></div>
     <div class="actions">${result ? '<button id="change">Change setup</button>' : `<label class="sound"><input type="checkbox" id="sounds"${sound ? ' checked' : ''}> Battle sound</label>`}
@@ -174,9 +177,9 @@ function showDesk(result?: TrialEnd, error = '') {
         onTrialReport: report => { protection = report },
         onExit: () => { if (id === match) { showDesk(); desk.querySelector<HTMLButtonElement>('#fight')?.focus() } },
         onUnavailable: () => { if (id === match) showDesk(undefined, 'unavailable') },
-        onFinish: (outcome, hull, enemyHull, crew, salvage) => {
+        onFinish: (outcome, hull, enemyHull, crew, salvage, trialCargo) => {
           if (id !== match) return
-          showDesk({ outcome, hull, enemyHull, crew, salvage, protection })
+          showDesk({ outcome, hull, enemyHull, crew, salvage, trialCargo, protection })
           desk.querySelector<HTMLButtonElement>('#fight')?.focus()
         },
       })
