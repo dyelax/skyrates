@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   armedSide, buildOpponent, buildShip, discharge, hitsShip,
-  gunBearsOn, moveShot, steerRaider, STILL_AIR, WATCH_CUTTER, type Shot,
+  gunBearsOn, moveShip, moveShot, steerRaider, STILL_AIR, WATCH_CUTTER, type Shot,
 } from '../src/battle-model'
 import { RAIDER_PROFILES } from '../src/raiders'
 
@@ -57,5 +57,52 @@ test('the one-gun scout can bring its port gun to bear and hit a stationary hull
       }
     }
     assert.ok(hit)
+  }
+})
+
+test('port and starboard make mirrored arcs, banking only as the hull starts to turn', () => {
+  const turn = (direction: number, throttle: number) => {
+    const ship = buildShip(origin, 0, 0, 0)
+    ship.throttle = throttle
+    for (let i=0; i<600; i++) moveShip(ship, 0, 1/120)
+    ship.x = 0
+    for (let i=0; i<24; i++) moveShip(ship, direction, 1/120)
+    const entry = { ...ship }
+    for (let i=24; i<240; i++) moveShip(ship, direction, 1/120)
+    return { entry, end: ship }
+  }
+  const left = turn(-1, 3), right = turn(1, 3), slow = turn(1, 1), pivot = turn(1, 0)
+  assert.ok(right.entry.heading > 0 && right.entry.heading < .07)
+  assert.ok(right.entry.heel > 0 && right.entry.heel < .16)
+  assert.ok(Math.abs(left.end.x-right.end.x) < 1e-7 && Math.abs(left.end.y+right.end.y) < 1e-7)
+  assert.equal(left.end.heel, -right.end.heel)
+  assert.ok(right.end.heel > .45 && slow.end.heel > .20)
+  assert.ok(pivot.end.heading > 1 && pivot.end.heel === 0 && pivot.end.x === 0 && pivot.end.y === 0)
+  assert.ok(slow.end.heading > right.end.heading && right.end.x > slow.end.x*2)
+  const slip = right.end.heading - Math.atan2(right.end.vy,right.end.vx)
+  assert.ok(slip > .08 && slip < .30)
+  for (let i=0; i<120; i++) moveShip(right.end, 0, 1/120)
+  assert.ok(Math.abs(right.end.heel) < .05 && Math.abs(right.end.angularSpeed) < .02)
+  assert.ok(Math.abs(right.end.heading-Math.atan2(right.end.vy,right.end.vx)) < .025)
+})
+
+test('the same turn, reversal and rollout agree across timestep rates and a midturn save', () => {
+  const run = (hz: number) => {
+    let ship = buildShip(origin, .1, 0, 0)
+    ship.throttle = 3
+    for (let tick=0; tick<8*hz; tick++) {
+      const t = tick/hz
+      if (t === 4) ship = JSON.parse(JSON.stringify(ship))
+      const helm = t < 3 ? 0 : t < 4.5 ? 1 : t < 6 ? -.7 : 0
+      moveShip(ship, helm, 1/hz)
+    }
+    return ship
+  }
+  const fine = run(120)
+  for (const rate of [30,60]) {
+    const coarse = run(rate)
+    assert.ok(Math.hypot(fine.x-coarse.x, fine.y-coarse.y) < .4)
+    assert.ok(Math.abs(fine.heading-coarse.heading) < .002)
+    assert.ok(Math.abs(fine.heel-coarse.heel) < .001)
   }
 })

@@ -8,7 +8,7 @@ export function hullDamageStage(hull: number, maxHull: number): number {
 // WebGL 1 supports mipmaps only on power-of-two textures. Preserve the original
 // frame inside transparent padding so collision footprints and damage painting
 // keep exactly the same dimensions as the source illustration.
-function hullCanvas(scene: Phaser.Scene, key: string, width: number, height: number) {
+export function hullCanvas(scene: Phaser.Scene, key: string, width: number, height: number) {
   const texture = scene.textures.createCanvas(key, 2 ** Math.ceil(Math.log2(width)), 2 ** Math.ceil(Math.log2(height)))
   texture?.get().setSize(width, height)
   return texture
