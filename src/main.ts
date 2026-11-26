@@ -38,7 +38,7 @@ loadSoundPreference()
 
 type View = InteriorView | 'harbor' | 'battle'
 const root = document.querySelector<HTMLElement>('#app')!
-root.innerHTML = `<a class="skip" href="#main">Skip to game</a><main id="main" tabindex="-1"></main><aside id="toast" hidden><span role="status" aria-live="polite" aria-atomic="true"></span><button type="button">Acknowledge</button></aside>`
+root.innerHTML = `<a class="skip" href="#main">Skip to game</a><main id="main" tabindex="-1"></main><aside id="toast" data-marker-obstacle hidden><span role="status" aria-live="polite" aria-atomic="true"></span><button type="button">Acknowledge</button></aside>`
 const main = root.querySelector<HTMLElement>('#main')!
 const toast = root.querySelector<HTMLElement>('#toast')!
 // Reserve the notice's actual wrapped height for the controls below the scene.

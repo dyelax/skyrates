@@ -1,19 +1,8 @@
-/* The wreck plays in the sky. An optional result button takes the pause
-   control's place without covering the sinking ship or moving keyboard focus. */
+/* The optional result takes the top controls' place during the wreck. */
 .air-duel:has(.duel-skip-wreck) .duel-heading { visibility: hidden; }
 .air-duel .duel-skip-wreck {
   position: absolute;
   z-index: 6;
-  top: max(16px, env(safe-area-inset-top));
-  right: max(20px, env(safe-area-inset-right));
-  padding: 4px 9px;
-  min-height: 36px;
-  border-color: var(--duel-rule);
-  background: var(--duel-panel);
-}
-@media (max-width: 720px) {
-  .air-duel .duel-skip-wreck { top: 9px; right: 9px; }
-}
-@media (pointer: coarse) {
-  .air-duel .duel-skip-wreck { min-height: 44px; }
+  top: var(--top);
+  right: var(--right);
 }

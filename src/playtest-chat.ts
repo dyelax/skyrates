@@ -41,6 +41,7 @@ export function mountPlaytestChat(read: () => { state: GameState; view: string }
   const launch = document.createElement('button')
   launch.type = 'button'
   launch.className = 'playtest-call'
+  launch.dataset.markerObstacle = ''
   launch.title = 'Debug chat (F2)'
   launch.setAttribute('aria-label', 'Debug chat')
   launch.setAttribute('aria-haspopup', 'dialog')
