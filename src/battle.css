@@ -78,7 +78,7 @@ body:has(.air-duel) { overflow: hidden; }
   text-shadow: var(--type-shadow);
   font: italic 600 clamp(19px, 1.45vw, 26px)/1 var(--font-serif, Georgia, serif);
 }
-.duel-wind::before, .throttle-label::before, .battery-side::before {
+.duel-wind::before, .throttle-label::before {
   content: '';
   position: absolute;
   z-index: -1;
@@ -171,11 +171,10 @@ body:has(.air-duel) { overflow: hidden; }
 }
 .duel-armament { left: var(--left); }
 .duel-orders { right: var(--right); }
-.duel-battery, .duel-throttle, .duel-engage { pointer-events: auto; }
-.duel-battery { width: max-content; }
-.duel-buttons, .duel-throttle, .duel-engage { display: flex; align-items: center; gap: 5px; }
-.duel-buttons button, .duel-engage button, .duel-throttle button { position: relative; overflow: hidden; }
-.battery-side, .throttle-label {
+.battery-fire, .duel-throttle, .duel-engage { pointer-events: auto; }
+.duel-throttle, .duel-engage { display: flex; align-items: center; gap: 5px; }
+.duel-engage button, .duel-throttle button { position: relative; overflow: hidden; }
+.throttle-label {
   position: relative;
   isolation: isolate;
   width: fit-content;
@@ -183,7 +182,6 @@ body:has(.air-duel) { overflow: hidden; }
   text-shadow: var(--type-shadow);
   white-space: nowrap;
 }
-.battery-side { display: block; margin: 0 0 5px 10px; }
 .throttle-label { display: block; margin-right: 4px; }
 .throttle-label b {
   display: block;
@@ -194,35 +192,42 @@ body:has(.air-duel) { overflow: hidden; }
 .air-duel .duel-throttle button { border-radius: 9px; width: 39px; padding-inline: 0; font: 400 21px/1 var(--font-sans, sans-serif); }
 .duel-engage button { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .duel-engage button > [aria-hidden] { font: 400 18px/1 var(--font-sans, sans-serif); }
-.gun-station { height: 36px; display: flex; align-items: center; justify-content: center; gap: 9px; }
-.gun-reticle {
-  width: 13px;
-  height: 13px;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  position: relative;
+.air-duel .battery-fire {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-height: 46px;
+  padding: 6px 14px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #193b3eeb, #10292ef2);
 }
-.gun-reticle::before, .gun-reticle::after {
-  content: '';
-  position: absolute;
-  inset: 50% -4px auto;
-  border-top: 1px solid currentColor;
-}
-.gun-reticle::after { transform: rotate(90deg); }
-.full-batteries .gun-reticle { display: none; }
-.gun-station i { position: absolute; height: 2px; bottom: 1px; left: 0; width: var(--gun-ready); background: #bce7d3; }
-.gun-station:not(.reloading) i, .gun-station:not(.reloading) .reload-time { display: none; }
-.gun-station.reloading { padding-bottom: 15px; }
-.gun-station.reloading .reload-time {
-  position: absolute;
-  bottom: 2px;
-  left: 0;
-  width: 100%;
+.battery-command, .battery-status, .battery-pips { display: flex; align-items: center; }
+.battery-command { gap: 8px; }
+.battery-command kbd {
+  padding: 1px 3px;
+  border: 1px solid #dbd4b780;
+  border-radius: 3px;
+  color: #efddbb;
   font: 600 10px/1 var(--font-sans, sans-serif);
+}
+.battery-status {
+  gap: 7px;
+  color: #f2e6c8;
+  font: 600 12px/1 var(--font-sans, sans-serif);
   font-variant-numeric: tabular-nums;
 }
+.battery-pips { gap: 3px; }
+.battery-pip {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border: 1px solid #d5ceb3;
+  border-radius: 50%;
+  background: linear-gradient(to top, #a3bbae var(--charge, 0%), transparent var(--charge, 0%));
+}
+.battery-pip[data-loaded='true'] { border-color: #ffdd94; background: #ffdd94; }
 .air-duel.is-drill [data-action='escape'] { display: none; }
-.air-duel[data-lesson='fire'] [data-action='gun1'].bearing {
+.air-duel[data-lesson='fire'] .battery-fire.bearing {
   border-color: #ffdd93;
   box-shadow: 0 0 10px #edce7d77;
 }
@@ -258,10 +263,7 @@ body:has(.air-duel) { overflow: hidden; }
 .is-drill .duel-banner { top: auto; bottom: calc(var(--bottom) + 85px); }
 
 @media (max-width: 940px) {
-  .full-batteries .duel-armament { flex-direction: column; align-items: flex-start; gap: 5px; }
-  .full-batteries .duel-battery { display: grid; grid-template-columns: 49px auto; align-items: center; gap: 6px; }
-  .full-batteries .battery-side { margin: 0; font-size: 16px; }
-  .full-batteries .duel-buttons button { padding-inline: 9px; font-size: 16px; }
+  .duel-armament { gap: 6px; }
 }
 @media (max-width: 750px) {
   .duel-orders { flex-direction: column; align-items: flex-end; gap: 6px; }
@@ -270,23 +272,24 @@ body:has(.air-duel) { overflow: hidden; }
 @media (max-width: 560px) {
   .air-duel { --margin-x: 9px; --margin-y: 10px; }
   .air-duel button { padding-inline: 9px; font-size: 17px; }
-  .duel-armament { flex-direction: column; align-items: flex-start; gap: 5px; }
-  .air-duel:not(.full-batteries) .duel-battery .gun-station { min-width: 110px; }
+  .duel-armament { flex-direction: column; align-items: stretch; gap: 5px; }
+  .air-duel .battery-fire { padding-inline: 10px; min-width: 100px; border-radius: 12px; }
+  .battery-command kbd { display: none; }
   .duel-orders { gap: 5px; }
   .duel-engage { flex-direction: column; align-items: stretch; }
   .duel-engage button { justify-content: flex-start; }
   .duel-throttle { gap: 4px; }
   .throttle-label { font-size: 16px; }
-  .full-batteries .duel-armament { flex-direction: row; align-items: flex-end; gap: 5px; }
-  .full-batteries .duel-battery { display: block; width: 57px; }
-  .full-batteries .duel-buttons { flex-direction: column; align-items: stretch; gap: 4px; }
-  .full-batteries .duel-buttons button { min-width: 0; padding-inline: 4px; }
-  .full-batteries .battery-side { margin: 0 auto 5px; font-size: 15px; }
   .drill-coach { top: calc(var(--top) + 49px); width: calc(100% - var(--left) - var(--right)); }
 }
 @media (pointer: coarse) {
   .air-duel button, .air-duel .duel-report summary, .air-duel .drill-heading button { min-height: 44px; min-width: 44px; }
   .air-duel .duel-throttle button, .air-duel .duel-pause { min-width: 44px; }
+  .battery-command kbd { display: none; }
+}
+@media (forced-colors: active) {
+  .battery-pip { forced-color-adjust: none; border-color: ButtonText; background: ButtonFace; }
+  .battery-pip[data-loaded='true'] { border-color: ButtonText; background: ButtonText; }
 }
 @media (min-width: 540px) and (max-height: 520px) and (orientation: landscape) {
   .is-drill { --coach-width: clamp(168px, 28vw, 250px); }

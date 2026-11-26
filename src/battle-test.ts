@@ -13,7 +13,7 @@ import './battle-test.css'
 const fittings = [
   { name: 'Starter Wayfarer', hullLevel: 0, gunLevel: 0, hands: 6, veterans: 1 },
   { name: 'Veteran boarding fit', hullLevel: 1, gunLevel: 1, hands: 8, veterans: 3 },
-  { name: 'Broadside gunship', hullLevel: 2, gunLevel: 3, hands: 6, veterans: 1 },
+  { name: 'Broadside gunship', hullLevel: 2, gunLevel: 5, hands: 6, veterans: 1 },
 ]
 
 // Keep the windy preset's repeatable chart wind, with clear visibility so both
@@ -44,7 +44,7 @@ interface TrialEnd {
 
 const desk = document.querySelector<HTMLElement>('#battle-desk')!
 desk.style.setProperty('--test-sky', `url("${artwork('cloud-sea')}")`)
-let fitIndex = 0
+let fitIndex = fittings.findIndex(fit => fit.name === 'Broadside gunship')
 let enemyIndex = 0
 let weatherIndex = 0
 let trialLocation: PortId = 'sunstep'
@@ -85,6 +85,7 @@ function showDesk(result?: TrialEnd, error = '') {
       ${result ? `<h2>${name}</h2>` : `<select id="${player ? 'your-fit' : 'opponent-fit'}" aria-label="${title}">${options(names, player ? fitIndex : enemyIndex)}</select>`}
       <div class="ship-plate"><img src="${artwork(player ? 'schooner-top' : 'raider-top')}" alt=""></div>
       <dl><div><dt>Hull</dt><dd>${hull}</dd></div><div><dt>${result ? 'Crew health' : 'Starting crew strength'}</dt><dd>${crew}</dd></div><div class="battery"><dt>Battery</dt><dd>${armamentLabel(player ? ship.guns.length : enemy.cannons)}</dd></div></dl>
+      ${player && !result && ship.guns.length > 2 ? '<p class="battery-tip">Fire a rail as each gun loads, or wait for a full broadside.</p>' : ''}
     </article>`
   }
   desk.innerHTML = `<section class="test-desk">
