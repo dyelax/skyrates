@@ -1,3 +1,4 @@
+import { dropCount, recovered, salvageLabel, salvageReceipt } from './salvage'
 import { validBattleSnapshot, type BattleEnding, type BattleSnapshot } from './battle-state'
 import { acceptsCommand, newRegister, officerOffer, prizeManifest, COMMANDER_NAMES, validPrizeTerms, validRegister,
   canLearnPerk, hasCaptainPerk, qualifiedMate, creditMission, CAPTAIN_PERKS, CAPTAIN_XP_PER_LEVEL, LAST_CAPTAIN_LEVEL, type CaptainPerk, type ServingHand, CREW_PROFILES,
@@ -571,7 +572,21 @@ function validCombatCheckpoint(value: unknown): value is BattleSnapshot {
 
 export function checkpointBattle(state: GameState, id: number, snapshot: BattleSnapshot): GameState {
   const voyage = state.voyage
-  if (!voyage || voyage.id !== id || voyage.phase !== 'battle' || voyage.battle?.terminal || !validCombatCheckpoint(snapshot)) return state
+  if (!voyage || voyage.id !== id || voyage.phase !== 'battle' || !validCombatCheckpoint(snapshot)) return state
+  const old = voyage.battle
+  const next = snapshot.salvage
+  if (next) {
+    const manifest = prizeManifest(state, raiderToll(state).profile.id, id)
+    if (next.sourceId !== 'raider-1' || next.crates.length !== dropCount(manifest) ||
+      recovered(next) > state.ship.hold - cargoUsed(state)) return state
+  }
+  if (old?.terminal) {
+    const before = old.salvage
+    if (!before || !next || old.terminal !== snapshot.terminal || before.remaining <= 0 ||
+      next.crates.length !== before.crates.length || next.remaining > before.remaining || old.player.hull !== snapshot.player.hull ||
+      old.playerCrew !== snapshot.playerCrew || old.enemyCrew !== snapshot.enemyCrew ||
+      before.crates.some((crate, i) => crate.taken && !next.crates[i].taken)) return state
+  }
   return { ...state, voyage: { ...voyage, battle: structuredClone(snapshot) } }
 }
 
@@ -604,7 +619,14 @@ function finishBattle(state: GameState, action: Extract<Command,{type:'resolveBa
       state.notoriety++
       state.coins += 25
       experience(state,12)
-      record(state, 'The raider sank. Claimed the 25-crown defense award at the next berth.')
+      {
+        const manifest = prizeManifest(state, profile.id, leg.id)
+        const pickup = leg.battle?.salvage
+        const qty = pickup ? Math.max(0, Math.min(recovered(pickup), dropCount(manifest), state.ship.hold - cargoUsed(state))) : 0
+        if (qty > 0) addCargo(state.cargo[manifest.good], qty, 0)
+        const report = pickup ? ' ' + salvageLabel(salvageReceipt(manifest, qty)) : ''
+        record(state, 'The raider sank. Claimed the 25-crown defense award at the next berth.' + report)
+      }
       break
     case 'lost':
     case 'yielded':

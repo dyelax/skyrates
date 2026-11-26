@@ -201,7 +201,7 @@ export function mountBattleFx(
     return scene.add.image(x, y, key).setDepth(7.5).setAlpha(0)
   }
 
-  function startWreck(event: { sunk: Side[]; complete: () => void }) {
+  function startWreck(event: { sunk: Side[]; nextLabel?: string; complete: () => void }) {
     if (wreck) return
     if (!event.sunk.length) {
       event.complete()
@@ -240,7 +240,7 @@ export function mountBattleFx(
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'duel-skip-wreck'
-    button.textContent = 'View result'
+    button.textContent = event.nextLabel ?? 'View result'
     button.onclick = endWreck
     root.append(button)
     button.focus({ preventScroll: true })
@@ -299,7 +299,7 @@ export function mountBattleFx(
     const dt = Math.min(0.09, ms / 1000)
     elapsed += dt
     ink.clear()
-    for (const side of SIDES) if (!wreck?.sunk.includes(side)) liftAndSmoke(side)
+    for (const side of SIDES) if (poses[side].hull > 0 && !wreck?.sunk.includes(side)) liftAndSmoke(side)
     for (let i = flashes.length - 1; i >= 0; i--) {
       const flash = flashes[i]
       flash.age += dt

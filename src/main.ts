@@ -1,3 +1,4 @@
+import { prizeManifest } from './prize-command'
 import { mountWorkshop, type Workshop } from './workshop'
 import { isStation } from './voxel/workroom-plan'
 import { openVoiceSettings } from './npc-voices'
@@ -16,6 +17,7 @@ import {
   act,
   advanceDrill,
   boardingStrength,
+  cargoUsed,
   hasCaptainPerk,
   loadGame,
   PORTS,
@@ -164,7 +166,7 @@ function render() {
   else if (view === 'battle' && (state.voyage || state.drill)) {
     const leg = state.voyage
     const pending = leg?.battle
-    if (!state.drill && leg && pending?.terminal) {
+    if (!state.drill && leg && pending?.terminal && !pending.salvage?.remaining) {
       dispatch({ type: 'resolveBattle', id: leg.id, result: CAMPAIGN_RESULTS[pending.terminal],
         hull: pending.player.hull, enemyHull: pending.enemy.hull })
       return
@@ -174,12 +176,12 @@ function render() {
       if (token !== renderToken) return
       battleUnmount?.()
       battleUnmount = undefined
-      const withdraw = state.drill ? 'Skip free exercise' : 'Strike colors · surrender ' + seizureLabel(state)
+      const withdraw = pending?.salvage ? 'Leave salvage with recovered cargo' : state.drill ? 'Skip free exercise' : 'Strike colors · surrender ' + seizureLabel(state)
       main.innerHTML = `<section class="battle-loading"><p>The encounter could not load.</p><button class="gold-action" data-retry>Retry encounter</button><button class="mission-action" data-withdraw>${withdraw}</button></section>`
       main.querySelector('[data-retry]')?.addEventListener('click', render)
       main.querySelector('[data-withdraw]')?.addEventListener('click', () =>
         state.drill ? dispatch({ type: 'endDrill', skip: true })
-          : leg && dispatch({ type: 'resolveBattle', id: leg.id, result: 'lost', hull: state.voyage?.battle?.player.hull ?? state.ship.hull }),
+          : leg && dispatch({ type: 'resolveBattle', id: leg.id, result: pending?.salvage ? 'enemyWreck' : 'lost', hull: state.voyage?.battle?.player.hull ?? state.ship.hull }),
       )
     }
     void import('./battle')
@@ -187,6 +189,10 @@ function render() {
         if (token !== renderToken || state.voyage?.id !== leg?.id) return
         main.replaceChildren()
         battleUnmount = mountBattle(main, {
+          salvageLoad: !state.drill && leg ? {
+            manifest: prizeManifest(state, raiderToll(state).profile.id, leg.id),
+            free: Math.max(0, state.ship.hold - cargoUsed(state)),
+          } : undefined,
           opponent: state.drill ? WATCH_CUTTER : raiderToll(state).profile,
           onUnavailable: unavailable,
           savedBattle: leg?.battle,
