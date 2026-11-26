@@ -54,6 +54,9 @@ export const WORLD_TOWNS = Object.fromEntries(PORT_IDS.map((id) => [id, makeTown
   PortId,
   WorldTown
 >
+export const WORLD_TOWN_RADIUS = 510
+export const WORLD_NOTICE_RADIUS = 430
+export const WORLD_BREAKOFF_RADIUS = 560
 export const WORLD_DOCK_RADIUS = 118
 export const WORLD_HAIL_RADIUS = 122
 export const WORLD_STEP = 1 / 60
@@ -73,6 +76,9 @@ export interface WorldTraffic {
   id: string
   name: string
   kind: 'merchant' | 'raider' | 'tender'
+  behavior: 'sailing' | 'watching' | 'pursuing' | 'evading' | 'struck'
+  clearSeconds: number
+  raided: boolean
   disposition: 'passing' | 'distressed' | 'hostile'
   ship: WorldPose
   route: PortId[]
@@ -208,6 +214,9 @@ function trafficFor(seed: number): WorldTraffic[] {
       id: 'lane-' + i,
       name: names[i],
       kind: i < 4 ? 'merchant' : 'raider',
+      behavior: 'sailing',
+      clearSeconds: 0,
+      raided: false,
       disposition: 'passing',
       ship: pose(
         first.x + (next.x - first.x) * progress - Math.sin(a) * side,
@@ -226,7 +235,8 @@ export function initWorldFlight(input: WorldDeparture): WorldFlight {
     seed = input.seed >>> 0
   const from = WORLD_PORTS[origin],
     to = WORLD_PORTS[destination]
-  const start = input.previous && dist(input.previous.player, from) < 450 ? input.previous.player : from
+  const prior = input.previous?.origin === origin ? input.previous.player : undefined
+  const start = prior ?? from
   const a =
     origin === destination
       ? origin === 'sunstep' || origin === 'copperfall'
@@ -254,6 +264,9 @@ export function initWorldFlight(input: WorldDeparture): WorldFlight {
       id: contactId,
       name: tender ? 'Neri’s tender' : 'Toll raider',
       kind: tender ? 'tender' : 'raider',
+      behavior: 'sailing',
+      clearSeconds: 0,
+      raided: false,
       disposition: tender ? 'distressed' : 'hostile',
       mooring,
       ship: pose(mooring.x + 48, mooring.y, a + Math.PI * 0.5, 1),
@@ -261,7 +274,7 @@ export function initWorldFlight(input: WorldDeparture): WorldFlight {
       next: 0,
     })
   }
-  const player = pose(start.x, start.y, a, tied ? 0 : 2)
+  const player = prior ? { ...prior } : pose(start.x, start.y, a, tied ? 0 : 2)
   if (!tied && !input.previous) {
     player.x += Math.cos(a) * 80
     player.y += Math.sin(a) * 80
@@ -292,13 +305,45 @@ function advanceTraffic(f: WorldFlight, actor: WorldTraffic) {
   const s = actor.ship
   const orbit = f.elapsed * 0.15 + (f.seed % 17)
   let goal: Point
-  if (actor.mooring)
+  const gap = dist(s, f.player)
+  const engaged = actor.behavior === 'pursuing' || actor.behavior === 'evading'
+  if (engaged) {
+    actor.clearSeconds = gap > WORLD_BREAKOFF_RADIUS ? actor.clearSeconds + WORLD_STEP : 0
+    if (actor.clearSeconds >= 4) endWorldPursuit(f, actor.id)
+  }
+  if (actor.behavior === 'struck') {
+    fly(s, 0, 0, f, 0.18, false)
+    clearLand(s)
+    return
+  }
+  if (actor.disposition === 'hostile' && !engaged && !f.safe && !f.spentIds.includes(actor.id)) {
+    if (gap < WORLD_NOTICE_RADIUS) actor.behavior = 'watching'
+    else if (gap > WORLD_NOTICE_RADIUS + 80) actor.behavior = 'sailing'
+  }
+  let throttle: Throttle = 2
+  if (actor.behavior === 'pursuing' || actor.behavior === 'watching') {
+    goal = { x: f.player.x + f.player.vx * 0.75, y: f.player.y + f.player.vy * 0.75 }
+    throttle = actor.behavior === 'watching' && gap < 190 ? 1 : 3
+  } else if (actor.behavior === 'evading') {
+    const a = bearing(f.player, s)
+    goal = { x: s.x + 500 * Math.cos(a), y: s.y + 500 * Math.sin(a) }
+    throttle = 3
+  } else if (actor.mooring) {
     goal = { x: actor.mooring.x + 50 * Math.cos(orbit), y: actor.mooring.y + 50 * Math.sin(orbit) }
-  else {
+    throttle = dist(s, goal) > 25 ? 1 : 0
+  } else {
     if (dist(s, WORLD_PORTS[actor.route[actor.next]]) < 105) actor.next = (actor.next + 1) % actor.route.length
     goal = WORLD_PORTS[actor.route[actor.next]]
   }
-  let aim = bearing(s, worldCourse(s, goal))
+  const via = worldCourse(s, goal)
+  let aim = bearing(s, via)
+  if (actor.behavior === 'pursuing' && gap < 240 && via === goal) {
+    // Bring the physical hull around to present a rail once in cannon range.
+    const port = wrapAngle(aim + Math.PI / 2 - s.heading),
+      starboard = wrapAngle(aim - Math.PI / 2 - s.heading)
+    aim = s.heading + (Math.abs(port) < Math.abs(starboard) ? port : starboard)
+    throttle = gap < 120 ? 0 : 1
+  }
   const steerClear = (other: Point) => {
     const gap = dist(s, other)
     if (gap >= 104 || gap < 0.01) return
@@ -306,15 +351,19 @@ function advanceTraffic(f: WorldFlight, actor: WorldTraffic) {
     if (Math.abs(side) > 1.43) return
     aim += (side >= 0 ? -1 : 1) * (1 - gap / 104) * 1.32
   }
-  steerClear(f.player)
+  if (!engaged) steerClear(f.player)
   for (const other of f.traffic) if (other !== actor) steerClear(other.ship)
   const error = wrapAngle(aim - s.heading)
-  const throttle = actor.mooring ? (dist(s, goal) > 25 ? 1 : 0) : 2
   fly(s, bound(error * 2 - s.angularSpeed * 0.35, -1, 1), throttle, f, 0.18, false)
   clearLand(s)
 }
 
-export function stepWorldFlight(f: WorldFlight, input: { helm: number; throttle: Throttle }, seconds: number) {
+export function stepWorldFlight(
+  f: WorldFlight,
+  input: { helm: number; throttle: Throttle },
+  seconds: number,
+  afterStep?: (dt: number) => void | false,
+) {
   if (!Number.isFinite(seconds) || seconds <= 0) return
   f.remainder += Math.min(0.25, seconds)
   while (f.remainder + 1e-10 >= WORLD_STEP) {
@@ -328,6 +377,10 @@ export function stepWorldFlight(f: WorldFlight, input: { helm: number; throttle:
     f.departed ||= dist(f.player, WORLD_PORTS[f.origin]) > 150
     f.cooldown = Math.max(0, f.cooldown - WORLD_STEP)
     for (const actor of f.traffic) advanceTraffic(f, actor)
+    if (afterStep?.(WORLD_STEP) === false) {
+      f.remainder = 0
+      break
+    }
   }
 }
 
@@ -462,7 +515,7 @@ export function nearestTraffic(f: WorldFlight, radius = 180) {
   return nearest
 }
 function hailKind(f: WorldFlight, actor: WorldTraffic, manual: boolean) {
-  if (f.spentIds.includes(actor.id)) return
+  if (f.spentIds.includes(actor.id) || ['pursuing', 'evading', 'struck'].includes(actor.behavior)) return
   const gap = dist(f.player, actor.ship)
   if (f.contactId === actor.id && gap <= (manual ? 165 : WORLD_HAIL_RADIUS))
     return f.encounter === 'tender' ? 'tender' : 'raiders'
@@ -489,7 +542,17 @@ export function nearbyHail(
 }
 export function resolveHail(f: WorldFlight, id: string) {
   const actor = f.traffic.find((n) => n.id === id)
-  if (!actor || f.cooldown > 0 || !hailKind(f, actor, true)) return false
+  if (!actor || f.cooldown > 0) return false
+  const closeDemand =
+    actor.kind === 'raider' && actor.behavior === 'pursuing' && dist(f.player, actor.ship) <= 165
+  if (!hailKind(f, actor, true) && !closeDemand) return false
+  toPassing(f, actor)
+  return true
+}
+function toPassing(f: WorldFlight, actor: WorldTraffic) {
+  const id = actor.id
+  actor.behavior = 'sailing'
+  actor.clearSeconds = 0
   actor.disposition = 'passing'
   if (actor.mooring) {
     delete actor.mooring
@@ -497,11 +560,63 @@ export function resolveHail(f: WorldFlight, id: string) {
     actor.next = 0
   }
   if (f.contactId === id) f.contactId = null
-  f.spentIds.push(id)
+  if (!f.spentIds.includes(id)) f.spentIds.push(id)
   f.cooldown = 8
-  return true
 }
 
+// The campaign already owns a pending exchange. Accept its resolution even
+// if wind carried the two vessels beyond initial calling distance meanwhile.
+export function settleWorldContact(f: WorldFlight, id: string) {
+  const actor = f.traffic.find((n) => n.id === id)
+  if (!actor || (f.spentIds.includes(id) && actor.behavior !== 'struck')) return false
+  toPassing(f, actor)
+  return true
+}
+export function startWorldPursuit(f: WorldFlight, id: string) {
+  const actor = f.traffic.find((n) => n.id === id)
+  if (
+    !actor ||
+    f.safe ||
+    f.spentIds.includes(id) ||
+    actor.disposition !== 'hostile' ||
+    dist(actor.ship, f.player) > 600
+  )
+    return false
+  actor.behavior = 'pursuing'
+  actor.clearSeconds = 0
+  return true
+}
+export function endWorldPursuit(f: WorldFlight, id: string) {
+  const actor = f.traffic.find((n) => n.id === id)
+  if (!actor || !['pursuing', 'evading'].includes(actor.behavior)) return false
+  toPassing(f, actor)
+  return true
+}
+export function strikeWorldContact(f: WorldFlight, id: string) {
+  const actor = f.traffic.find((n) => n.id === id)
+  if (!actor) return false
+  toPassing(f, actor)
+  actor.behavior = 'struck'
+  actor.ship.throttle = 0
+  return true
+}
+export function nearbyAttackableMerchant(f: WorldFlight, id?: string) {
+  if (f.safe) return
+  return f.traffic
+    .filter((n) => n.kind === 'merchant' && !n.raided && (!id || n.id === id) && dist(n.ship, f.player) <= 185)
+    .sort((a, b) => dist(f.player, a.ship) - dist(f.player, b.ship))[0]
+}
+export function provokeWorldMerchant(f: WorldFlight, id: string) {
+  const actor = nearbyAttackableMerchant(f, id)
+  if (!actor) return
+  actor.raided = true
+  // Escorted packet hulls turn a rail outwards; unarmed bulk traders run.
+  const defending = actor.id === 'lane-1' || actor.id === 'lane-3'
+  actor.behavior = defending ? 'pursuing' : 'evading'
+  actor.disposition = defending ? 'hostile' : 'passing'
+  actor.clearSeconds = 0
+  return actor.behavior
+}
 // An older checkpoint may already display a hail or battle, without a world
 // pose. Reconstruct its committed physical contact exactly once on migration.
 export function retireWorldContact(f: WorldFlight, id: string) {
@@ -577,6 +692,11 @@ function validTraffic(v: unknown) {
     typeof v.name === 'string' &&
     ['merchant', 'raider', 'tender'].includes(String(v.kind)) &&
     ['passing', 'distressed', 'hostile'].includes(String(v.disposition)) &&
+    ['sailing', 'watching', 'evading', 'pursuing', 'struck'].includes(String(v.behavior)) &&
+    finite(v.clearSeconds) &&
+    v.clearSeconds >= 0 &&
+    v.clearSeconds < 4 + WORLD_STEP &&
+    typeof v.raided === 'boolean' &&
     validPose(v.ship) &&
     Array.isArray(v.route) &&
     v.route.length <= PORT_IDS.length &&

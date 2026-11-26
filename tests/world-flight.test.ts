@@ -1,4 +1,11 @@
 import assert from 'node:assert/strict'
+import {
+  startWorldPursuit,
+  endWorldPursuit,
+  provokeWorldMerchant,
+  retireWorldContact,
+  strikeWorldContact,
+} from '../src/world-flight'
 import test from 'node:test'
 import {
   initWorldFlight,
@@ -160,4 +167,71 @@ test('neighboring harbors take two to four minutes, all berth centers are usable
       qy = (f.player.y - town.center.y) / town.island.ry
     assert(Math.hypot(qx, qy) > 1)
   }
+})
+
+test('noticed raiders chase a real hull, can be outrun or paid, and never issue duplicate demands', () => {
+  const f = start(),
+    actor = f.traffic.at(-1)!
+  Object.assign(f.player, { x: actor.ship.x - 310, y: actor.ship.y, heading: Math.PI, vx: -40, vy: 0 })
+  advance(f, 0.1, 0, 1)
+  assert.equal(actor.behavior, 'watching')
+  assert(startWorldPursuit(f, actor.id))
+  const last = { ...actor.ship }
+  advance(f, 1, 0, 2)
+  assert(distance(actor.ship, last) > 8)
+  Object.assign(f.player, { x: actor.ship.x - 800, y: actor.ship.y })
+  advance(f, 2, 0, 3)
+  assert(actor.clearSeconds >= 1.9)
+  f.player.x = actor.ship.x - 180
+  advance(f, 0.1, 0, 2)
+  assert.equal(actor.clearSeconds, 0)
+  assert.equal(actor.behavior, 'pursuing')
+  f.player.x = actor.ship.x - 810
+  advance(f, 4.1, 0, 3)
+  assert.equal(actor.behavior, 'sailing')
+  assert(f.spentIds.includes(actor.id))
+  assert(!startWorldPursuit(f, actor.id))
+  const other = f.traffic.find((n) => n.kind === 'raider' && n.id !== actor.id)!
+  Object.assign(f.player, { x: other.ship.x + 40, y: other.ship.y })
+  advance(f, 8.2, 0, 0)
+  Object.assign(f.player, { x: other.ship.x + 40, y: other.ship.y })
+  assert(startWorldPursuit(f, other.id))
+  assert(resolveHail(f, other.id))
+  assert(!startWorldPursuit(f, other.id))
+  assert(!endWorldPursuit(f, other.id))
+})
+test('armed and unarmed traders react only to the pilot’s own attack; struck and retired ship IDs persist', () => {
+  const f = start(),
+    traders = f.traffic.filter((n) => n.kind === 'merchant'),
+    first = traders[0],
+    second = traders[1]
+  for (const actor of [first, second]) {
+    assert.equal(actor.behavior, 'sailing')
+    Object.assign(f.player, { x: actor.ship.x + 55, y: actor.ship.y })
+    assert.equal(provokeWorldMerchant(f, actor.id), actor === first ? 'evading' : 'pursuing')
+    assert.equal(provokeWorldMerchant(f, actor.id), undefined)
+  }
+  assert(strikeWorldContact(f, second.id))
+  assert.equal(second.behavior, 'struck')
+  assert(retireWorldContact(f, second.id))
+  assert(!worldContactPose(f, second.id))
+  assert(validWorldFlight(JSON.parse(JSON.stringify(f))))
+  const keep = initWorldFlight({
+    seed: 52,
+    origin: f.origin,
+    destination: 'copperfall',
+    weather: calm,
+    encounter: 'none',
+    previous: f,
+  })
+  assert.equal(keep.traffic.length, 5)
+  assert(keep.spentIds.includes(second.id))
+  assert.deepEqual(keep.player, f.player)
+  let steps = 0
+  stepWorldFlight(keep, { helm: 0, throttle: 3 }, 0.1, (dt) => {
+    steps++
+    assert.equal(dt, 1 / 60)
+  })
+  assert.equal(steps, 6)
+  assert(validWorldFlight(keep))
 })
