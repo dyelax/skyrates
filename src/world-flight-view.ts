@@ -113,7 +113,8 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
     tied = !underway && Math.hypot(flight.player.vx, flight.player.vy) < 1
   let approach: Site | undefined,
     approachPort: PortId = state.port
-  let waiting = ''
+  let waiting = '',
+    sheetVisible = host.inert
   const held = new Set<string>(),
     stop = new AbortController(),
     reduced = matchMedia('(prefers-reduced-motion: reduce)')
@@ -773,6 +774,7 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
       }
       const mooring = tied ? { ...p } : undefined
       stepCampaignSky(flight, { helm: clamp(helm, -1, 1), throttle: ordered }, dt, battle, state.ship.guns, load)
+      sky.combatFx.observe(flight, battle)
       if (mooring) Object.assign(p, mooring)
       saveTime += dt
       if (saveTime >= (tied ? 3 : 0.32) || (battle?.terminal && !battle.salvage?.remaining)) checkpoint()
@@ -808,6 +810,8 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
     focusSite,
     approachSite,
     update(next: GameState) {
+      if (sheetVisible && !host.inert) focused = undefined
+      sheetVisible = host.inert
       const prev = state,
         was = underway
       state = next

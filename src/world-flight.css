@@ -446,3 +446,9 @@
     bottom: 76px;
   }
 }
+
+.flight-world .flight-actions,
+.flight-world .flight-context,
+.flight-world .flight-port-battery {
+  margin-bottom: var(--notice-space, 0px);
+}

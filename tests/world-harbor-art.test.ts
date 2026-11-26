@@ -33,6 +33,9 @@ for (const port of PORT_IDS) {
       assert.ok(nodes.has('npc-' + site.id))
       if (site.id === 'dockworker') anchor('player-berth', site.berth)
     }
+    const lamps = asset.nodes.filter((node) => node.name.startsWith('practical-'))
+    assert.equal(lamps.length, 4)
+    assert.ok(lamps.every((node) => node.translation?.length === 3 && node.translation[1] > 0))
     assert.ok(asset.meshes.length > 10)
     assert.ok(asset.materials.some((material) => material.emissiveFactor?.some((channel) => channel > 0.2)))
     if (port === 'copperfall') assert.ok(nodes.has('winter-glass-repaired'))

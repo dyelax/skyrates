@@ -3,6 +3,7 @@ import { hullDamageStage, paintHullDamage } from './battle-damage'
 import type { BattleSnapshot } from './battle-state'
 import { GUN_POSITIONS, stationOffset } from './drill'
 import { battleSound } from './audio'
+import { WorldSkirmishFx } from './world-skirmish-fx'
 import { FlightGround } from './world-flight-ground'
 import { flightLight } from './world-flight-light'
 import { artwork } from './artwork'
@@ -137,6 +138,7 @@ export class WorldFlightSky {
   private town?: FlightTown
   private requestedTown = false
   private clock = 0
+  readonly combatFx = new WorldSkirmishFx()
   constructor(
     private surface: HTMLCanvasElement,
     origin: Point,
@@ -221,7 +223,7 @@ export class WorldFlightSky {
     const near = clamp((620 - dist) / 290, 0, 1),
       site = town.sites.find((s) => s.id === berth?.site)
     const target =
-      site?.position ??
+      (site ? { ...site.position } : undefined) ??
       (berth && dist < 350
         ? { x: 0.69 * town.center.x + 0.31 * p.x, y: 0.69 * town.center.y + 0.31 * p.y }
         : { x: p.x + p.vx * ahead, y: p.y + p.vy * ahead })
@@ -231,6 +233,13 @@ export class WorldFlightSky {
     this.elevation +=
       ((site?.id === 'dockworker' ? 0.38 : site ? 0.43 : 1.5 - 0.77 * near) - this.elevation) * response
     this.yaw += ((closest === 'sunstep' || closest === 'copperfall' ? 0.19 : -0.19) * near - this.yaw) * response
+    if (site) {
+      // The counter stays visible beside its sheet (above it on a handset).
+      const horizontal = this.w > 600 ? Math.min(235, this.w * 0.21) / this.scale : 0
+      const down = this.w <= 600 ? (this.h * 0.29) / (Math.sin(this.elevation) * this.scale) : 0
+      target.x += horizontal * Math.cos(this.yaw) + down * Math.sin(this.yaw)
+      target.y += down * Math.cos(this.yaw) - horizontal * Math.sin(this.yaw)
+    }
     this.center.x += (target.x - this.center.x) * response
     this.center.y += (target.y - this.center.y) * response
     this.clock += dt
@@ -247,6 +256,7 @@ export class WorldFlightSky {
     c.setTransform(this.density, 0, 0, this.density, 0, 0)
     c.fillStyle = '#446f75'
     c.fillRect(0, 0, this.w, this.h)
+    this.combatFx.drift(c, dt, reduced)
     // Keep the flight camera world-anchored as the near island grows above the more distant ground.
     this.ground.draw(c, this.center, this.planeScale(0.38) * (0.35 - 0.16 * near), this.w, this.h)
     const weather = flight.weather.kind,
@@ -324,6 +334,25 @@ export class WorldFlightSky {
         foe?.guns.length ?? 0,
         foe ? hullDamageStage(foe.hull, foe.maxHull) : 0,
       )
+      if (actor.behavior === 'struck') {
+        const pos = this.project(actor.ship),
+          u = this.scale
+        c.save()
+        c.translate(pos.x, pos.y)
+        c.scale(u, u)
+        c.strokeStyle = '#513e34'
+        c.beginPath()
+        c.moveTo(0, -8)
+        c.lineTo(0, -23)
+        c.stroke()
+        c.fillStyle = '#fff2d5'
+        c.beginPath()
+        c.moveTo(0, -23)
+        c.lineTo(12, -20)
+        c.lineTo(0, -17)
+        c.fill()
+        c.restore()
+      }
     }
     c.save()
     c.globalAlpha = cityReady ? 1 - near : 1
@@ -336,6 +365,13 @@ export class WorldFlightSky {
       battle ? hullDamageStage(battle.player.hull, battle.player.maxHull) : 0,
     )
     c.restore()
+    this.combatFx.draw(
+      c,
+      (p) => this.project(p),
+      this.scale,
+      reduced,
+      (...args) => this.drawShip(...args),
+    )
     if (battle) this.projectiles(battle, dt, reduced)
     if (weather === 'squall' || weather === 'rain') this.cloudLayer(1.12, 520, flight, reduced, true)
   }
