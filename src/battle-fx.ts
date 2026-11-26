@@ -222,14 +222,14 @@ export function mountBattleFx(
         const left = Math.floor((piece.width * i) / 3),
           right = Math.floor((piece.width * (i + 1)) / 3)
         piece.setCrop(left, 0, right - left, piece.height)
-        piece.setScale(view.hull.scaleX, view.hull.scaleY).setRotation(pose.heading)
+        piece.setScale(view.shadow.scaleX, view.shadow.scaleY).setRotation(pose.heading)
         pieces.push({
           image: piece,
           x: pose.x,
           y: pose.y,
           heading: pose.heading,
-          scaleX: view.hull.scaleX,
-          scaleY: view.hull.scaleY,
+          scaleX: view.shadow.scaleX,
+          scaleY: view.shadow.scaleY,
           driftX: (i - 1) * Math.cos(pose.heading) * 46 + 8,
           driftY: (i - 1) * Math.sin(pose.heading) * 46 + (i % 2 ? -13 : 9),
           spin: (i - 1) * 1.1 + 0.35,

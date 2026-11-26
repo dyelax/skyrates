@@ -113,22 +113,52 @@ export function buildShip(
   }
 }
 
+const ENGINE_SPEED = [0, 37, 63, 94]
+const clampUnit = (value: number) => Math.min(1, Math.max(0, value))
+
 export function moveShip(ship: Vessel, helm: number, dt: number, wind: Point = STILL_AIR): void {
-  const cruiseSpeed = [0, 37, 63, 94][ship.throttle] ?? 0
-  const across = -Math.sin(ship.heading) * wind.x + Math.cos(ship.heading) * wind.y
-  const turnTarget = helm * (ship.throttle === 3 ? 1.04 : 1.32) + across * 0.065
-  const turnResponse = 1 - Math.exp(-dt * 3.3)
-  ship.angularSpeed += (turnTarget - ship.angularSpeed) * turnResponse
-  ship.heading = wrapAngle(ship.heading + ship.angularSpeed * dt)
-  const acceleration = 1 - Math.exp(-dt * 1.12)
-  ship.vx += (Math.cos(ship.heading) * cruiseSpeed + wind.x * HULL_DRIFT - ship.vx) * acceleration
-  ship.vy += (Math.sin(ship.heading) * cruiseSpeed + wind.y * HULL_DRIFT - ship.vy) * acceleration
-  ship.x += ship.vx * dt
-  ship.y += ship.vy * dt
-  ship.heel += (ship.angularSpeed * 0.7 - ship.heel) * turnResponse
-  ship.guns.forEach((gun) => {
-    gun.cooldown = Math.max(0, gun.cooldown - dt)
-  })
+  const cruise = ENGINE_SPEED[ship.throttle] ?? 0
+  const windX = wind.x * HULL_DRIFT, windY = wind.y * HULL_DRIFT
+  const airX = ship.vx - windX, airY = ship.vy - windY
+  const forward = Math.max(0, Math.cos(ship.heading) * airX + Math.sin(ship.heading) * airY)
+  // At low speed the crew can pivot the ship. The rudder bites once underway;
+  // at full ahead the same order describes a much wider arc.
+  const speedFraction = clampUnit((forward - ENGINE_SPEED[1]) / (ENGINE_SPEED[3] - ENGINE_SPEED[1]))
+  const turnRate = 1.05 + .30 * clampUnit(forward / ENGINE_SPEED[1]) - .48 * speedFraction
+  const crosswind = -Math.sin(ship.heading) * wind.x + Math.cos(ship.heading) * wind.y
+  const targetYaw = Math.max(-1, Math.min(1, helm)) * turnRate + crosswind * .065
+  const yawResponse = Math.abs(helm) < .01 ? 4.8 : 2.7
+  const yawGain = -Math.expm1(-yawResponse * dt)
+  const yawChange = targetYaw * dt + (ship.angularSpeed - targetYaw) * yawGain / yawResponse
+  ship.angularSpeed += (targetYaw - ship.angularSpeed) * yawGain
+
+  // Resolve momentum in the turning hull's frame. The engine builds forward
+  // speed gently; the keel damps sideways motion faster, leaving a short skid.
+  const midHeading = ship.heading + yawChange * .5
+  const bowX = Math.cos(midHeading), bowY = Math.sin(midHeading)
+  const along = bowX * airX + bowY * airY
+  const normal = -bowY * airX + bowX * airY
+  const thrust = cruise + (along - cruise) * Math.exp(-1.12 * dt)
+  const slip = normal * Math.exp(-4.5 * dt)
+  const vx = bowX * thrust - bowY * slip + windX
+  const vy = bowY * thrust + bowX * slip + windY
+  ship.x += (ship.vx + vx) * .5 * dt
+  ship.y += (ship.vy + vy) * .5 * dt
+  ship.vx = vx
+  ship.vy = vy
+  ship.heading = wrapAngle(ship.heading + yawChange)
+
+  // Signed roll follows lateral acceleration, not the key. A pivot at rest
+  // stays level and a coasting ship keeps its bank until the turn rolls out.
+  const bank = Math.atan(ship.angularSpeed * forward / 118)
+  ship.heel += (bank - ship.heel) * -Math.expm1(-dt * 4.4)
+  for (const gun of ship.guns) gun.cooldown = Math.max(0, gun.cooldown - dt)
+}
+
+// Lead the rollout when following a course so the bow settles on its heading.
+export function helmForHeading(ship: Vessel, desired: number): number {
+  const error = wrapAngle(desired - ship.heading)
+  return Math.max(-1, Math.min(1, error * 2.35 - ship.angularSpeed * .63))
 }
 
 export function steerRaider(
@@ -150,8 +180,7 @@ export function steerRaider(
   if (enemy.x < 68 || enemy.x > area.width - 68 || enemy.y < area.top + 43 || enemy.y > area.bottom - 43)
     desired = angleBetween(enemy, { x: area.width / 2, y: area.height / 2 })
   enemy.throttle = range > 325 || pursuing ? 2 : 1
-  const helm = Math.max(-1, Math.min(1, wrapAngle(desired - enemy.heading) * 1.7))
-  moveShip(enemy, helm, dt, wind)
+  moveShip(enemy, helmForHeading(enemy, desired), dt, wind)
   enemy.x = Math.max(30, Math.min(area.width - 30, enemy.x))
   enemy.y = Math.max(area.top + 20, Math.min(area.bottom - 20, enemy.y))
   return side

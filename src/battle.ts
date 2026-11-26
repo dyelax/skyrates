@@ -3,6 +3,8 @@ import { artwork } from './artwork'
 import type { PortId } from './data'
 import { mountBattleFx } from './battle-fx'
 import { prepareHull } from './battle-damage'
+import { AirshipRig } from './battle-rig'
+import { drawBoarders } from './boarding-art'
 import { BattleMarkers } from './battle-markers'
 import './battle-fx.css'
 import type { WeatherReport } from './weather'
@@ -20,6 +22,7 @@ import {
   gunBearsOn,
   gunMuzzle,
   headingForBroadside,
+  helmForHeading,
   raiderLookout,
   localPoint,
   moveShip,
@@ -74,12 +77,6 @@ interface Spark extends Point {
   duration: number
   size: number
   color: number
-}
-interface ShipView {
-  hull: Phaser.GameObjects.Image
-  shadow: Phaser.GameObjects.Image
-  scaleX: number
-  scaleY: number
 }
 const clamp = Phaser.Math.Clamp
 const THROTTLE = ['Hove to', 'Ahead slow', 'Cruising', 'Full ahead']
@@ -241,12 +238,15 @@ class SkyBattle extends Phaser.Scene {
   private opts: BattleOptions
   private player: Vessel
   private foe: Vessel
-  private playerView!: ShipView
-  private foeView!: ShipView
+  private playerView!: AirshipRig
+  private foeView!: AirshipRig
   private area: FlightArea
   private clouds?: CloudDeck
   private overlays!: Phaser.GameObjects.Graphics
   private paths!: Phaser.GameObjects.Graphics
+  private boardingWatch!: Phaser.GameObjects.Graphics
+  private boardingTime = 0
+  private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
   private shots: Projectile[] = []
   private sparks: Spark[] = []
   private aiDelay = 3.5
@@ -337,14 +337,16 @@ class SkyBattle extends Phaser.Scene {
     prepareHull(this, 'schooner')
     prepareHull(this, 'opponent')
     this.setChartZoom()
-    this.clouds = new CloudDeck(this, this.opts.weather, Boolean(this.drill), this.area.width, this.area.height)
+    this.clouds = new CloudDeck(this, this.opts.weather, Boolean(this.drill), this.area.width, this.area.height, this.player)
     this.paths = this.add.graphics().setDepth(2)
-    this.playerView = this.makeShip('schooner', 114)
-    this.foeView = this.makeShip('opponent', 110)
+    this.boardingWatch = this.add.graphics().setName('boarding-at-rail').setDepth(6.5).setVisible(false)
+    this.playerView = new AirshipRig(this, 'schooner', 114)
+    this.foeView = new AirshipRig(this, 'opponent', 110)
     mountBattleFx(this, this.root, { player: this.playerView, enemy: this.foeView }, { player: this.player, enemy: this.foe })
     this.root.dataset.shipRenderer = 'illustrated'
-    this.updateShipView(this.playerView, this.player)
-    this.updateShipView(this.foeView, this.foe)
+    this.playerView.update(this.player)
+    this.foeView.update(this.foe)
+    this.showBoarding(0)
     this.overlays = this.add.graphics().setDepth(7)
     this.ready = true
     if (this.terminal) { this.finish(this.terminal, true); return }
@@ -378,6 +380,19 @@ class SkyBattle extends Phaser.Scene {
     if (this.drill) this.drawCoach()
     this.syncMarkers()
     this.syncHUD()
+  }
+
+  private showBoarding(dt: number) {
+    const fighting = this.touching && !this.ended && this.crew.player > 0 && this.crew.enemy > 0 &&
+      this.player.hull > 0 && this.foe.hull > 0
+    this.boardingWatch.setVisible(fighting)
+    if (!fighting) {
+      this.boardingTime = 0
+      return
+    }
+    this.boardingTime += dt
+    const scale = clamp(this.area.width / Math.max(1, this.scale.displaySize.width), .92, 2.6)
+    drawBoarders(this.boardingWatch, hullContact(this.player, this.foe), scale, this.boardingTime, this.reducedMotion.matches)
   }
 
   private setChartZoom() {
@@ -612,27 +627,6 @@ class SkyBattle extends Phaser.Scene {
     this.bannerTTL = seconds
   }
 
-  private makeShip(key: string, length: number): ShipView {
-    const shadow = this.add.image(0, 0, key).setTintFill(0x112e38).setAlpha(0.37).setDepth(3)
-    const hull = this.add.image(0, 0, key).setDepth(5)
-    const scale = length / hull.width
-    hull.setScale(scale)
-    shadow.setScale(scale)
-    return { hull, shadow, scaleX: scale, scaleY: scale }
-  }
-
-  private updateShipView(view: ShipView, ship: Vessel) {
-    const heel = 1 - Math.abs(ship.heel) * 0.13
-    view.hull
-      .setPosition(ship.x, ship.y)
-      .setRotation(ship.heading + ship.heel * 0.025)
-      .setScale(view.scaleX, view.scaleY * heel)
-    view.shadow
-      .setPosition(ship.x + 3.5, ship.y + 8)
-      .setRotation(ship.heading)
-      .setScale(view.scaleX, view.scaleY * heel)
-  }
-
   private firePlayer(guns: Gun[]) {
     if (!guns.length) {
       this.tell('No cannon is fitted on that side.', 2)
@@ -788,7 +782,7 @@ class SkyBattle extends Phaser.Scene {
     this.drill = stage
     this.opts.drill!.onCheckpoint(stage)
     this.player.throttle = 0
-    this.player.vx = this.player.vy = this.player.angularSpeed = 0
+    this.player.vx = this.player.vy = this.player.angularSpeed = this.player.heel = 0
     this.course = undefined
     this.ramming = false
     this.chalk = undefined
@@ -916,6 +910,7 @@ class SkyBattle extends Phaser.Scene {
     if (this.ended) return
     this.ended = true
     this.terminal = outcome
+    this.showBoarding(0)
     this.save()
     this.listeners.abort()
     this.syncHUD()
@@ -1034,12 +1029,13 @@ class SkyBattle extends Phaser.Scene {
     }
     if (this.course && !left && !right) {
       const distance = Math.hypot(this.player.x - this.course.x, this.player.y - this.course.y)
-      const turn = wrapAngle(angleBetween(this.player, this.course) - this.player.heading)
+      const desired = angleBetween(this.player, this.course)
+      const turn = wrapAngle(desired - this.player.heading)
       if (distance < (this.drill === 'dodge' ? 25 : 12)) {
         this.course = undefined
         if (this.drill === 'dodge') this.player.throttle = 0
       } else {
-        helm = clamp(turn * 2.2, -1, 1)
+        helm = helmForHeading(this.player, desired)
         if (this.drill === 'dodge') this.player.throttle = Math.abs(turn) > 1.15 ? 0 : distance < 52 ? 1 : 2
       }
     }
@@ -1124,7 +1120,7 @@ class SkyBattle extends Phaser.Scene {
     if (!this.ready || this.ended || this.pausedDuel) return
     // Bound catch-up after background throttling; use the same physics tick at all display rates.
     const dt = Math.min(.16, delta / 1000)
-    this.clouds?.update(dt)
+    const beforeX = this.player.x, beforeY = this.player.y, lesson = this.drill
     this.accumulator += dt
     this.paths.clear()
     while (this.accumulator >= PHYSICS_STEP && !this.ended) {
@@ -1132,6 +1128,10 @@ class SkyBattle extends Phaser.Scene {
       this.accumulator -= PHYSICS_STEP
     }
     if (this.ended) return
+    // Measure actual chart movement after collision and boundary resolution.
+    // Reframing the Watch exercise is a placement change, not simulated flight.
+    const flew = lesson === this.drill
+    this.clouds?.update(dt, flew ? this.player.x - beforeX : 0, flew ? this.player.y - beforeY : 0)
     this.bannerTTL -= dt
     if (this.bannerTTL <= 0 && !this.banner.hidden) this.clearBanner()
     this.traceCourse()
@@ -1139,8 +1139,9 @@ class SkyBattle extends Phaser.Scene {
     this.saveIn -= dt
     if (!this.drill && this.saveIn <= 0) this.save()
     this.syncMarkers()
-    this.updateShipView(this.playerView, this.player)
-    this.updateShipView(this.foeView, this.foe)
+    this.playerView.update(this.player)
+    this.foeView.update(this.foe)
+    this.showBoarding(dt)
     this.effects(dt)
     this.hudIn -= dt
     if (this.hudIn <= 0) {
