@@ -40,6 +40,7 @@ import {
   type DrillStage,
 } from './drill'
 import './battle.css'
+import './battle-markers.css'
 
 export type BattleOutcome = BattleEnding
 export interface BattleOptions {
@@ -94,11 +95,12 @@ function measureSky(root: HTMLElement): FlightArea {
   const viewport = root.querySelector<HTMLElement>('.duel-canvas')!.getBoundingClientRect()
   const unit = SKY.width / Math.max(1, viewport.width)
   const height = Math.round(viewport.height * unit)
-  const gauges = root.querySelector<HTMLElement>('.duel-readouts')!.getBoundingClientRect()
-  const batteries = root.querySelector<HTMLElement>('.duel-console')!.getBoundingClientRect()
+  const heading = root.querySelector('.duel-top-actions')!.getBoundingClientRect()
+  const battery = root.querySelector('.duel-armament')!.getBoundingClientRect()
+  const helm = root.querySelector('.duel-orders')!.getBoundingClientRect()
   // Keep both ships within the visible sea of clouds between the instruments.
-  const top = Math.min(height * 0.17, (gauges.bottom - viewport.top) * unit)
-  const bottom = Math.max(height * 0.71, (batteries.top - viewport.top) * unit)
+  const top = Math.min(height * 0.17, (heading.bottom - viewport.top) * unit)
+  const bottom = Math.max(height * 0.71, (Math.min(battery.top, helm.top) - viewport.top) * unit)
   return { width: SKY.width, height, top, bottom }
 }
 
@@ -117,41 +119,64 @@ function hullCard(title: string, id: string): string {
 }
 
 function battery(side: Side, count: number): string {
-  const guns = GUN_POSITIONS.slice(0, count).filter((gun) => gun.side === side)
+  const guns = GUN_POSITIONS.slice(0, count).filter(gun => gun.side === side)
   if (!guns.length) return ''
-  const stations = guns
-    .map(
-      (gun) =>
-        `<button type="button" data-action="gun${gun.key}" aria-label="Fire ${side} ${gun.station ? 'aft' : 'bow'} cannon"><kbd>${gun.key}</kbd><span>${gun.station ? 'Aft' : 'Bow'} gun</span><i></i></button>`,
-    )
-    .join('')
-  const broadside =
-    guns.length > 1
-      ? `<button type="button" class="duel-volley" data-action="${side}"><kbd>${side === 'port' ? 'Q' : 'E'}</kbd> Broadside</button>`
-      : ''
-  return `<div class="duel-battery"><div class="duel-battery-title">${side} battery</div><div class="duel-buttons">${stations}${broadside}</div></div>`
+  const sideName = side === 'port' ? 'Port' : 'Starboard'
+  const expanded = count > 2
+  const stations = guns.map(gun => {
+    const station = gun.station ? 'aft' : 'bow'
+    const label = expanded ? (gun.station ? 'Aft' : 'Bow') : sideName + ' gun'
+    return `<button type="button" class="gun-station" data-action="gun${gun.key}" aria-keyshortcuts="${gun.key}" aria-label="Fire ${side} ${station} cannon"><span class="gun-reticle" aria-hidden="true"></span><span>${label}</span><small class="reload-time" aria-hidden="true"></small><i aria-hidden="true"></i></button>`
+  }).join('')
+  const volleyKey = side === 'port' ? 'Q' : 'E'
+  const volley = guns.length > 1
+    ? `<button type="button" data-action="${side}" aria-label="Fire ${side} broadside" aria-keyshortcuts="${volleyKey}" title="Fire loaded ${side} guns (${volleyKey})">Volley</button>`
+    : ''
+  return `<div class="duel-battery" role="group" aria-label="${sideName} battery" data-marker-obstacle>${expanded ? '<span class="battery-side">' + sideName + '</span>' : ''}<div class="duel-buttons">${stations}${volley}</div></div>`
 }
 
 export function mountBattle(host: HTMLElement, options: BattleOptions): () => void {
   const root = document.createElement('section')
   root.className = options.drill ? 'air-duel is-drill' : 'air-duel'
   const cannons = options.drill ? 1 : options.cannons
-  root.classList.toggle('single-battery', cannons === 1)
+  root.classList.toggle('full-batteries', cannons > 2)
   root.setAttribute('aria-label', 'Airship battle')
   const weather = options.weather
   const windAngle = (Math.atan2(weather.wind.y, weather.wind.x) * 180) / Math.PI
-  const windStation = options.drill
-    ? ''
-    : `<figure class="duel-wind"><div class="duel-anemoscope" aria-hidden="true"><i style="transform:rotate(${windAngle}deg)">➜</i></div><figcaption><strong>${weather.knots} kn · ${weather.bearing}</strong><span>${weather.kind} · ${weather.season}</span></figcaption>${options.onExit ? '<button type="button" data-exit-test>Leave test</button>' : ''}</figure>`
-  root.innerHTML = `<div class="duel-heading"><button type="button" class="duel-pause" data-action="pause" aria-label="Pause or resume battle" aria-keyshortcuts="P" aria-pressed="false"><kbd>P</kbd> Pause</button></div>
-    <div class="duel-readouts">${hullCard(options.drill ? 'You' : 'Your schooner', 'player')}<div class="duel-range"><span data-read="speed">Ahead slow</span><span data-read="range"></span></div>${hullCard(options.drill ? 'Watch' : options.opponent.name, 'enemy')}</div>
-    ${windStation}<div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading by clicking the sky, or use the helm controls below."></div><div class="duel-markers" aria-hidden="true"></div><div class="duel-banner" role="status"></div></div>
-    <div class="duel-console">${battery('port', cannons)}${battery('starboard', cannons)}<div class="duel-battery duel-orders"><div class="duel-battery-title">Helm orders</div><div class="duel-buttons"><button type="button" data-action="slower" aria-label="Reduce throttle"><kbd>S</kbd> −</button><button type="button" data-action="faster" aria-label="Increase throttle"><kbd>W</kbd> +</button><button type="button" data-action="ram" title="Steer to contact or push the touching ships apart"><kbd>B</kbd> <span data-read="ramOrder">Close in</span></button><button type="button" data-action="escape"><kbd>R</kbd> <span data-read="escapeOrder">Break away</span></button></div></div></div>
-    <div class="duel-foot"><span>${options.drill ? 'Watch exercise · Chalk rounds' : '<kbd>A</kbd> <kbd>D</kbd> turn · Click sky to steer · Fire along the rail marks · Touch to engage crews'}</span><span data-read="crew" role="status"></span></div>`
+  const windStation = options.drill ? '' : `<figure class="duel-wind" data-marker-obstacle title="${weather.summary} · ${weather.season}">
+    <span class="duel-wind-arrow" aria-hidden="true" style="transform:rotate(${windAngle}deg)">${weather.knots ? '➝' : '○'}</span>
+    <figcaption>${weather.knots} kn <span>${weather.bearing}</span></figcaption></figure>`
+  root.innerHTML = `${windStation}
+    <div class="duel-heading">
+      <div class="duel-top-actions" data-marker-obstacle>
+        ${options.onExit ? '<button type="button" class="duel-exit" data-exit-test>Leave test</button>' : ''}
+        <button type="button" class="duel-pause" data-action="pause" aria-label="Pause battle" aria-keyshortcuts="P" aria-pressed="false" title="Pause battle (P)"><span class="pause-icon" aria-hidden="true"></span><span class="resume-label" hidden>Resume</span></button>
+      </div>
+      <details class="duel-report" data-marker-obstacle hidden><summary>Battle details</summary>
+        <div class="report-body"><div class="duel-readouts">${hullCard('Wayfarer', 'player')}${hullCard(options.drill ? 'Watch · Lark' : options.opponent.name, 'enemy')}</div>
+        <p class="report-location">Range <b data-read="range"></b>${options.drill ? '' : ' · ' + weather.summary + ' · ' + weather.season}</p>
+        <p>Choose a heading in the sky, or turn with <kbd>A</kbd> / <kbd>D</kbd>. Set throttle with <kbd>W</kbd> / <kbd>S</kbd>.</p>
+        <p><kbd>1</kbd>–<kbd>4</kbd> fire fitted guns. <kbd>Q</kbd> / <kbd>E</kbd> fire the port or starboard broadside. <kbd>B</kbd> closes or pushes off. <kbd>R</kbd> breaks away.</p></div>
+      </details>
+    </div>
+    <div class="duel-stage"><div class="duel-canvas" role="img" aria-label="Overhead sky battle. Choose a heading in the sky, or turn with A and D."></div><div class="duel-markers"></div></div>
+    <div class="duel-banner" role="status" data-marker-obstacle hidden></div>
+    <div class="duel-armament">${battery('port', cannons)}${battery('starboard', cannons)}</div>
+    <div class="duel-orders">
+      <div class="duel-throttle" role="group" aria-label="Throttle" data-marker-obstacle>
+        <span class="throttle-label">Throttle <b data-read="speed"></b></span>
+        <button type="button" data-action="slower" aria-label="Reduce throttle" aria-keyshortcuts="S ArrowDown" title="Reduce throttle (S)">−</button>
+        <button type="button" data-action="faster" aria-label="Increase throttle" aria-keyshortcuts="W ArrowUp" title="Increase throttle (W)">+</button>
+      </div>
+      <div class="duel-engage" data-marker-obstacle>
+        <button type="button" data-action="ram" aria-keyshortcuts="B" title="Steer to contact or push the touching ships apart (B)"><span aria-hidden="true">↗</span><span data-read="ramOrder">Close in</span></button>
+        <button type="button" data-action="escape" aria-keyshortcuts="R" title="Set a course to leave the fight (R)"><span aria-hidden="true">×</span><span data-read="escapeOrder">Break away</span></button>
+      </div>
+    </div><span data-read="crew" class="duel-sr-only" role="status"></span>`
   if (options.drill) {
     root.insertAdjacentHTML(
       'beforeend',
-      `<section class="drill-coach" aria-label="Harbor Watch instruction"><div class="drill-heading"><span class="drill-chapter"></span><button type="button" data-action="skip">Skip exercise</button></div><h1></h1><p class="drill-copy"></p><div class="drill-actions"><button type="button" data-action="coach"></button></div></section>`,
+      `<section class="drill-coach" data-marker-obstacle aria-label="Harbor Watch instruction"><div class="drill-heading"><span class="drill-chapter"></span><button type="button" data-action="skip">Skip exercise</button></div><h1></h1><p class="drill-copy"></p><div class="drill-actions"><button type="button" data-action="coach"></button></div></section>`,
     )
   }
   if (options.shipName && !options.drill)
@@ -192,7 +217,7 @@ export function mountBattle(host: HTMLElement, options: BattleOptions): () => vo
   } catch {
     resize.observe(container)
   }
-  for (const panel of root.querySelectorAll('.duel-readouts, .duel-wind, .duel-console, .drill-coach, .duel-foot')) resize.observe(panel)
+  for (const panel of document.querySelectorAll('[data-marker-obstacle]')) resize.observe(panel)
   window.addEventListener('resize', resizeChart)
   return () => {
     resize.disconnect()
@@ -269,7 +294,7 @@ class SkyBattle extends Phaser.Scene {
     this.banner = root.querySelector('.duel-banner')!
     this.markers = new BattleMarkers(
       root.querySelector('.duel-markers')!,
-      'You · ' + (options.shipName || 'Wayfarer'),
+      options.shipName || 'Wayfarer',
       this.drill ? 'Watch · Lark' : options.opponent.name,
     )
     root.querySelectorAll<HTMLElement>('[data-read]').forEach((el) => {
@@ -366,15 +391,19 @@ class SkyBattle extends Phaser.Scene {
     this.markers.resize()
     const previous = this.area
     this.area = next
-    if (this.cameras?.main) this.setChartZoom()
-    if (previous.height === next.height && previous.top === next.top && previous.bottom === next.bottom) return
-    const objects: Point[] = [this.player, this.foe, ...this.sparks, ...this.shots]
-    if (this.buoy) objects.push(this.buoy)
-    if (this.chalk) this.chalk = undefined
-    if (this.course) objects.push(this.course)
-    const factor = (next.bottom - next.top) / Math.max(1, previous.bottom - previous.top)
-    for (const p of objects) p.y = next.top + (p.y - previous.top) * factor
-    this.clouds?.resize(next.width, next.height)
+    if (previous.height !== next.height || previous.top !== next.top || previous.bottom !== next.bottom) {
+      const objects: Point[] = [this.player, this.foe, ...this.sparks, ...this.shots]
+      if (this.buoy) objects.push(this.buoy)
+      if (this.chalk) this.chalk = undefined
+      if (this.course) objects.push(this.course)
+      const factor = (next.bottom - next.top) / Math.max(1, previous.bottom - previous.top)
+      for (const p of objects) p.y = next.top + (p.y - previous.top) * factor
+      this.clouds?.resize(next.width, next.height)
+    }
+    if (this.cameras?.main) {
+      this.setChartZoom()
+      this.syncMarkers()
+    }
   }
 
   disconnect() {
@@ -442,7 +471,7 @@ class SkyBattle extends Phaser.Scene {
         const key = event.key.toLowerCase()
         const steering = ['arrowleft', 'arrowright', 'a', 'd'].includes(key)
         if (!steering && !keyActions[key]) return
-        if (key === ' ' && event.target instanceof HTMLButtonElement) return
+        if (key === ' ' && event.target instanceof HTMLElement && event.target.closest('button, summary')) return
         event.preventDefault()
         if (event.repeat) return
         if (steering) {
@@ -498,7 +527,14 @@ class SkyBattle extends Phaser.Scene {
     }
     if (action === 'pause') {
       this.pausedDuel = !this.pausedDuel
-      this.buttons.pause.innerHTML = this.pausedDuel ? '<kbd>P</kbd> Resume' : '<kbd>P</kbd> Pause'
+      const actionName = this.pausedDuel ? 'Resume battle' : 'Pause battle'
+      this.buttons.pause.setAttribute('aria-label', actionName)
+      this.buttons.pause.title = actionName + ' (P)'
+      this.buttons.pause.querySelector<HTMLElement>('.resume-label')!.hidden = !this.pausedDuel
+      const report = this.root.querySelector<HTMLDetailsElement>('.duel-report')!
+      if (!this.pausedDuel && report.contains(document.activeElement)) this.buttons.pause.focus()
+      report.hidden = !this.pausedDuel
+      if (!this.pausedDuel) report.open = false
       this.buttons.pause.setAttribute('aria-pressed', String(this.pausedDuel))
       this.clearBanner()
     } else if (!this.pausedDuel) {
@@ -561,14 +597,14 @@ class SkyBattle extends Phaser.Scene {
   }
 
   private clearBanner() {
-    this.banner.classList.remove('visible')
+    this.banner.hidden = true
     this.banner.textContent = ''
     this.bannerTTL = 0
   }
 
   private tell(message: string, seconds: number) {
     this.banner.textContent = message
-    this.banner.classList.add('visible')
+    this.banner.hidden = false
     this.bannerTTL = seconds
   }
 
@@ -670,10 +706,12 @@ class SkyBattle extends Phaser.Scene {
         (!!this.drill && this.drill !== 'fire')
       el.classList.toggle('bearing', this.drill === 'fire' && gunBearsOn(this.player, gun, this.foe) && !el.disabled)
       el.style.setProperty('--gun-ready', `${100 * (1 - gun.cooldown / gun.reload)}%`)
-      el.title =
-        gun.cooldown > 0
-          ? `Reloading (${gun.cooldown.toFixed(1)}s)`
-          : `Fire ${gun.side} ${gun.station === 0 ? 'bow' : 'aft'} cannon`
+      const station = `Fire ${gun.side} ${gun.station === 0 ? 'bow' : 'aft'} cannon`
+      const seconds = gun.cooldown > 0 ? gun.cooldown.toFixed(1) + 's' : ''
+      el.classList.toggle('reloading', Boolean(seconds))
+      el.querySelector('.reload-time')!.textContent = seconds
+      el.setAttribute('aria-label', seconds ? station + ', reloading ' + seconds : station)
+      el.title = seconds ? station + ' · Reloading ' + seconds : station + ' (' + gunKey(gun) + ')'
     })
     for (const side of ['port', 'starboard'] as const) {
       const el = this.buttons[side]
@@ -698,6 +736,7 @@ class SkyBattle extends Phaser.Scene {
     this.buttons.escape.disabled = locked || !!this.drill
     this.buttons.ram.disabled = locked || (!!this.drill && !['board', 'melee', 'return'].includes(this.drill))
     this.buttons.ram.setAttribute('aria-pressed', String(this.ramming))
+    this.buttons.escape.setAttribute('aria-pressed', String(this.escaping))
   }
 
   private setupExercise() {
@@ -900,7 +939,7 @@ class SkyBattle extends Phaser.Scene {
     if (!this.foe.hull) sunk.push('enemy')
     if (sunk.length) {
       this.overlays.clear()
-      this.banner.classList.remove('visible')
+      this.banner.hidden = true
       if (!this.events.emit('sky:terminal', { sunk, complete })) complete()
     } else this.time.delayedCall(700, complete)
   }
@@ -1090,7 +1129,7 @@ class SkyBattle extends Phaser.Scene {
     }
     if (this.ended) return
     this.bannerTTL -= dt
-    if (this.bannerTTL <= 0) this.banner.classList.remove('visible')
+    if (this.bannerTTL <= 0 && !this.banner.hidden) this.clearBanner()
     this.traceCourse()
     this.events.emit('sky:ships', { player: this.player, enemy: this.foe })
     this.saveIn -= dt

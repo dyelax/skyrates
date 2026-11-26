@@ -1,0 +1,75 @@
+.air-duel .duel-markers {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.duel-markers .ship-leaders {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.ship-leaders .ship-leader {
+  fill: none;
+  stroke: #fff0cf;
+  stroke-opacity: .87;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-width: 1.2px;
+  filter: drop-shadow(0 1px 1px #14282d);
+}
+.duel-markers .ship-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--marker-width);
+  height: 47px;
+  isolation: isolate;
+  color: #fff2d4;
+  font: italic 400 13px/14px Georgia, serif;
+  text-shadow: 0 1px 2px #0e1b20, 0 0 2px #0e1b20, 0 2px 4px #10232a;
+}
+.duel-markers .ship-marker::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -8px -12px;
+  background: radial-gradient(ellipse at center, #11282e88 10%, #11282e50 53%, transparent 75%);
+}
+.duel-markers .ship-marker strong {
+  display: block;
+  height: 19px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: italic 400 clamp(15px, 1.15vw, 19px)/19px Georgia, serif;
+}
+.duel-markers .ship-meter {
+  display: grid;
+  grid-template-columns: 2.65em minmax(0, 1fr);
+  column-gap: 5px;
+  align-items: center;
+  height: 14px;
+}
+.duel-markers .ship-meter i {
+  display: block;
+  box-sizing: border-box;
+  overflow: hidden;
+  height: 5px;
+  border-radius: 2px;
+  background: #18333bcc;
+  box-shadow: 0 0 0 1px #173238bd, 0 1px 2px #10262b8c;
+}
+.duel-markers .ship-meter b {
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  background: #b0ecdc;
+}
+.duel-markers .crew-meter b { background: #ffd584; }
+@media (max-width: 540px) {
+  .duel-markers .ship-marker { font-size: 12px; }
+}
