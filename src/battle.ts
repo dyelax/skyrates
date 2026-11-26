@@ -1,4 +1,6 @@
 import Phaser from 'phaser'
+import { artwork } from './artwork'
+import type { PortId } from './data'
 import { mountBattleFx } from './battle-fx'
 import { prepareHull } from './battle-damage'
 import { BattleMarkers } from './battle-markers'
@@ -49,6 +51,7 @@ export interface BattleOptions {
   skill: number
   gunLevel: number
   cannons: number
+  location: PortId
   weather: WeatherReport
   drill?: { stage: DrillStage; onCheckpoint: (stage: DrillStage) => void; onLeave: (skip: boolean) => void }
   hullLevel: number
@@ -312,11 +315,12 @@ class SkyBattle extends Phaser.Scene {
 
   preload() {
     for (const [name, file] of [
+      ['battle-terrain', 'battle-' + this.opts.location],
       ['sea', 'cloud-sea'],
       ['schooner-art', 'schooner-top'],
       ['opponent-art', this.drill ? 'watch-top' : 'raider-top'],
     ]) {
-      this.load.image(name, new URL(`art/${file}.webp`, document.baseURI).href)
+      this.load.image(name, artwork(file))
     }
   }
 

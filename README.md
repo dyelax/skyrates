@@ -79,7 +79,7 @@ npm run dev
 
 `npm test` runs the economy, save, progression, and combat regression tests. `npm run build` type-checks the game and builds the static site into `dist/`. `npm run preview` serves that build locally.
 
-The TypeScript game simulation is independent of the interface. Port definitions and chapter tuning live in [the game data](src/data.ts). Phaser carries painted cloud banks downwind beneath the airships. In heavy weather, low clouds cross the ships and leave gaps to steer through. The battle test offers repeatable calm, windy and storm forecasts. The ports and workshops use still ImageGen illustrations with selectable people, buildings and counters. The same harbor image and clickable locations work when WebGL is unavailable. [Artwork and production prompts](docs/artwork.md) · [Bundled third-party notices](public/licenses)
+The TypeScript game simulation is independent of the interface. Port definitions and chapter tuning live in [the game data](src/data.ts). Battlefields overlook the four port regions, with distant clouds below the ships. During squalls, higher banks cross the flight path and leave gaps to steer through. The battle test lets you choose a location independently of its repeatable calm, windy and storm forecasts. The ports and workshops use still ImageGen illustrations with selectable people, buildings and counters. The same harbor image and clickable locations work when WebGL is unavailable. [Artwork and production prompts](docs/artwork.md) · [Bundled third-party notices](public/licenses)
 
 The public game is served from the root of the `gh-pages` branch. Publish the contents of a tested `dist/` build to that branch with a `.nojekyll` file. The `main` branch contains the source and editable game data.
 

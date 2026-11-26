@@ -34,7 +34,7 @@ interface Bank {
 
 // Wrap the original painting by feathering overlapping edges. Unlike a mirror,
 // a long northbound drift never reveals a line of symmetrical cloud peaks.
-function paintTextures(scene: Phaser.Scene, report: WeatherReport) {
+function paintTextures(scene: Phaser.Scene, report: WeatherReport, hasTerrain: boolean) {
   const sea = scene.textures.get('sea').getSourceImage() as HTMLImageElement
   const width = 1024,
     height = 512,
@@ -65,23 +65,41 @@ function paintTextures(scene: Phaser.Scene, report: WeatherReport) {
       tile.data[i + 3] = 255
     }
   }
-  ground.putImageData(tile, 0, 0)
-  const light = sunlight[report.season],
-    shade = weatherColor[report.kind]
-  ground.fillStyle = 'rgb(' + light.join(',') + ')'
-  ground.globalCompositeOperation = 'soft-light'
-  ground.globalAlpha = 0.3
-  ground.fillRect(0, 0, 1024, 512)
-  if (report.kind === 'squall') {
-    ground.globalCompositeOperation = 'multiply'
-    ground.globalAlpha = 0.5
-    ground.fillStyle = 'rgb(93, 126, 162)'
-    ground.fillRect(0, 0, width, height)
+  // Lift the bright ridges out of the familiar deep-cloud painting. The wind
+  // moves this sheet over the land; the ground can be seen between its crests.
+  // Bake each soft, offset cloud shadow into the same tile to save a draw pass.
+  if (hasTerrain) {
+    const mask = new Float32Array(width * height)
+    const pixels = tile.data
+    for (let i = 0; i < mask.length; i++) {
+      const n = i * 4
+      const luminance = (pixels[n] * .31 + pixels[n + 1] * .56 + pixels[n + 2] * .13) / 255
+      mask[i] = smooth(.56, .84, luminance) * .8
+    }
+    const shadowColor = [53, 77, 87]
+    for (let y = 0; y < height; y++) {
+      const shadowRow = ((y - 14 + height) % height) * width
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x, n = i * 4
+        const cloud = mask[i]
+        const shadow = mask[shadowRow + (x - 22 + width) % width] * .27 * (1 - cloud)
+        const alpha = cloud + shadow
+        pixels[n + 3] = alpha * 255
+        if (alpha > 0) for (let c = 0; c < 3; c++) {
+          pixels[n + c] = (pixels[n + c] * cloud + shadowColor[c] * shadow) / alpha
+        }
+      }
+    }
   }
-  ground.globalCompositeOperation = 'source-over'
-  ground.globalAlpha = 0.09 + 0.32 * report.severity
+  ground.putImageData(tile, 0, 0)
+  const light = sunlight[report.season], shade = weatherColor[report.kind]
+  ground.globalCompositeOperation = 'source-atop'
+  ground.fillStyle = 'rgb(' + light.join(',') + ')'
+  ground.globalAlpha = .09
+  ground.fillRect(0, 0, width, height)
   ground.fillStyle = 'rgb(' + shade.join(',') + ')'
-  ground.fillRect(0, 0, 1024, 512)
+  ground.globalAlpha = .04 + .28 * report.severity
+  ground.fillRect(0, 0, width, height)
   bottom.refresh()
 
   const bankShade = light.map((_, c) => mix(shade[c], [78, 107, 125][c], 0.55))
@@ -137,6 +155,8 @@ function paintTextures(scene: Phaser.Scene, report: WeatherReport) {
 }
 
 export class CloudDeck {
+  private readonly terrain?: Phaser.GameObjects.Image
+  private readonly atmosphere?: Phaser.GameObjects.Rectangle
   private readonly bottom: Phaser.GameObjects.TileSprite
   private readonly banks: Bank[] = []
   private readonly reduced = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -152,8 +172,20 @@ export class CloudDeck {
     width: number,
     height: number,
   ) {
-    paintTextures(scene, weather)
-    this.bottom = scene.add.tileSprite(0, 0, 1, 1, 'cloud-deep').setOrigin(0).setDepth(0)
+    // A missing optional location plate leaves the original opaque cloud sea.
+    // Scene teardown releases the images and their per-battle canvas textures.
+    if (scene.textures.exists('battle-terrain')) {
+      this.terrain = scene.add.image(0, 0, 'battle-terrain').setDepth(0)
+      // The blue-grey air column keeps the distant roofs and cliffs behind
+      // both silhouettes, including the Wayfarer's pale sails over warm orchards.
+      const distanceColor = weather.kind === 'squall' ? [44, 67, 85] : [99, 138, 153]
+      const [r, g, b] = weatherColor[weather.kind].map((v, i) => Math.round(mix(v, distanceColor[i], .55)))
+      const color = (r << 16) | (g << 8) | b
+      this.atmosphere = scene.add.rectangle(0, 0, 1, 1, color, .3 + .35 * weather.severity)
+        .setOrigin(0).setDepth(.1)
+    }
+    paintTextures(scene, weather, Boolean(this.terrain))
+    this.bottom = scene.add.tileSprite(0, 0, 1, 1, 'cloud-deep').setOrigin(0).setDepth(.5)
     this.resize(width, height)
   }
 
@@ -161,6 +193,11 @@ export class CloudDeck {
     if (width === this.width && height === this.height) return
     this.width = width
     this.height = height
+    if (this.terrain) {
+      const scale = Math.max(width / this.terrain.width, height / this.terrain.height)
+      this.terrain.setPosition(width / 2, height / 2).setScale(scale)
+      this.atmosphere!.setSize(width, height)
+    }
     this.bottom.setSize(width, height).setTileScale(Math.min(2, Math.max(1.05, height / 1040)))
     // Fixed world-size cells keep a tall phone chart from stretching the clouds.
     // Rebuild only on layout changes; the animation reuses the same images.
@@ -169,10 +206,12 @@ export class CloudDeck {
       b.shoulder.destroy()
     })
     this.banks.length = 0
-    const layers = this.drill ? 1 : 2
+    // Wind carries the low deck on even the clearest day. Only squall
+    // fronts build banks at flight altitude; training always keeps that air clear.
+    const upperBanks = !this.drill && this.weather.kind === 'squall'
+    const layers = upperBanks ? 2 : 1
     for (let layer = 0; layer < layers; layer++) {
       const high = layer === 1
-      if (high && this.weather.severity < 0.2) continue
       const cols = high ? 3 : 4,
         rows = Math.max(2, Math.min(9, Math.ceil((height + 420) / (high ? 370 : 320))))
       for (let row = 0; row < rows; row++)
@@ -231,7 +270,7 @@ export class CloudDeck {
       const y = wrap(b.v * down + wind.y * t * speed, down) - margin
       const angle = -0.25 + 0.26 * Math.sin(phase * 2.2) + roll * 0.045
       const size = b.size * (1 + 0.044 * swell)
-      const density = b.foreground ? Math.min(0.94, 0.05 + 1.06 * strength ** 2) : 0.38
+      const density = b.foreground ? Math.min(0.94, 0.05 + 1.06 * strength ** 2) : 0.21
       const alpha = this.staticAir && b.foreground ? density * 0.64 : density
       b.core
         .setPosition(x, y)

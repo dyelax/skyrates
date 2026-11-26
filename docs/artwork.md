@@ -93,3 +93,9 @@ ImageGen supplied eight new market and shipyard paintings and Pilot Sen’s offi
 ImageGen painted the [side elevation](../public/study/wayfarer-elevation.webp), the [unrigged deck](../public/study/wayfarer-deck.webp), the [transom](../public/study/wayfarer-stern.webp) and the [bow](../public/study/wayfarer-bow.webp). The hull uses solid curved sections, a domed gallery, round masts, cambered sails, paired shrouds and ladders. The study keeps these original sheets at hand for color registration. The game’s battle sprite remains its own lightweight artwork.
 
 Run `python3 tools/build_wayfarer.py` with Pillow and NumPy to regenerate the model files. The baker stores exterior square faces of a solid cubic lattice at two resolutions. Only the model study downloads them.
+
+## Battle landscapes
+
+ImageGen painted four aerial views for the battle chart. Sunstep’s pear trees follow the honey-colored terrace walls. Glasshouse’s glazed roofs trace its folds of violet slate. Copperfall’s crane slips sit in a rust-colored industrial basin. At Meridian, narrow bridges join white rock spires to the observatory. Each square painting is delivered as a 1024-pixel WebP and cropped to the viewport without stretching.
+
+The [Sunstep](../public/art/battle-sunstep.webp), [Glasshouse](../public/art/battle-glasshouse.webp), [Copperfall](../public/art/battle-copperfall.webp) and [Meridian](../public/art/battle-meridian.webp) paintings contain the land alone. The battle renderer draws the original [cloud-sea painting](../public/art/cloud-sea.webp) as a separate low deck and casts its moving shadows over the land. Squalls add another layer at the ships’ altitude.
