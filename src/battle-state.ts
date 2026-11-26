@@ -12,6 +12,7 @@ export interface ContactClock {
 
 export interface BattleSnapshot {
   version: 1
+  worldActor?: string
   player: Vessel
   enemy: Vessel
   playerCrew: number
@@ -33,18 +34,18 @@ const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFi
 const nonnegative = (v: unknown): v is number => finite(v) && v >= 0
 const point = (v: unknown) => record(v) && finite(v.x) && finite(v.y)
 
-function vessel(v: unknown): boolean {
+function vessel(v: unknown,unarmed=false): boolean {
   return record(v) && point(v) && [v.vx, v.vy, v.heading, v.angularSpeed, v.heel].every(finite)
     && nonnegative(v.hull) && finite(v.maxHull) && v.maxHull > 0 && v.hull <= v.maxHull
     && nonnegative(v.throttle) && Number.isInteger(v.throttle) && v.throttle <= 3
-    && Array.isArray(v.guns) && v.guns.length >= 1 && v.guns.length <= GUN_POSITIONS.length
+    && Array.isArray(v.guns) && v.guns.length >= (unarmed?0:1) && v.guns.length <= GUN_POSITIONS.length
     && v.guns.every(g => record(g) && (g.side === 'port' || g.side === 'starboard')
       && (nonnegative(g.station) && Number.isInteger(g.station) && g.station < GUN_POSITIONS.length / 2) && nonnegative(g.cooldown) && finite(g.reload) && g.reload > 0
       && (g.salvoIn === undefined || (nonnegative(g.salvoIn) && g.salvoIn <= 1)))
 }
 
 export function validBattleSnapshot(v: unknown): v is BattleSnapshot {
-  return record(v) && v.version === 1 && vessel(v.player) && vessel(v.enemy)
+  return record(v) && v.version === 1 && (v.worldActor === undefined || typeof v.worldActor === 'string' && v.worldActor.length > 0 && v.worldActor.length <= 100) && vessel(v.player) && vessel(v.enemy,typeof v.worldActor === 'string')
     && nonnegative(v.playerCrew) && nonnegative(v.enemyCrew)
     && record(v.area) && finite(v.area.top) && finite(v.area.bottom) && v.area.bottom > v.area.top
     && record(v.contact) && typeof v.contact.armed === 'boolean' && nonnegative(v.contact.clearSeconds)

@@ -19,7 +19,7 @@ export function openHandbook(state: GameState) {
     ],
     [
       'Where do I go next?',
-      'Open the sky chart and unfold Captain’s orders. Locate an order to mark its destination. Select a port to see the passage, recorded prices and Set sail. Present commissions to the named keeper in person.',
+      'Open the sky chart and unfold Captain’s orders. Locate an order to mark its destination. Select a port to read its prices and set a waypoint, or cast off and steer freely. Slow to approach a berth and dock. Present commissions to the named keeper in person.',
     ],
     [
       'Why underwrite the lens?',
@@ -31,7 +31,7 @@ export function openHandbook(state: GameState) {
     ],
     [
       'How do I fight and board?',
-      'Your first departure from Sunstep includes a Harbor Watch exercise with chalk rounds. Watch the incoming line, steer clear, turn your port gun toward the other ship and fire. The first impact costs hull. A square bow into a rail hurts that rail more. Both crews fight while touching and keep their remaining strength when apart. Steer clear or push off. An enemy with an exhausted crew and an intact hull yields. Replay the drill at the yard.',
+      'Visit Vale or a shipyard for an optional Harbor Watch exercise with chalk rounds. Watch the cutter signal, steer toward the buoy, turn your port gun toward the other ship and fire. The first impact costs hull. A square bow into a rail hurts that rail more. Both crews fight while touching and keep their remaining strength when apart. Steer clear or push off. An enemy with an exhausted crew and an intact hull yields. Replay the drill at the yard.',
     ],
     [
       'What changes as people hear of me?',

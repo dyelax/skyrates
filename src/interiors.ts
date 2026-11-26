@@ -1,3 +1,4 @@
+import { WORLD_PORTS } from './world-flight'
 import { artwork } from './artwork'
 import { armamentLabel } from './battle-model'
 import { seasonalPosting } from './seasonal-trade'
@@ -16,7 +17,7 @@ import { buyerQuantity, buyerTerms, chartObjectives } from './objectives'
 import {
   CAPTAIN_PERKS, CAPTAIN_XP_PER_LEVEL, LAST_CAPTAIN_LEVEL, NEGOTIATION,
   canLearnPerk, captainPoints, handRecord, hasCaptainPerk, qualifiedMate,
-  passageEvent, rollPirate, type CaptainPerk, CREW_PROFILES, type SailorId,
+  encounterId, laneTraffic, prizeProfile, worldOpponent, worldCombatLoad, rollPirate, type CaptainPerk, CREW_PROFILES, type SailorId,
   GOODS,
   GOOD_IDS,
   INVOICE_COST,
@@ -87,11 +88,14 @@ const safe = (value: string) =>
     /[&<>"']/g,
     (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!,
   )
-const bearing: Record<PortId, [number, number]> = {
-  sunstep: [16, 70],
-  glasshouse: [41, 15],
-  copperfall: [79, 75],
-  meridian: [85, 31],
+function chartProjection(state: GameState) {
+  const ship=state.voyage?.flight?.player
+  const positions=[...Object.values(WORLD_PORTS), ...(ship ? [ship] : [])]
+  const xs=positions.map(p=>p.x), ys=positions.map(p=>p.y)
+  const left=Math.min(...xs), right=Math.max(...xs), top=Math.min(...ys), bottom=Math.max(...ys)
+  // Let the ship sail outside the four-port rectangle without losing it off-chart.
+  const k=Math.min(650/(right-left || 1),440/(bottom-top || 1))
+  return (p:{x:number;y:number}):[number,number]=>[50+(p.x-(left+right)/2)*k/8.8,50+(p.y-(top+bottom)/2)*k/6.24]
 }
 
 interface Controls {
@@ -293,7 +297,7 @@ function mooredPrizes(state: GameState, ui: Controls) {
   const local = state.command.prizes.filter(ship => ship.port === state.port)
   if (!local.length) return ''
   return `<article class="sk-card"><h2>Prize berths</h2><ul class="sk-offers">${local.map(ship => {
-    const profile = RAIDER_PROFILES.find(p => p.id === ship.class)!
+    const profile = prizeProfile(ship.class)!
     const load = Math.min(ship.cargo.quantity,state.ship.hold-cargoUsed(state))
     const cargo = ship.cargo.quantity ? `${ship.cargo.quantity} × ${GOODS[ship.cargo.good].name}` : 'Empty hold'
     return `<li><div><h3>${profile.name} · register ${ship.id}</h3><p>${ship.captain ? handRecord(ship.captain) : COMMANDER_NAMES[ship.commander]} · ${ship.hull.toFixed(1)} / ${profile.hull} hull · ${cargo}</p></div>
@@ -399,11 +403,16 @@ function chart(state: GameState, ui: Controls) {
     ui.settings.destination = null
     ui.refresh()
   }
+  const project=chartProjection(state)
+  const position=state.voyage?.flight?.player
+  const waypoint=state.voyage?.waypoint
+  const marker=position ? project(position) : undefined
+  const shipMarker=marker && position ? `<span class="sk-flight-mark" aria-label="Wayfarer’s position" style="left:${marker[0]}%;top:${marker[1]}%"><i aria-hidden="true" style="transform:rotate(${position.heading}rad)">➤</i> Wayfarer</span>` : ''
   const nodes = PORT_IDS.map((id) => {
-    const [x, y] = bearing[id]
-    const here = id === state.port
+    const [x, y] = project(WORLD_PORTS[id])
+    const here = !state.voyage && id === state.port
     const locked = !isUnlocked(state, id)
-    return `<button type="button" class="sk-chart-node ${here ? 'is-home' : ''} ${locked ? 'is-locked' : ''}" style="left:${x}%;top:${y}%" data-port="${id}" aria-label="${PORTS[id].name}${here ? ', current port' : locked ? ', locked' : ''}" aria-haspopup="dialog" aria-pressed="${id === dest}" data-action="${ui.register(
+    return `<button type="button" class="sk-chart-node ${here ? 'is-home' : ''} ${locked ? 'is-locked' : ''}" style="left:${x}%;top:${y}%" data-port="${id}" aria-label="${PORTS[id].name}${here ? ', current port' : locked ? ', locked' : id === waypoint ? ', waypoint' : ''}" aria-haspopup="dialog" aria-pressed="${id === dest}" data-action="${ui.register(
       () => {
         if (id === dest) close()
         else {
@@ -416,10 +425,10 @@ function chart(state: GameState, ui: Controls) {
   let popover = ''
   if (dest) {
     const port = PORTS[dest]
-    const current = state.port === dest
+    const current = state.port === dest && !state.voyage
     const unlocked = isUnlocked(state, dest)
     const days = routeDays(state.port, dest)
-    const forecast = routeWeather(state.port, dest, state.day)
+    const forecast = state.voyage?.flight?.weather ?? routeWeather(state.port,dest,state.day)
     const related = (offer: BuyerOffer) => offer.source === dest || offer.destination === dest
     const localOrders = signed.filter(related)
     const postings = offers.filter(related)
@@ -435,7 +444,7 @@ function chart(state: GameState, ui: Controls) {
       <p>${current ? 'Local exchange' : unlocked ? `${days}-day passage` : 'Relight the beacon to reach this port'} · ${GOODS[port.specialty].name}</p>
       <p class="sk-forecast">${forecast.summary} · wind toward ${forecast.bearing}, ${forecast.knots} kn</p>
       ${buyerNotes}
-      ${!current && unlocked ? routeLookout(state) : ''}
+      ${!state.voyage && !current && unlocked ? routeLookout(state,dest) : ''}
       <details class="sk-fold"><summary>Climate and trade on arrival</summary><p>${CLIMATES[dest].region}. ${seasonAt(state.day + days)} · day ${state.day + days}.</p>${marketOutlook(dest,state.day+days)}</details>
       <details class="sk-fold"><summary>Port trade &amp; services</summary><p>${CITY_ECONOMY[dest].tradeLead}</p><p>${CITY_ECONOMY[dest].institution} requests ${CITY_ECONOMY[dest].order.quantity} × ${GOODS[CITY_ECONOMY[dest].order.good].name}.</p></details>
       <details class="sk-fold"><summary>Recorded prices</summary>${rememberedPrices(state, dest)}</details>
@@ -451,10 +460,11 @@ function chart(state: GameState, ui: Controls) {
               { secondary: true },
             )
           : ui.button(
-              unlocked ? 'Set sail →' : 'Route locked',
+              unlocked ? state.voyage ? 'Set waypoint' : 'Set sail →' : 'Route locked',
               () => {
                 ui.settings.destination = null
-                ui.act({ type: 'sail', to: dest })
+                if (state.voyage) ui.act({type:'setWaypoint',id:state.voyage.id,port:dest})
+                else ui.act({ type: 'sail', to: dest })
               },
               { disabled: !unlocked },
             )
@@ -471,8 +481,8 @@ function chart(state: GameState, ui: Controls) {
     ${!objectives.length && !offers.length ? '<p>Your docket is clear. Visit a freight desk for another contract.</p>' : ''}
     </div></details>`
   return `<div class="sk-mapstage"><div class="sk-map-scroll"><div class="sk-chart" aria-label="Chart of four skyports">
-      <img src="${artwork('sky-chart')}" alt="" class="sk-chart-art"><canvas aria-hidden="true" data-map width="880" height="624"></canvas>${nodes}</div></div>
-      <div class="sk-chart-plaque"><h1>Sky chart</h1><span>${PORTS[state.port].name} · ${seasonAt(state.day)} · day ${state.day}</span></div>${orders}${popover}</div>`
+      <img src="${artwork('sky-chart')}" alt="" class="sk-chart-art"><canvas aria-hidden="true" data-map width="880" height="624"></canvas>${nodes}${shipMarker}</div></div>
+      <div class="sk-chart-plaque"><h1>Sky chart</h1><span>${state.voyage ? waypoint ? 'Waypoint · ' + PORTS[waypoint].name : 'Free flight' : PORTS[state.port].name} · ${seasonAt(state.day)} · day ${state.day}</span></div>${orders}${popover}</div>`
 }
 
 function freightDesk(state: GameState, ui: Controls) {
@@ -562,11 +572,11 @@ function authority(state: GameState, ui: Controls) {
   return `<header class="sk-dialogue-heading"><div class="sk-kicker">${contact.name} · Port authority</div><div class="sk-identity">
     ${portrait ? `<img src="${artwork(portrait)}" alt="">` : ''}<h1>${speaker}</h1></div></header>
     <div class="sk-office-dialogue" data-npc-id="${npc.id}"><p class="sk-kicker" aria-label="Relationship"> ${npc.relationship.label}</p><blockquote class="sk-quote">${safe(quote)}</blockquote><details class="sk-fold" data-contact-topic><summary>How did you come to this work?</summary><p>${safe(npc.publicHistory)}</p></details>${memories}${lastTalk}</div>
-    ${job}${canPay && state.coins < INVOICE_COST ? '<details class="sk-fold sk-ledger-fold"><summary>A word from the loading dock</summary><p>A glazier chalks <i>Copperfall</i> on a stack of panes. “Their winter gardens are framed and roofless. I can cut all week and the yard still wants more.”</p></details>' : ''}
+    ${job}${state.port==='sunstep' && state.voyageCount===0 ? ui.button('Take the free Harbor Watch exercise',()=>ui.act({type:'practiceDrill'}),{secondary:true}) : ''}${canPay && state.coins < INVOICE_COST ? '<details class="sk-fold sk-ledger-fold"><summary>A word from the loading dock</summary><p>A glazier chalks <i>Copperfall</i> on a stack of panes. “Their winter gardens are framed and roofless. I can cut all week and the yard still wants more.”</p></details>' : ''}
     ${freightDesk(state, ui)}`
 }
 
-function routeLookout(state: GameState): string {
+function routeLookout(state: GameState,dest:PortId): string {
   const forecast = raiderForecast(state)
   const { exposedValue, cargoValue, low, high } = forecast
   const manifest = `Carried wealth ${exposedValue} crowns · ${state.coins} in your purse + ${cargoValue} in appraised trade cargo.`
@@ -576,12 +586,15 @@ function routeLookout(state: GameState): string {
   const leg = state.voyageCount + 1
   let intelligence = ''
   if (hasCaptainPerk(state,'readRoom')) {
-    if (passageEvent(leg,state.tender) === 'raider') {
+    const traffic=laneTraffic(state,state.port,dest,state.day,leg)
+    if (traffic==='raiders') {
       const profile = rollPirate(state.pirateSeed,leg,exposedValue)
-      const cargo = prizeManifest(state,profile.opponent,leg)
-      const skipper = skipperTerms(state,leg)
-      intelligence = `<p><b>Read the Room.</b> Dockside crews have spotted a ${profile.opponent} carrying ${cargo.quantity} crates of ${GOODS[cargo.good].name.toLowerCase()}. ${skipper.motive} ${skipper.evidence} Chance of signing articles: ${Math.round(skipper.chance*100)}%.</p>`
-    } else intelligence = '<p><b>Read the Room.</b> Dockside crews report a clear lane on this passage.</p>'
+      const contactId = Math.max(leg,(state.lastEncounterId ?? 0)+1)
+      const cargo = prizeManifest(state,profile.opponent,contactId)
+      const skipper = skipperTerms(state,contactId)
+      intelligence = `<p><b>Read the Room.</b> On the raider patrol, look for a ${profile.opponent} carrying ${cargo.quantity} crates of ${GOODS[cargo.good].name.toLowerCase()}. ${skipper.motive} ${skipper.evidence} Chance of signing articles: ${Math.round(skipper.chance*100)}%.</p>`
+    } else if (traffic==='tender') intelligence = '<p><b>Read the Room.</b> A tender has signaled distress along this route. Other traffic may cross your course.</p>'
+    else intelligence='<p><b>Read the Room.</b> No patrol has been posted on this route. Ships working nearby can still cross your course.</p>'
   }
   const range = low === high ? String(low) : low + '–' + high
   return `<details class="sk-fold"><summary>Raider lookout · ${range} crowns if hailed</summary><p>${manifest}</p><p>${forecastText(forecast)}</p>${intelligence}<p>${commandReadiness(state)}</p></details>`
@@ -596,8 +609,14 @@ function voyage(state: GameState, ui: Controls) {
   let line = 'The last mooring line falls away.'
   let copy = 'Your solar sails draw taut. The chart table is lashed down and the lookout is at the rail.'
   let terms = ''
-  let buttons = ui.button('Continue voyage →', () => ui.act({ type: 'continueVoyage' }))
-  if (leg.phase === 'tender') {
+  let buttons = ''
+  if (leg.phase === 'merchant') {
+    const merchant = leg.flight?.traffic.find(actor => actor.id === leg.hailed)
+    title = merchant ? safe(merchant.name) : 'Passing trader'
+    line = '“Good wind to you, Captain.”'
+    copy = 'The merchant returns your hail and signals that her hold and crew are safe.'
+    buttons = ui.button('Lower the flag and continue',() => ui.act({type:'leaveMerchant',id:encounterId(leg)}))
+  } else if (leg.phase === 'tender') {
     title = 'A tender adrift'
     line = 'A signal lamp winks from below the lane.'
     copy =
@@ -609,8 +628,8 @@ function voyage(state: GameState, ui: Controls) {
     const toll = raiderToll(state)
     const foe = toll.profile
     const crew = { scout: 'a light boarding crew', cutter: 'trained boarders', corsair: 'a veteran boarding crew' }[foe.id]
-    const skipper = skipperTerms(state,leg.id)
-    const manifest = prizeManifest(state,foe.id,leg.id)
+    const skipper = skipperTerms(state,encounterId(leg))
+    const manifest = prizeManifest(state,foe.id,encounterId(leg))
     const canPayCargo = toll.settlement.cargo.length > 0 && toll.exposedValue >= toll.crowns
     const cargoTerms = tollSettlementLabel(toll.settlement)
     const canPayCash = state.coins >= toll.crowns
@@ -627,18 +646,18 @@ function voyage(state: GameState, ui: Controls) {
       (toll.settlement.coins ? ` + ${toll.settlement.coins} crowns` : '') +
       (toll.settlement.change ? ` · receive ${toll.settlement.change} in change` : '')
     const paymentLabel = toll.crowns === 0 ? 'Accept clear passage' : 'Pay ' + toll.crowns + (toll.crowns === 1 ? ' crown' : ' crowns')
-    buttons = ui.button(paymentLabel, () => ui.act({ type: 'payToll', id: leg.id, payment: 'crowns' }), { disabled: !canPayCash }) +
-      (canPayCargo ? ui.button(cargoButton, () => ui.act({ type: 'payToll', id: leg.id, payment: 'cargo' }), {secondary: canPayCash}) : '') +
+    buttons = ui.button(paymentLabel, () => ui.act({ type: 'payToll', id: encounterId(leg), payment: 'crowns' }), { disabled: !canPayCash }) +
+      (canPayCargo ? ui.button(cargoButton, () => ui.act({ type: 'payToll', id: encounterId(leg), payment: 'cargo' }), {secondary: canPayCash}) : '') +
       ui.button('Refuse · take the helm', () => ui.act({ type: 'engage' }), { secondary: canPayCash || canPayCargo })
     if (!canPayCargo && !canPayCash) copy += ' Your manifest cannot cover the toll.'
-  } else if (leg.phase === 'prize' && leg.pirate && leg.prize) {
-    const profile = RAIDER_PROFILES.find(p => p.id === leg.pirate!.opponent)!
-    const manifest = prizeManifest(state,profile.id,leg.id)
+  } else if (leg.phase === 'prize' && leg.prize) {
+    const profile = worldOpponent(state)
+    const manifest = worldCombatLoad(state)!.manifest
     const max = Math.min(manifest.quantity,state.ship.hold-cargoUsed(state))
-    const skipper = skipperTerms(state,leg.id)
+    const skipper = skipperTerms(state,encounterId(leg))
     const decision = leg.prize.offer
-    const command = (who:Commander,label:string) => ui.button(label,() => ui.act({type:'commissionPrize',id:leg.id,commander:who}))
-    title = 'The raider surrenders'
+    const command = (who:Commander,label:string) => ui.button(label,() => ui.act({type:'commissionPrize',id:encounterId(leg),commander:who}))
+    title = leg.aggressor === 'player' ? profile.name + ' surrenders' : 'The raider surrenders'
     line = 'The gunports close. Across the rail, the skipper lowers the colors.'
     copy = `The ${profile.name.toLowerCase()} is afloat with ${leg.prize.hull.toFixed(1)} / ${profile.hull} hull and ${manifest.quantity} crates of ${GOODS[manifest.good].name.toLowerCase()}.
       A commander can take this ship and its cargo to a berth at ${PORTS[leg.to].name}.`
@@ -650,16 +669,16 @@ function voyage(state: GameState, ui: Controls) {
       (mate ? command('mate','Promote First Mate ' + CREW_PROFILES[mate.id].name) : '') +
       (decision === 'accepted' ? command('skipper','Commission ship with its skipper') : '') +
       (hasCaptainPerk(state,'articles') && decision === 'unasked' ? ui.button(`Offer the skipper command · ${Math.round(skipper.chance*100)}% · one attempt`,
-        () => ui.act({type:'offerCommand',id:leg.id})) : '')
+        () => ui.act({type:'offerCommand',id:encounterId(leg)})) : '')
     if (max > 0) {
       const options = Array.from({length:max},(_,i) => `<option value="${i+1}" ${i+1 === max ? 'selected' : ''}>${i+1}</option>`).join('')
       buttons += `<label>Crates to take <select data-prize-load>${options}</select></label>` +
         ui.button('Take selected cargo and release ship', () => {
           const selector = ui.page.querySelector<HTMLSelectElement>('[data-prize-load]')
-          if (selector) ui.act({type:'releasePrize',id:leg.id,crates:Number(selector.value)})
+          if (selector) ui.act({type:'releasePrize',id:encounterId(leg),crates:Number(selector.value)})
         },{secondary:true})
     } else terms += '<p>Your hold is full.</p>'
-    buttons += ui.button('Release ship with all cargo',() => ui.act({type:'releasePrize',id:leg.id,crates:0}),{secondary:true})
+    buttons += ui.button('Release ship with all cargo',() => ui.act({type:'releasePrize',id:encounterId(leg),crates:0}),{secondary:true})
   } else if (leg.phase === 'battle') {
     title = 'Under fire'
     line = 'The gun crews stand ready.'
@@ -686,6 +705,7 @@ export function renderInterior(
   navigate: Navigate,
   recordContact: ContactWriter,
   inWorkshop = false,
+  contextual = false,
 ): void {
   let settings = settingsByDocument.get(root.ownerDocument)
   if (!settings || settings.port !== state.port) {
@@ -716,7 +736,7 @@ export function renderInterior(
     voyage: null,
     log: 'sky-chart',
   }[view]
-  if (art) {
+  if (art && !contextual) {
     page.classList.add('sk-illustrated')
     page.style.setProperty('--sk-art', `url("${artwork(art)}")`)
   }
@@ -728,7 +748,7 @@ export function renderInterior(
     settings,
     page,
     register,
-    refresh: () => renderInterior(root, view, state, dispatch, navigate, recordContact, inWorkshop),
+    refresh: () => renderInterior(root, view, state, dispatch, navigate, recordContact, inWorkshop,contextual),
     button: (label, callback, options = {}) =>
       `<button type="button" class="sk-button ${options.secondary ? 'sk-secondary' : ''}" data-action="${register(callback)}" ${options.disabled ? 'disabled' : ''}>${label}</button>`,
   }
@@ -738,9 +758,10 @@ export function renderInterior(
       : `<button class="sk-crumb" data-action="${register(() => {
           settings.destination = null
           navigate('harbor')
-        })}" aria-label="Return to harbor">← Harbor</button>`
+        })}" aria-label="Return to the ship">← Return to ship</button>`
   const content = { civic, market, shipyard, log: logbook, chart, authority, voyage }[view](state, ui)
   const insideRoom = !!art
+  if (contextual) page.classList.add('context-ledger')
   page.innerHTML =
     back +
     (insideRoom ? `<div class="sk-room-overlay"><div class="sk-room-ledger">${content}</div></div>` : content)
@@ -871,12 +892,22 @@ function drawMap(canvas: HTMLCanvasElement, state: GameState, dest: PortId | nul
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   const { width: w, height: h } = canvas
-  const point = (id: PortId): [number, number] => [(w * bearing[id][0]) / 100, (h * bearing[id][1]) / 100]
+  const project=chartProjection(state)
+  const pixels=(p:{x:number;y:number}):[number,number] => {
+    const [x,y]=project(p)
+    return [w*x/100,h*y/100]
+  }
+  const point=(id:PortId)=>pixels(WORLD_PORTS[id])
+  const sky=state.voyage?.flight, waypoint=state.voyage?.waypoint
+  if (sky && waypoint) {
+    ctx.beginPath(); ctx.setLineDash([6,3]); ctx.strokeStyle='#f9d588'; ctx.lineWidth=3
+    ctx.moveTo(...pixels(sky.player)); ctx.lineTo(...point(waypoint)); ctx.stroke()
+  }
   for (let i = 0; i < PORT_IDS.length; i++)
     for (let j = i + 1; j < PORT_IDS.length; j++) {
       const a = PORT_IDS[i],
         b = PORT_IDS[j]
-      const active = (a === state.port && b === dest) || (a === dest && b === state.port)
+      const active = !state.voyage && ((a === state.port && b === dest) || (a === dest && b === state.port))
       const locked = !isUnlocked(state, a) || !isUnlocked(state, b)
       const [x1, y1] = point(a),
         [x2, y2] = point(b)

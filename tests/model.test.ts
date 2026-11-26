@@ -1,3 +1,4 @@
+import { flyToNextStop, settleThenFlyToPort } from './passage-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
@@ -22,11 +23,11 @@ import {
 function land(state: GameState, to: PortId, tow = true): GameState {
   let next = act(state, { type: 'sail', to })
   if (next.drill) next = act(next, { type: 'endDrill', skip: true })
-  next = act(next, { type: 'continueVoyage' })
-  if (next.voyage?.phase === 'tender') next = act(next, { type: 'tender', help: tow })
+  next = flyToNextStop(next)
+  if (next.voyage?.phase === 'tender') next = settleThenFlyToPort(next, { type: 'tender', help: tow })
   if (next.voyage?.phase === 'raider') {
     next = act(next, { type: 'engage' })
-    next = act(next, { type: 'resolveBattle', id: next.voyage!.id, result: 'escaped', hull: next.ship.hull })
+    next = settleThenFlyToPort(next, { type: 'resolveBattle', id: next.voyage!.id, result: 'escaped', hull: next.ship.hull })
   }
   assert.equal(next.port, to)
   assert.equal(next.voyage, null)
@@ -55,9 +56,9 @@ test('a merchant can pay a mild first raider and fund the beacon with two trade 
   state = act(state, { type: 'presentCommission' })
   state = shippingRun(state, 'copperfall', 'glass')
   state = act(state, { type: 'sail', to: 'glasshouse' })
-  state = act(state, { type: 'continueVoyage' })
+  state = flyToNextStop(state)
   assert.equal(state.voyage?.phase, 'raider')
-  state = act(state, { type: 'payToll', id: state.voyage!.id, payment: 'crowns' })
+  state = settleThenFlyToPort(state, { type: 'payToll', id: state.voyage!.id, payment: 'crowns' })
   assert.equal(state.day, 4)
   state = act(state, { type: 'payInvoice' })
   assert.equal(state.certificate, 'aboard')
@@ -144,19 +145,19 @@ test('a penniless captain can deliver bonded mail, and arriving twice cannot pay
   assert.equal(freightOffer(state), null)
   const sailing = act(state, { type: 'sail', to: offer.to })
   assert.equal(act(sailing, { type: 'buy', good: 'glass', quantity: 1 }), sailing)
-  state = act(act(reload(sailing), { type: 'endDrill', skip: true }), { type: 'continueVoyage' })
+  state = flyToNextStop(act(reload(sailing), { type: 'endDrill', skip: true }))
   assert.equal(state.coins, offer.pay)
   assert.equal(state.freight, null)
-  assert.equal(act(state, { type: 'continueVoyage' }), state)
+  assert.equal(flyToNextStop(state), state)
 })
 
 test('giving the tender a tow costs a day, changes a later greeting and reserves one contract', () => {
   const first = land(initialState(), 'glasshouse')
   let atTender = act(first, { type: 'sail', to: 'copperfall' })
-  atTender = reload(act(atTender, { type: 'continueVoyage' }))
+  atTender = reload(flyToNextStop(atTender))
   assert.equal(atTender.voyage?.phase, 'tender')
-  const passed = act(atTender, { type: 'tender', help: false })
-  let helped = act(atTender, { type: 'tender', help: true })
+  const passed = settleThenFlyToPort(atTender, { type: 'tender', help: false })
+  let helped = settleThenFlyToPort(atTender, { type: 'tender', help: true })
   assert.equal(helped.day, passed.day + 1)
   assert.equal(helped.notoriety, passed.notoriety + 1)
   assert.match(greeting(helped), /towed her/)
@@ -174,19 +175,19 @@ test('giving the tender a tow costs a day, changes a later greeting and reserves
 test('battle rewards, damage and return to port apply once for the active voyage', () => {
   const state = land(land(initialState(), 'glasshouse'), 'copperfall')
   let next = act(state, { type: 'sail', to: 'sunstep' })
-  next = act(next, { type: 'continueVoyage' })
+  next = flyToNextStop(next)
   assert.equal(next.voyage?.phase, 'raider')
   next = reload(act(next, { type: 'engage' }))
   assert.equal(next.voyage?.phase, 'battle')
   const id = next.voyage!.id
-  assert.equal(act(next, { type: 'resolveBattle', id: id + 1, result: 'won', hull: 70 }), next)
-  const won = act(next, { type: 'resolveBattle', id, result: 'boarded', hull: 64 })
+  assert.equal(settleThenFlyToPort(next, { type: 'resolveBattle', id: id + 1, result: 'won', hull: 70 }), next)
+  const won = settleThenFlyToPort(next, { type: 'resolveBattle', id, result: 'boarded', hull: 64 })
   assert.equal(won.coins, next.coins)
   assert.equal(won.voyage?.phase, 'prize')
   assert.equal(won.ship.hull, 64)
   const resumed = reload(won)
-  assert.equal(act(resumed, { type: 'resolveBattle', id, result: 'boarded', hull: 64 }), resumed)
-  const lost = act(next, { type: 'resolveBattle', id, result: 'lost', hull: 0 })
+  assert.equal(settleThenFlyToPort(resumed, { type: 'resolveBattle', id, result: 'boarded', hull: 64 }), resumed)
+  const lost = settleThenFlyToPort(next, { type: 'resolveBattle', id, result: 'lost', hull: 0 })
   assert.ok(lost.ship.hull > 0)
   assert.ok(freightOffer(lost))
   assert.equal(lost.port, 'sunstep')
@@ -368,10 +369,12 @@ test('unacknowledged notices survive later actions, travel, and reload in order'
   assert.equal(loadGame({ getItem: () => JSON.stringify(old) }).mission, 'accepted')
 })
 
-test('first sailing orders start the watch drill once and checkpoints survive reload', () => {
+test('the Watch can be chosen after a safe first castoff and checkpoints survive reload', () => {
   let state = act(initialState(), { type: 'sail', to: 'glasshouse' })
+  assert.equal(state.drill,null)
+  state=act(state,{type:'practiceDrill'})
   assert.equal(state.drill, 'briefing')
-  assert.equal(act(state, { type: 'continueVoyage' }), state)
+  assert.equal(flyToNextStop(state), state)
   assert.equal(act(state, { type: 'endDrill', skip: false }), state)
   assert.equal(advanceDrill(state, 'board'), state)
   for (const stage of ['dodge', 'fire', 'board', 'melee', 'return', 'debrief'] as const) {
@@ -381,7 +384,7 @@ test('first sailing orders start the watch drill once and checkpoints survive re
   const cleared = act(state, { type: 'endDrill', skip: false })
   assert.equal(cleared.ship.hull, 100)
   assert.equal(cleared.coins, state.coins)
-  const landed = act(cleared, { type: 'continueVoyage' })
+  const landed = flyToNextStop(cleared)
   assert.equal(landed.port, 'glasshouse')
   assert.equal(act(landed, { type: 'sail', to: 'sunstep' }).drill, null)
   const practice = act(landed, { type: 'practiceDrill' })

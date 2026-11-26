@@ -1,3 +1,4 @@
+@import './battery.css';
 body:has(.air-duel) { overflow: hidden; }
 
 .air-duel {
@@ -201,31 +202,6 @@ body:has(.air-duel) { overflow: hidden; }
   border-radius: 16px;
   background: linear-gradient(145deg, #193b3eeb, #10292ef2);
 }
-.battery-command, .battery-status, .battery-pips { display: flex; align-items: center; }
-.battery-command { gap: 8px; }
-.battery-command kbd {
-  padding: 1px 3px;
-  border: 1px solid #dbd4b780;
-  border-radius: 3px;
-  color: #efddbb;
-  font: 600 10px/1 var(--font-sans, sans-serif);
-}
-.battery-status {
-  gap: 7px;
-  color: #f2e6c8;
-  font: 600 12px/1 var(--font-sans, sans-serif);
-  font-variant-numeric: tabular-nums;
-}
-.battery-pips { gap: 3px; }
-.battery-pip {
-  display: block;
-  width: 9px;
-  height: 9px;
-  border: 1px solid #d5ceb3;
-  border-radius: 50%;
-  background: linear-gradient(to top, #a3bbae var(--charge, 0%), transparent var(--charge, 0%));
-}
-.battery-pip[data-loaded='true'] { border-color: #ffdd94; background: #ffdd94; }
 .air-duel.is-drill [data-action='escape'] { display: none; }
 .air-duel[data-lesson='fire'] .battery-fire.bearing {
   border-color: #ffdd93;

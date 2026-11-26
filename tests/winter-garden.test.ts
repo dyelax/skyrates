@@ -1,3 +1,4 @@
+import { flyToNextStop, settleThenFlyToPort } from './passage-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { existsSync } from 'node:fs'
@@ -10,11 +11,11 @@ const restore = (value: unknown) => loadGame({ getItem: () => JSON.stringify(val
 function sail(state: GameState, to: PortId) {
   let s = act(state, { type:'sail', to })
   if (s.drill) s = act(s, { type:'endDrill', skip:true })
-  s = act(s, { type:'continueVoyage' })
-  if (s.voyage?.phase === 'tender') s = act(s, { type:'tender', help:false })
+  s = flyToNextStop(s)
+  if (s.voyage?.phase === 'tender') s = settleThenFlyToPort(s, { type:'tender', help:false })
   if (s.voyage?.phase === 'raider') {
     s = act(s, { type:'engage' })
-    s = act(s, { type:'resolveBattle', id:s.voyageCount, result:'escaped', hull:s.ship.hull })
+    s = settleThenFlyToPort(s, { type:'resolveBattle', id:s.voyageCount, result:'escaped', hull:s.ship.hull })
   }
   assert.equal(s.port, to)
   return s

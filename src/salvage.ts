@@ -15,6 +15,7 @@ export interface SalvageReceipt extends PrizeManifest {
   dropped: number
 }
 export interface SalvageArea {
+  left?: number
   width: number
   top: number
   bottom: number
@@ -71,9 +72,9 @@ export function launchCargo(
   area: SalvageArea,
 ): SalvageState {
   const direction = Math.atan2(wreck.y - player.y, wreck.x - player.x)
-  const inward = Math.atan2((area.top + area.bottom) / 2 - player.y, area.width / 2 - player.x)
+  const inward = Math.atan2((area.top + area.bottom) / 2 - player.y, ((area.left ?? 0) + area.width) / 2 - player.x)
   const inside = (x: number, y: number) => ({
-    x: bound(x, 28, area.width - 28),
+    x: bound(x, (area.left ?? 0) + 28, area.width - 28),
     y: bound(y, area.top + 25, area.bottom - 25),
   })
   const crates = Array.from({ length: dropCount(manifest) }, (_, i) => {
@@ -92,7 +93,7 @@ export function launchCargo(
 export function fallingPoint(crate: SalvageCrate, secondsLeft: number, wind: Point, area: SalvageArea): Point {
   const age = SALVAGE_SECONDS - secondsLeft
   return {
-    x: bound(crate.x + wind.x * age * 1.9, 28, area.width - 28),
+    x: bound(crate.x + wind.x * age * 1.9, (area.left ?? 0) + 28, area.width - 28),
     y: bound(crate.y + wind.y * age * 1.9 + age * 0.7, area.top + 25, area.bottom - 25),
   }
 }

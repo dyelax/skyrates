@@ -1,3 +1,4 @@
+import { flyToNextStop } from './passage-fixture'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { PORT_IDS } from '../src/data'
@@ -36,7 +37,7 @@ test('the weather forecast survives departure and save round trips across a seas
   assert.equal(forecast.season, 'summer')
 })
 
-test('approach battles and Watch drills keep their regional ground on reload', () => {
+test('battles keep the nearest physical region and drills keep their port on reload', () => {
   const captain = initialState(17)
   captain.day = 12
   let stored = ''
@@ -52,17 +53,17 @@ test('approach battles and Watch drills keep their regional ground on reload', (
   assert.ok(saveGame(first, storage))
   assert.equal(battleLocation(loadGame(storage)), 'sunstep')
 
-  const docked = act(act(first, { type: 'endDrill', skip: true }), { type: 'continueVoyage' })
+  const docked = flyToNextStop(act(first, { type: 'endDrill', skip: true }))
   const replay = act(docked, { type: 'practiceDrill' })
   assert.ok(saveGame(replay, storage))
   assert.equal(battleLocation(loadGame(storage)), 'copperfall')
 
   // Version-one saves already have both ports even without regional art data.
   const third = act({ ...captain, voyageCount: 2, tender: 'helped' }, { type: 'sail', to: 'glasshouse' })
-  const hail = act(third, { type: 'continueVoyage' })
+  const hail = flyToNextStop(third)
   const fight = act(hail, { type: 'engage' })
   assert.equal(fight.voyage?.phase, 'battle')
   assert.ok(saveGame(fight, storage))
-  assert.equal(battleLocation(loadGame(storage)), 'glasshouse')
+  assert.equal(battleLocation(loadGame(storage)), 'sunstep')
   assert.deepEqual(voyageWeather(fight), routeWeather('sunstep', 'glasshouse', 12))
 })

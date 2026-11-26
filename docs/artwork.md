@@ -99,3 +99,9 @@ Run `python3 tools/build_wayfarer.py` with Pillow and NumPy to regenerate the mo
 ImageGen painted four aerial views for the battle chart. Sunstep’s pear trees follow the honey-colored terrace walls. Glasshouse’s glazed roofs trace its folds of violet slate. Copperfall’s crane slips sit in a rust-colored industrial basin. At Meridian, narrow bridges join white rock spires to the observatory. Each square painting is delivered as a 1024-pixel WebP and cropped to the viewport without stretching.
 
 The [Sunstep](../public/art/battle-sunstep.webp), [Glasshouse](../public/art/battle-glasshouse.webp), [Copperfall](../public/art/battle-copperfall.webp) and [Meridian](../public/art/battle-meridian.webp) paintings contain the land alone. The battle renderer draws the original [cloud-sea painting](../public/art/cloud-sea.webp) as a separate low deck and casts its moving shadows over the land. Squalls add another layer at the ships’ altitude.
+
+## Flying into port
+
+Four transparent skyport illustrations from the original ImageGen island sheet mark the towns at a distance. Each fades into its corresponding Blender model on approach. The ships, people, local terrain, roads, jetties, lights, and service entrances share one set of world coordinates. The clear or squalling sky and the position of the sun determine the lighting.
+
+[Build the four GLBs](../tools/ports/build_ports.py) with Blender in background mode. The recipes include Sunstep’s working mill, Copperfall’s open ship frame, Glasshouse’s ribbed barrel-vault conservatories and Meridian’s observatory. Meadow, limestone, strata and masonry use four textures cut from an original painted ground atlas generated for Skyrates. Each GLB carries named anchors for the five counters, their berths and their staff. The distant illustrations also serve captains whose devices cannot render the close-up models.

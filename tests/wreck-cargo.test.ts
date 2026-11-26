@@ -1,3 +1,4 @@
+import { flyToNextStop, settleThenFlyToPort } from './passage-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { buildOpponent, buildShip, STILL_AIR } from '../src/battle-model'
@@ -34,12 +35,12 @@ test('terminal save resumes the same wreck and awards only the collected part, o
   let state = initialState(5)
   state = act(state, { type: 'sail', to: 'glasshouse' })
   state = act(state, { type: 'endDrill', skip: true })
-  state = act(state, { type: 'continueVoyage' })
+  state = flyToNextStop(state)
   state = act(state, { type: 'sail', to: 'copperfall' })
-  state = act(state, { type: 'continueVoyage' })
-  state = act(state, { type: 'tender', help: true })
+  state = flyToNextStop(state)
+  state = settleThenFlyToPort(state, { type: 'tender', help: true })
   state = act(state, { type: 'sail', to: 'sunstep' })
-  state = act(state, { type: 'continueVoyage' })
+  state = flyToNextStop(state)
   state = act(state, { type: 'engage' })
   const id = state.voyage!.id,
     profile = raiderToll(state).profile,
@@ -49,6 +50,7 @@ test('terminal save resumes the same wreck and awards only the collected part, o
   const salvage = launchCargo('raider-1', manifest, player, wreck, area)
   const snapshot: BattleSnapshot = {
     version: 1,
+    worldActor: state.voyage!.hailed,
     player: buildShip(player, 0, 0, 0),
     enemy: foe,
     playerCrew: 6,
@@ -74,12 +76,12 @@ test('terminal save resumes the same wreck and awards only the collected part, o
   const loaded = loadGame({ getItem: () => JSON.stringify(chosen) })
   assert.deepEqual(loaded.voyage?.battle?.salvage, picked.salvage)
   const resolve = { type: 'resolveBattle' as const, id, result: 'enemyWreck' as const, hull: 100 }
-  const completed = act(loaded, resolve)
+  const completed = settleThenFlyToPort(loaded, resolve)
   assert.equal(completed.voyage, null)
   assert.equal(completed.coins, state.coins + 25)
   assert.equal(completed.cargo[manifest.good].quantity, state.cargo[manifest.good].quantity + 1)
   assert(completed.log.some((e) => e.text.includes('Recovered 1 of ' + dropCount(manifest))))
-  assert.equal(act(completed, resolve), completed)
+  assert.equal(settleThenFlyToPort(completed, resolve), completed)
   const wrongGood = structuredClone(picked)
   wrongGood.salvage!.sourceId = 'other'
   assert.equal(checkpointBattle(dead, id, wrongGood), dead)

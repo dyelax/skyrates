@@ -1,3 +1,4 @@
+import { flyToNextStop, settleThenFlyToPort } from './passage-fixture'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -16,11 +17,11 @@ const handIn = (s: GameState, id = FEN_PANES.id) =>
 function cross(s: GameState, port: PortId, tow = false) {
   let state = act(s, { type: 'sail', to: port })
   if (state.drill) state = act(state, { type: 'endDrill', skip: true })
-  state = act(state, { type: 'continueVoyage' })
-  if (state.voyage?.phase === 'tender') state = act(state, { type: 'tender', help: tow })
+  state = flyToNextStop(state)
+  if (state.voyage?.phase === 'tender') state = settleThenFlyToPort(state, { type: 'tender', help: tow })
   if (state.voyage?.phase === 'raider') {
     state = act(state, { type: 'engage' })
-    state = act(state, { type: 'resolveBattle', id: state.voyageCount, result: 'escaped', hull: state.ship.hull })
+    state = settleThenFlyToPort(state, { type: 'resolveBattle', id: state.voyageCount, result: 'escaped', hull: state.ship.hull })
   }
   assert.equal(state.port, port)
   return state
@@ -149,14 +150,14 @@ test('paying a pirate with a pane leaves Fen one short, while cash or escape pre
   docked.voyageCount = 2
   docked.tender = 'passed'
   const sailing = act(docked, { type: 'sail', to: 'copperfall' })
-  const hailed = reload(act(sailing, { type: 'continueVoyage' }))
+  const hailed = reload(flyToNextStop(sailing))
   const { crowns, settlement } = raiderToll(hailed)
   const id = hailed.voyageCount
   assert.deepEqual(settlement.cargo, [{ good: 'glass', quantity: 1 }])
-  const cash = act(hailed, { type: 'payToll', id, payment: 'crowns' })
+  const cash = settleThenFlyToPort(hailed, { type: 'payToll', id, payment: 'crowns' })
   const fight = reload(act(hailed, { type: 'engage' }))
   assert.deepEqual(raiderToll(fight), raiderToll(hailed))
-  const escape = act(fight, { type: 'resolveBattle', id, result: 'escaped', hull: fight.ship.hull })
+  const escape = settleThenFlyToPort(fight, { type: 'resolveBattle', id, result: 'escaped', hull: fight.ship.hull })
   for (const safe of [cash, escape]) {
     const receipt = reload(handIn(safe))
     assert.equal(receipt.buyers.orders[0].status, 'filled')
@@ -164,7 +165,7 @@ test('paying a pirate with a pane leaves Fen one short, while cash or escape pre
     assert.equal(receipt.xp - docked.xp, 5)
     assert.equal(receipt.tradeProfitRemainder, 6)
   }
-  const paidInGlass = reload(act(hailed, { type: 'payToll', id, payment: 'cargo' }))
+  const paidInGlass = reload(settleThenFlyToPort(hailed, { type: 'payToll', id, payment: 'cargo' }))
   const partial = reload(handIn(paidInGlass))
   assert.equal(partial.coins - paidInGlass.coins, 78)
   assert.equal(partial.xp - docked.xp, 4)

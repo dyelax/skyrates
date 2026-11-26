@@ -1,6 +1,8 @@
 const KEY = 'skyrates.sound'
 let context: AudioContext | null = null
 let wind: AudioBufferSourceNode | null = null
+let windFilter: BiquadFilterNode | null = null
+let windGain: GainNode | null = null
 let enabled = false
 export function loadSoundPreference() {
   try {
@@ -41,9 +43,23 @@ export function beginAmbience() {
   filter.type = 'lowpass'
   filter.frequency.value = 600
   const level = ctx.createGain()
+  windGain = level
+  windFilter = filter
   level.gain.value = 0.17
   wind.connect(filter).connect(level).connect(ctx.destination)
   wind.start()
+}
+
+export function flightAmbience(airspeed: number, gust: number, moored: boolean, paused: boolean) {
+  if (!enabled || !windGain || !windFilter || !context) return
+  const k = Math.min(1, airspeed / 94),
+    v = Math.min(1, Math.abs(gust))
+  windGain.gain.setTargetAtTime(
+    paused ? 0 : moored ? 0.039 : 0.07 + 0.12 * k + 0.035 * v,
+    context.currentTime,
+    0.35,
+  )
+  windFilter.frequency.setTargetAtTime(400 + 620 * k + 170 * v, context.currentTime, 0.45)
 }
 
 export function bell(event: 'select' | 'trade' | 'dock' | 'mission') {
@@ -86,6 +102,8 @@ export function toggleSound() {
     wind.stop()
     wind.disconnect()
     wind = null
+    windGain = null
+    windFilter = null
   }
 }
 
