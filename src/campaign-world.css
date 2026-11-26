@@ -18,3 +18,12 @@
 
 .sk-flight-mark { position: absolute; z-index: 3; pointer-events: none; color: #ffe7b4; text-shadow: 0 1px 3px #121e28, 0 0 6px #121e28; transform: translate(-.55em,-50%); font: 600 .85rem Barlow, sans-serif; }
 .sk-flight-mark i { display: inline-block; color: #fff2cb; }
+/* Keep the helm and mooring action free even with several unread decisions. */
+#main:has(.campaign-sky:not([hidden])) + #toast {
+  top: max(74px, calc(env(safe-area-inset-top) + 64px));
+  bottom: auto;
+  max-width: min(440px, calc(100vw - 20px));
+}
+@media(min-width:900px) {
+  #main:has(.campaign-sky:not([hidden])) + #toast { top: max(14px, env(safe-area-inset-top)); max-width: min(460px, 38vw); }
+}
