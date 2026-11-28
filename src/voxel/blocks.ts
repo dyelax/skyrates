@@ -161,7 +161,7 @@ export function dressMaterials(materials: Paints, textures: T.Texture[]) {
     mat.customProgramCacheKey = () => 'voxel-pigment-v1'
   }
 }
-export function disposeMeshes(scene: T.Object3D, materials: Paints, tex: T.Texture[]) {
+export function disposeMeshes(scene: T.Object3D, materials: Record<string,T.Material>, tex: T.Texture[]) {
   const geometry = new Set<T.BufferGeometry>(),
     other = new Set<T.Material>()
   scene.traverse((o) => {

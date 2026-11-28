@@ -1,13 +1,13 @@
+import harborCoasts from './harbor-coasts.json'
 import { PORT_IDS, type PortId } from './data'
 import { wrapAngle, type Point } from './battle-model'
 import type { WeatherReport } from './weather'
 
-export const WORLD_PORTS: Record<PortId, Point> = {
-  sunstep: { x: 0, y: 0 },
-  glasshouse: { x: 10080, y: -7560 },
-  copperfall: { x: 20580, y: 1512 },
-  meridian: { x: 27972, y: -24108 },
-}
+import { WORLD_PORTS } from './world-coordinates'
+import { clearIslets, isletCourse } from './world-islets'
+import { localPose, refreshLocalTraffic, persistentTrafficId, type LocalRun } from './world-locals'
+
+export { WORLD_PORTS }
 export type WorldSiteId = 'market' | 'shipyard' | 'authority' | 'dockworker' | 'civic'
 export interface WorldSite {
   id: WorldSiteId
@@ -73,7 +73,20 @@ export function worldCoastRadius(port: PortId, angle: number) {
     const diff = wrapAngle(a - angle)
     edge = Math.max(edge, 0.82 + 0.17 * Math.exp((-diff * diff) / 0.052))
   }
-  return edge
+  const coast = harborCoasts[port]
+  const east = port === 'sunstep' || port === 'copperfall' ? 1 : -1
+  const facing = Math.atan2(-Math.sin(angle), east * Math.cos(angle))
+  function inlet(bearing: number, center: number, width: number) {
+    const f = Math.abs(wrapAngle(bearing - center)) / width
+    return f < 1 ? 0.5 + 0.5 * Math.cos(Math.PI * f) : 0
+  }
+  const terrace = coast.terraces.reduce(
+    (sum, [center, width, lift]) => sum + lift * inlet(-angle, center, width),
+    0,
+  )
+  const basin = coast.depth * inlet(facing, coast.mouth, coast.width)
+  const secondaryInlet = coast.inlet * inlet(facing, coast.back, 0.4)
+  return edge + terrace - basin - secondaryInlet
 }
 export const WORLD_TOWN_RADIUS = 510
 export const WORLD_NOTICE_RADIUS = 430
@@ -105,6 +118,7 @@ export interface WorldTraffic {
   route: PortId[]
   next: number
   mooring?: Point
+  local?: LocalRun
 }
 export interface WorldFlight {
   version: 1
@@ -184,7 +198,14 @@ export function worldAir(f: Pick<WorldFlight, 'seed' | 'elapsed' | 'weather'>, a
   return { wind, current, lift, gust }
 }
 
-function fly(ship: WorldPose, helm: number, throttle: Throttle, f: WorldFlight, load: number, pilot: boolean) {
+function fly(
+  ship: WorldPose,
+  helm: number,
+  throttle: Throttle,
+  f: WorldFlight,
+  load: number,
+  pilot: boolean,
+) {
   const dt = WORLD_STEP,
     air = worldAir(f, ship),
     advection = { x: air.wind.x + air.current.x, y: air.wind.y + air.current.y }
@@ -267,9 +288,9 @@ export function initWorldFlight(input: WorldDeparture): WorldFlight {
       : bearing(start, worldCourse(start, to))
   const tied = origin === destination
   const traffic = input.previous
-    ? structuredClone(input.previous.traffic.filter((n) => n.id.startsWith('lane-')))
+    ? structuredClone(input.previous.traffic.filter((n) => persistentTrafficId(n.id)))
     : trafficFor(seed)
-  const spentIds = input.previous?.spentIds.filter((id) => id.startsWith('lane-')) ?? []
+  const spentIds = input.previous?.spentIds.filter((id) => persistentTrafficId(id)) ?? []
   const safe = input.safe ?? false
   for (const n of traffic)
     n.disposition = n.kind === 'raider' && !safe && !spentIds.includes(n.id) ? 'hostile' : 'passing'
@@ -302,7 +323,7 @@ export function initWorldFlight(input: WorldDeparture): WorldFlight {
     player.y += Math.sin(a) * 80
     clearLand(player)
   }
-  return {
+  const flight: WorldFlight = {
     version: 1,
     seed,
     origin,
@@ -310,7 +331,9 @@ export function initWorldFlight(input: WorldDeparture): WorldFlight {
     weather: structuredClone(input.weather),
     load: bound(input.load ?? 0, 0, 1),
     elapsed: 0,
-    skyTimeAtDeparture: input.previous ? (input.previous.skyTimeAtDeparture ?? 0) + input.previous.elapsed : 0,
+    skyTimeAtDeparture: input.previous
+      ? (input.previous.skyTimeAtDeparture ?? 0) + input.previous.elapsed
+      : 0,
     distance: 0,
     departed: false,
     remainder: 0,
@@ -322,6 +345,8 @@ export function initWorldFlight(input: WorldDeparture): WorldFlight {
     spentIds,
     player,
   }
+  refreshLocalTraffic(flight)
+  return flight
 }
 
 function advanceTraffic(f: WorldFlight, actor: WorldTraffic) {
@@ -351,11 +376,17 @@ function advanceTraffic(f: WorldFlight, actor: WorldTraffic) {
     const a = bearing(f.player, s)
     goal = { x: s.x + 500 * Math.cos(a), y: s.y + 500 * Math.sin(a) }
     throttle = 3
+  } else if (actor.local) {
+    const run = actor.local
+    const phase = (f.skyTimeAtDeparture ?? 0) + f.elapsed
+    goal = localPose(run, phase + 1.7)
+    throttle = dist(s, goal) > 83 ? 2 : 1
   } else if (actor.mooring) {
     goal = { x: actor.mooring.x + 50 * Math.cos(orbit), y: actor.mooring.y + 50 * Math.sin(orbit) }
     throttle = dist(s, goal) > 25 ? 1 : 0
   } else {
-    if (dist(s, WORLD_PORTS[actor.route[actor.next]]) < 105) actor.next = (actor.next + 1) % actor.route.length
+    if (dist(s, WORLD_PORTS[actor.route[actor.next]]) < 105)
+      actor.next = (actor.next + 1) % actor.route.length
     goal = WORLD_PORTS[actor.route[actor.next]]
   }
   const via = worldCourse(s, goal)
@@ -399,6 +430,7 @@ export function stepWorldFlight(
     f.distance += Math.hypot(f.player.x - x, f.player.y - y)
     f.departed ||= dist(f.player, WORLD_PORTS[f.origin]) > 150
     f.cooldown = Math.max(0, f.cooldown - WORLD_STEP)
+    if (Math.round(f.elapsed / WORLD_STEP) % 60 === 1) refreshLocalTraffic(f)
     for (const actor of f.traffic) advanceTraffic(f, actor)
     if (afterStep?.(WORLD_STEP) === false) {
       f.remainder = 0
@@ -443,7 +475,7 @@ export function worldCourse(from: Point, destination: Point): Point {
   const town = Object.values(WORLD_TOWNS)
     .filter((t) => dist(from, t.center) < 650 && blocked(from, destination, t))
     .sort((a, b) => dist(from, a.center) - dist(from, b.center))[0]
-  if (!town) return destination
+  if (!town) return isletCourse(from, destination)
   const ring = rings.get(town)!
   let best = Infinity,
     via = destination
@@ -473,6 +505,7 @@ export function worldCourse(from: Point, destination: Point): Point {
 }
 
 function clearLand(ship: WorldPose) {
+  clearIslets(ship)
   for (const port of PORT_IDS) {
     const town = WORLD_TOWNS[port],
       x = ship.x - town.center.x,
@@ -631,7 +664,9 @@ export function strikeWorldContact(f: WorldFlight, id: string) {
 export function nearbyAttackableMerchant(f: WorldFlight, id?: string) {
   if (f.safe) return
   return f.traffic
-    .filter((n) => n.kind === 'merchant' && !n.raided && (!id || n.id === id) && dist(n.ship, f.player) <= 185)
+    .filter(
+      (n) => n.kind === 'merchant' && !n.raided && (!id || n.id === id) && dist(n.ship, f.player) <= 185,
+    )
     .sort((a, b) => dist(f.player, a.ship) - dist(f.player, b.ship))[0]
 }
 export function provokeWorldMerchant(f: WorldFlight, id: string) {
@@ -725,6 +760,23 @@ function validTraffic(v: unknown) {
     v.clearSeconds >= 0 &&
     v.clearSeconds < 4 + WORLD_STEP &&
     typeof v.raided === 'boolean' &&
+    (v.local === undefined ||
+      (record(v.local) &&
+        persistentTrafficId(v.id) &&
+        v.kind === 'merchant' &&
+        ['circuit', 'shuttle', 'harbor'].includes(String(v.local.kind)) &&
+        point(v.local.center) &&
+        finite(v.local.major) &&
+        v.local.major > 0 &&
+        v.local.major <= 500 &&
+        finite(v.local.minor) &&
+        v.local.minor > 0 &&
+        v.local.minor <= v.local.major &&
+        finite(v.local.period) &&
+        Math.abs(v.local.period) >= 5 &&
+        Math.abs(v.local.period) < 200 &&
+        finite(v.local.bearing) &&
+        finite(v.local.phase))) &&
     validPose(v.ship) &&
     Array.isArray(v.route) &&
     v.route.length <= PORT_IDS.length &&
@@ -767,10 +819,9 @@ export function validWorldFlight(v: unknown): v is WorldFlight {
     typeof v.departed !== 'boolean' ||
     !['none', 'tender', 'raiders'].includes(String(v.encounter)) ||
     !Array.isArray(v.traffic) ||
-    v.traffic.length > 12 ||
+    v.traffic.length > 128 ||
     !v.traffic.every(validTraffic) ||
     !Array.isArray(v.spentIds) ||
-    v.spentIds.length > 12 ||
     !v.spentIds.every((id) => typeof id === 'string')
   )
     return false
@@ -778,7 +829,7 @@ export function validWorldFlight(v: unknown): v is WorldFlight {
   return (
     ids.size === v.traffic.length &&
     new Set(v.spentIds).size === v.spentIds.length &&
-    v.spentIds.every((id) => /^lane-[0-9]+$|^(raiders|tender)-[0-9]+$/.test(id)) &&
+    v.spentIds.every((id) => persistentTrafficId(id) || /^(raiders|tender)-[0-9]+$/.test(id)) &&
     (v.contactId === null ||
       (typeof v.contactId === 'string' && ids.has(v.contactId) && !v.spentIds.includes(v.contactId)))
   )

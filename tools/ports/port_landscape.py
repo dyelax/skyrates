@@ -1,5 +1,6 @@
 """Editable port terrain and craftwork. Blender X east, Y north, Z up."""
 
+import json
 import math
 import random
 from functools import lru_cache
@@ -16,6 +17,8 @@ SITES = [
     ("authority", -2.35, 22),
     ("civic", 2.46, 20),
 ]
+# Half the centreline distance between the two timber arms at each arrival slip.
+SLIP_HALF_WIDTH = {"sunstep": 4.45, "glasshouse": 5.12, "copperfall": 4.45, "meridian": 4.21}
 RX, RY = 19.25, 12.625
 TAU = math.tau
 COLORS = {
@@ -85,6 +88,16 @@ def sites_for(port):
     return data
 
 
+# Blender's north is +Y. Both the hull solver and the exported stone use the
+# same shore cut, measured at the face of the island carrying the main berth.
+HARBOR_COASTS = json.loads((Path(__file__).parents[2] / 'src' / 'harbor-coasts.json').read_text())
+
+
+def inlet(angle, center, width):
+    distance = abs(math.atan2(math.sin(angle-center), math.cos(angle-center))) / width
+    return .5 + .5 * math.cos(math.pi*distance) if distance < 1 else 0
+
+
 def coast(port, a):
     phase = PORTS.index(port) * 1.23 + 0.56
     # Port geometry comes from the same ellipse and quay pads as the game.
@@ -100,7 +113,12 @@ def coast(port, a):
         b = math.atan2(s["y"] / RY, s["x"] / RX)
         da = math.atan2(math.sin(b - a), math.cos(b - a))
         h = max(h, 0.82 + 0.17 * math.exp(-da * da / 0.052))
-    return h
+    profile = HARBOR_COASTS[port]
+    facing = math.atan2(math.sin(a), east(port) * math.cos(a))
+    shoulder = sum(lift * inlet(a, angle, width) for angle, width, lift in profile['terraces'])
+    basin = profile['depth'] * inlet(facing, profile['mouth'], profile['width'])
+    secondary_inlet = profile['inlet'] * inlet(facing, profile['back'], .40)
+    return h + shoulder - basin - secondary_inlet
 
 
 def surface(port, x, y):
@@ -672,6 +690,8 @@ def docks(port, r, b, acc):
     p = COLORS[port]
     sites = sites_for(port)
     for site, s in sites.items():
+        if site == "dockworker":
+            continue  # The arrival slip leaves the captain's mooring clear between two arms.
         start = Vector((s["x"], s["y"]))
         target = Vector(s["berth"][:2])
         u = (target - start).normalized()
@@ -683,8 +703,8 @@ def docks(port, r, b, acc):
             pt = start + a * u + w * side
             return (pt.x, pt.y, h)
 
-        if site in ("dockworker", "shipyard"):
-            wide = 4.15 if site == "dockworker" else 3.20
+        if site == "shipyard":
+            wide = 3.20
             # Solid bracketed lips, edge trusses, rails and asymmetric bollards.
             n = math.ceil(distance / 0.23)
             for j in range(n):
@@ -764,6 +784,8 @@ def docks(port, r, b, acc):
                     b, loc(distance * 0.22, -wide * 0.46, 0.08), loc(distance * 0.91, -wide * 0.39, 0.08)
                 )
     # Real external vaulted gallery under the light-colored lower terrace.
+    if port in ('glasshouse', 'sunstep', 'meridian'):
+        return  # Those towns' curved galleries follow their individual terraces below.
     angle = -1.60
     for j in range(8):
         a = angle + (j - 3.5) * 0.104
@@ -1141,6 +1163,8 @@ def build_landscape(port):
     gardens(port, r, wood, green, flowers)
     shelf_cover(green, crowns, port)
     foreground(port, r, stone, wood, flowers, green)
+    from port_quays import build_quays
+    build_quays(port, stone, dock, acc, flowers, green)
     mat = paint_material()
     strata = "strata" if port == "copperfall" else "limestone"
     textured = {key: paint_material(key) for key in {"meadow", strata, "limestone", "masonry"}}

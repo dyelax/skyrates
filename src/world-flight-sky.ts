@@ -1,3 +1,5 @@
+import { PortPreview } from './world-flight-port-preview'
+import { drawSkyIslets } from './world-islet-art'
 import { BANK_STEP, MAX_POSE, POSE_WIDTH, drawBankedHull } from './battle-rig'
 import { hullDamageStage, paintHullDamage } from './battle-damage'
 import type { BattleSnapshot } from './battle-state'
@@ -16,6 +18,10 @@ type Pose = WorldFlight['player']
 type Plate = HTMLCanvasElement | HTMLImageElement
 const TAU = Math.PI * 2
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
+const smooth = (n: number) => {
+  const t = clamp(n, 0, 1)
+  return t * t * (3 - 2 * t)
+}
 const hash = (x: number, y: number) => {
   let n = Math.imul(x + 1, 0x9e3779b1) ^ Math.imul(y + 3, 0x85ebca77)
   n = Math.imul(n ^ (n >>> 16), 0x85ebca6b)
@@ -115,7 +121,9 @@ interface SternTrail {
 
 export class WorldFlightSky {
   private context: CanvasRenderingContext2D
-  private ports = new Map<PortId, Plate>()
+  private background: CanvasRenderingContext2D
+  private foreground: CanvasRenderingContext2D
+  private preview = new PortPreview()
   private ships = new Map<string, HTMLImageElement>()
   private shadows = new Map<string, Plate>()
   private ground = new FlightGround()
@@ -136,23 +144,31 @@ export class WorldFlightSky {
   private elevation = 1.5
   private yaw = 0
   private town?: FlightTown
-  private requestedTown = false
+
   private clock = 0
   readonly combatFx = new WorldSkirmishFx()
   constructor(
     private surface: HTMLCanvasElement,
+    private modelLayer: HTMLCanvasElement,
+    private effectLayer: HTMLCanvasElement,
     origin: Point,
   ) {
     this.center = { x: origin.x, y: origin.y }
-    this.context = surface.getContext('2d', { alpha: false })!
+    this.background = surface.getContext('2d', { alpha: false })!
+    this.foreground = effectLayer.getContext('2d')!
+    this.context = this.background
+    void import('./world-flight-town')
+      .then(({ FlightTown }) => {
+        if (!this.dead) this.town = new FlightTown(modelLayer)
+      })
+      .catch(() => {
+        /* The flight and calibrated port previews also work without WebGL. */
+      })
     for (const id of PORT_IDS) {
       void image('battle-' + id).then((img) => {
         if (img && !this.dead) {
           this.ground.register(id, seamlessGround(img))
         }
-      })
-      void image('flight-port-' + id).then((img) => {
-        if (img && !this.dead) this.ports.set(id, img)
       })
     }
     for (const name of ['schooner-top', 'raider-top', 'watch-top'])
@@ -170,7 +186,7 @@ export class WorldFlightSky {
     this.dead = true
     this.town?.dispose()
     this.trails = []
-    this.ports.clear()
+    this.preview.dispose()
     this.banks = []
     this.ships.clear()
     this.shadows.clear()
@@ -183,6 +199,8 @@ export class WorldFlightSky {
     this.density = Math.min(window.devicePixelRatio || 1, 2.5, Math.sqrt(4600000 / (this.w * this.h)))
     this.surface.width = Math.round(this.w * this.density)
     this.surface.height = Math.round(this.h * this.density)
+    this.effectLayer.width = this.surface.width
+    this.effectLayer.height = this.surface.height
   }
   private planeScale(depth: number) {
     return depth >= 1 ? this.scale : this.baseScale + (this.scale - this.baseScale) * 0.1
@@ -206,8 +224,9 @@ export class WorldFlightSky {
     cannons = 1,
     repaired = false,
   ) {
-    const c = this.context,
-      p = flight.player,
+    let c = this.background
+    this.context = c
+    const p = flight.player,
       air = worldAir(flight, p)
     const ahead = reduced ? 0 : Math.min(0.95, 0.6 + Math.hypot(p.vx, p.vy) / 240)
     const closest =
@@ -220,18 +239,37 @@ export class WorldFlightSky {
       )
     const town = WORLD_TOWNS[closest],
       dist = Math.hypot(p.x - town.center.x, p.y - town.center.y)
-    const near = clamp((620 - dist) / 290, 0, 1),
+    const range = clamp((880 - dist) / 635, 0, 1),
+      near = range * range * (3 - 2 * range),
       site = town.sites.find((s) => s.id === berth?.site)
-    const target =
-      (site ? { ...site.position } : undefined) ??
-      (berth && dist < 350
-        ? { x: 0.69 * town.center.x + 0.31 * p.x, y: 0.69 * town.center.y + 0.31 * p.y }
-        : { x: p.x + p.vx * ahead, y: p.y + p.vy * ahead })
+    const lead = { x: p.x + p.vx * ahead, y: p.y + p.vy * ahead }
+    const dx = town.center.x - p.x,
+      dy = town.center.y - p.y
+    const speed = Math.hypot(p.vx, p.vy)
+    const approachRate = (dx * p.vx + dy * p.vy) / Math.max(1, dist * speed)
+    const inbound = smooth((approachRate - 0.16) / 0.64) * smooth((speed - 8) / 28)
+    // A pilot flying toward the harbor first sees its whole overhead silhouette.
+    // Pull the camera back only as far as the current viewport and bearing need.
+    const overview = inbound * smooth((1850 - dist) / 650) * (1 - smooth((650 - dist) / 360))
     const framing = site ? Math.min(this.w / 132, this.h / 164) : Math.min(this.w / 435, this.h / 350)
-    const response = reduced || !this.clock ? 1 : 1 - Math.exp(-dt * (site ? 3.3 : 4.6))
-    this.scale += (this.baseScale + (framing - this.baseScale) * near - this.scale) * response
+    const wideScale = Math.min(
+      this.baseScale,
+      Math.max(0.34, Math.min((this.w * 0.73) / (Math.abs(dx) + 265), (this.h * 0.69) / (Math.abs(dy) + 240))),
+    )
+    const transitScale = this.baseScale + (wideScale - this.baseScale) * overview
+    const closeZoom = near * (1 - overview)
+    const settle = near * near * 0.62
+    const interest = settle + (0.51 - settle) * overview
+    const target = site
+      ? { ...site.position }
+      : {
+          x: lead.x + (town.center.x - lead.x) * interest,
+          y: lead.y + (town.center.y - lead.y) * interest,
+        }
+    const response = !this.clock ? 1 : 1 - Math.exp(-dt * (site ? 3.3 : 4.6))
+    this.scale += (transitScale + (framing - transitScale) * closeZoom - this.scale) * response
     this.elevation +=
-      ((site?.id === 'dockworker' ? 0.38 : site ? 0.43 : 1.5 - 0.77 * near) - this.elevation) * response
+      ((site?.id === 'dockworker' ? 0.38 : site ? 0.43 : 1.5 - 0.77 * closeZoom) - this.elevation) * response
     this.yaw += ((closest === 'sunstep' || closest === 'copperfall' ? 0.19 : -0.19) * near - this.yaw) * response
     if (site) {
       // The counter stays visible beside its sheet (above it on a handset).
@@ -242,21 +280,28 @@ export class WorldFlightSky {
     }
     this.center.x += (target.x - this.center.x) * response
     this.center.y += (target.y - this.center.y) * response
-    this.clock += dt
-    if (near > 0) this.town?.request(closest)
-    const cityReady = this.town?.ready(closest) ?? false
-    if (near > 0 && !this.requestedTown) {
-      this.requestedTown = true
-      void import('./world-flight-town')
-        .then(({ FlightTown }) => {
-          if (!this.dead) this.town = new FlightTown()
-        })
-        .catch(() => {})
+    if (!site) {
+      const hero = this.project(p),
+        margin = Math.min(this.w * 0.19, 25 + 44 * this.scale)
+      const spillX = (hero.x - clamp(hero.x, margin, this.w - margin)) / this.scale
+      const spillY =
+        (hero.y - clamp(hero.y, Math.min(this.h * 0.25, 88), this.h - Math.min(this.h * 0.25, 94))) /
+        (this.scale * Math.sin(this.elevation))
+      this.center.x += Math.cos(this.yaw) * spillX + Math.sin(this.yaw) * spillY
+      this.center.y += Math.cos(this.yaw) * spillY - Math.sin(this.yaw) * spillX
     }
+    this.clock += dt
+    // Stream a single town before its skyline enters even an ultra-wide camera.
+    const viewRadius = Math.hypot(this.w, this.h) / (2 * this.scale * Math.sin(this.elevation))
+    const inRange = dist < viewRadius + 1730
+    if (inRange) this.town?.request(closest)
+    const gpu = !!this.town?.available
     c.setTransform(this.density, 0, 0, this.density, 0, 0)
     c.fillStyle = '#446f75'
     c.fillRect(0, 0, this.w, this.h)
-    this.combatFx.drift(c, dt, reduced)
+    const shake = this.combatFx.drift(c, dt, reduced)
+    const shakeTransform = shake ? 'translate(' + shake.x + 'px,' + shake.y + 'px)' : ''
+    if (this.modelLayer.style.transform !== shakeTransform) this.modelLayer.style.transform = shakeTransform
     // Keep the flight camera world-anchored as the near island grows above the more distant ground.
     this.ground.draw(c, this.center, this.planeScale(0.38) * (0.35 - 0.16 * near), this.w, this.h)
     const weather = flight.weather.kind,
@@ -289,22 +334,38 @@ export class WorldFlightSky {
       c.restore()
     }
     this.cloudLayer(0.66, 235, flight, reduced, false)
-    for (const id of PORT_IDS) {
-      const at = this.project(WORLD_PORTS[id]),
-        img = this.ports.get(id),
-        size = 263 * this.scale
-      if (!img || at.x < -size || at.y < -size || at.x > this.w + size || at.y > this.h + size) continue
-      const center = this.project(WORLD_TOWNS[id].center),
-        width = size * 1.5,
-        h = (width * img.height) / img.width
-      c.save()
-      c.globalAlpha = id === closest && cityReady ? 1 - near : 1
-      c.drawImage(img, center.x - width / 2, center.y - h * 0.46, width, h)
-      c.restore()
+    drawSkyIslets(
+      c,
+      this.center,
+      viewRadius + 160,
+      (point, height) => {
+        const at = this.project(point)
+        at.y -= height * this.scale * Math.cos(this.elevation)
+        return at
+      },
+      light,
+    )
+    if (inRange && (!gpu || !this.town?.ready(closest)))
+      this.preview.draw(c, closest, this.project(town.center), this.scale, this.elevation, this.yaw, light.night)
+    if (gpu && near < 1) {
+      const shadow = this.shadows.get('schooner-top')
+      if (shadow) {
+        const pos = this.project(p),
+          w = 83 * this.scale,
+          h = (w * shadow.height) / shadow.width
+        c.save()
+        c.translate(pos.x + this.scale * 12, pos.y + this.scale * 18)
+        c.rotate(p.heading + this.yaw)
+        c.globalAlpha = 0.19 * (1 - near)
+        c.drawImage(shadow, -w / 2, -h / 2, w, h)
+        c.restore()
+      }
     }
-    if (near > 0 && this.town)
-      this.town.draw(
-        c,
+    if (reduced) this.trails.length = 0
+    else this.sternWake(p, air.wind, dt)
+    const damage = battle ? hullDamageStage(battle.player.hull, battle.player.maxHull) : 0
+    if (gpu)
+      this.town!.draw(
         closest,
         this.center,
         this.scale,
@@ -313,16 +374,22 @@ export class WorldFlightSky {
         this.w,
         this.h,
         dt,
-        near,
         this.clock,
         p,
         repaired,
         light,
         reduced,
         cannons,
+        damage,
+        !battle || battle.player.hull > 0,
       )
-    if (reduced) this.trails.length = 0
-    else this.sternWake(p, air.wind, dt)
+    // Compose the opaque ground, transparent WebGL town and front cloud/ship effects
+    // directly in the browser. No full-frame WebGL readback or second copy of the island.
+    c = this.foreground
+    this.context = c
+    c.setTransform(this.density, 0, 0, this.density, 0, 0)
+    c.clearRect(0, 0, this.w, this.h)
+    if (shake) c.translate(shake.x, shake.y)
     for (const actor of flight.traffic) {
       const foe = battle?.worldActor === actor.id ? battle.enemy : undefined
       if (foe && !foe.hull) continue
@@ -354,17 +421,7 @@ export class WorldFlightSky {
         c.restore()
       }
     }
-    c.save()
-    c.globalAlpha = cityReady ? 1 - near : 1
-    this.drawShip(
-      p,
-      'schooner-top',
-      83,
-      reduced,
-      cannons,
-      battle ? hullDamageStage(battle.player.hull, battle.player.maxHull) : 0,
-    )
-    c.restore()
+    if (!gpu && (!battle || battle.player.hull > 0)) this.drawShip(p, 'schooner-top', 83, reduced, cannons, damage)
     this.combatFx.draw(
       c,
       (p) => this.project(p),

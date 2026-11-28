@@ -12,6 +12,7 @@ import {
   stepWorldFlight,
   worldAir,
   worldCourse,
+  worldCoastRadius,
   validWorldFlight,
   nearestTraffic,
   nearbyDock,
@@ -26,7 +27,8 @@ import {
   type WorldFlight,
   type Throttle,
 } from '../src/world-flight'
-import { type PortId } from '../src/data'
+import { PORT_IDS, type PortId } from '../src/data'
+import harborCoasts from '../src/harbor-coasts.json'
 import { type WeatherReport } from '../src/weather'
 const calm: WeatherReport = {
   kind: 'clear',
@@ -55,7 +57,8 @@ function start(
 ) {
   return initWorldFlight({ seed, origin, destination, weather, load, encounter: 'raiders' })
 }
-const distance = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.hypot(p.x - q.x, p.y - q.y)
+const distance = (p: { x: number; y: number }, q: { x: number; y: number }) =>
+  Math.hypot(p.x - q.x, p.y - q.y)
 function guide(f: WorldFlight, destination: { x: number; y: number }, throttle: Throttle) {
   const s = f.player,
     at = worldCourse(s, destination)
@@ -136,7 +139,7 @@ test('safe opening and multiple distinct contacts are physical, spend once and s
     Object.assign(safe.player, { x: actor.ship.x, y: actor.ship.y })
     assert.equal(nearbyHail(safe), undefined)
   }
-  assert.equal(safe.traffic.length, 6)
+  assert.equal(safe.traffic.filter((ship) => !ship.local).length, 6)
   assert.equal(safe.spentIds.length, 3)
   assert.deepEqual(safe.traffic[0].ship, f.traffic[0].ship)
 })
@@ -166,6 +169,36 @@ test('neighboring harbors take two to four minutes, all berth centers are usable
     const qx = (f.player.x - town.center.x) / town.island.rx,
       qy = (f.player.y - town.center.y) / town.island.ry
     assert(Math.hypot(qx, qy) > 1)
+  }
+})
+
+test('pilots can fly into each recessed cove and still reach the five original berths', () => {
+  for (const port of PORT_IDS) {
+    const town = WORLD_TOWNS[port]
+    const { mouth, width } = harborCoasts[port]
+    const east = port === 'copperfall' || port === 'sunstep' ? 1 : -1
+    const angle = (f: number) => Math.atan2(-Math.sin(f), east * Math.cos(f))
+    const depth = worldCoastRadius(port, angle(mouth))
+    for (const arm of [-1, 1]) assert.ok(worldCoastRadius(port, angle(mouth + arm * width)) > depth + 0.2)
+    const dx = Math.cos(angle(mouth)) * town.island.rx
+    const dy = Math.sin(angle(mouth)) * town.island.ry
+    const flight = start(41, calm, 0, port, port)
+    Object.assign(flight.player, {
+      x: town.center.x + 1.3 * dx,
+      y: town.center.y + 1.3 * dy,
+      heading: Math.atan2(-dy, -dx),
+      vx: 0, vy: 0,
+    })
+    advance(flight, 4, 0, 1)
+    const rx = (flight.player.x - town.center.x) / town.island.rx
+    const ry = (flight.player.y - town.center.y) / town.island.ry
+    const radius = Math.hypot(rx, ry)
+    assert.ok(radius < 0.83, port + ' can sail between both outer arms')
+    assert.ok(radius > worldCoastRadius(port, Math.atan2(ry, rx)), port + ' stops at the inner quay')
+    for (const site of town.sites) {
+      Object.assign(flight.player, { ...site.berth, vx: 0, vy: 0 })
+      assert.equal(nearbyWorldSite(flight)?.siteId, site.id)
+    }
   }
 })
 
@@ -224,7 +257,7 @@ test('armed and unarmed traders react only to the pilot’s own attack; struck a
     encounter: 'none',
     previous: f,
   })
-  assert.equal(keep.traffic.length, 5)
+  assert.equal(keep.traffic.filter((ship) => !ship.local).length, 5)
   assert(keep.spentIds.includes(second.id))
   assert.deepEqual(keep.player, f.player)
   let steps = 0

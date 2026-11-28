@@ -332,6 +332,8 @@ def build_architecture(port,sites):
                (1.7,1.95,2.85,3.75,2.55,.64),(4.2,1.3,1.78,2.79,1.62,.38),
                (7.3,-1.6,2.0,2.88,2.02,-.13)]
         for i,args in enumerate(homes):house(port,'Orchard lane '+str(i+1),*args)
+        house(port,'Lower quay fruit stores',2.70,-6.08,2.54,2.85,1.85,-.28)
+        house(port,'Orchard packer’s cottage',-.90,-6.21,2.32,2.28,1.65,.19)
         windmill(-6.2,6.15,surface(port,-6.2,6.15))
         house(port,'Mill granary',-8.9,3.3,2.0,3.60,1.8,.59)
     for role,site in sites.items():

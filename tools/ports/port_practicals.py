@@ -2,7 +2,7 @@
 
 import math
 import bpy
-from port_landscape import Batch, sites_for, surface, east, paint_material, pigment
+from port_landscape import SLIP_HALF_WIDTH, Batch, sites_for, surface, east, paint_material, pigment
 
 
 def specs(port):
@@ -10,7 +10,7 @@ def specs(port):
     dock = s["dockworker"]
     x, y, z = dock["berth"]
     sign = east(port)
-    jetty = ("jetty", (x - sign * 0.32, y - 1.5, 1.68), (1, 0.55, 0.24), 390, 2.0)
+    jetty = ("jetty", (x - sign * 0.32, y - SLIP_HALF_WIDTH[port], 1.68), (1, 0.55, 0.24), 390, 2.0)
     g = lambda x, y: surface(port, x, y)
     if port == "sunstep":
         m = s["market"]

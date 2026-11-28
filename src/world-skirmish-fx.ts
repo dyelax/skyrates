@@ -94,7 +94,9 @@ export class WorldSkirmishFx {
     }
     if (reduced) return
     const k = this.shake.power * (1 - this.shake.age / 0.2) ** 2 * 2.9 * Math.cos(this.shake.age * 68)
-    ctx.translate(Math.cos(this.shake.angle) * k, Math.sin(this.shake.angle) * k)
+    const offset = { x: Math.cos(this.shake.angle) * k, y: Math.sin(this.shake.angle) * k }
+    ctx.translate(offset.x, offset.y)
+    return offset
   }
   draw(
     ctx: CanvasRenderingContext2D,

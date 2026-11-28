@@ -58,7 +58,10 @@ def build_fractures(port, cliff, edge, shelves, depths):
             next_point = edge[(int(u) + 2) % n]
             tangent = Vector((next_point.x - prev.x, next_point.y - prev.y, 0)).normalized()
             inward = Vector((-tangent.y, tangent.x, 0))
-            angular_radius = (next_point - prev).xy.length / (4 * math.tau / n)
+            # A deeply incised inlet has a long bank inside a short sector.
+            # Break its stone into ordinary joints; the radial shelf mesh
+            # already follows the whole recess beneath the quay.
+            angular_radius = min(20.0, (next_point - prev).xy.length / (4 * math.tau / n))
             width = angular_radius * arc * rng.uniform(1.01, 1.29)
             wave = 0.5 + 0.5 * math.sin(3 * angle + 0.47 * region) * math.cos(2 * angle - 0.3)
             depth = {"sunstep": 1.0, "copperfall": 1.13, "glasshouse": 0.99, "meridian": 1.23}[port] * (
