@@ -11,8 +11,8 @@ const positive = (n: number, limit: number) => ((Math.floor(n) % limit) + limit)
 export class FlightGround {
   private sources = new Map<PortId, ImageData>()
   private tiles = new Map<string, HTMLCanvasElement>()
-  register(port: PortId, source: HTMLCanvasElement) {
-    this.sources.set(port, source.getContext('2d')!.getImageData(0, 0, source.width, source.height))
+  register(port: PortId, source: ImageData) {
+    this.sources.set(port, source)
     // Preserve tiles outside the incoming image's region; loading a distant
     // painting must not regenerate the current approach under the helm.
     for (const key of this.tiles.keys()) {
