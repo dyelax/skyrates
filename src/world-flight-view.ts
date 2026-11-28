@@ -492,8 +492,9 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
       read('where').textContent = PORTS[waypoint].name
       read('distance').textContent = bearing(p, pin) + ' · ' + distanceLabel(distance(p, pin))
     } else {
-      read('where').textContent = 'Open sky'
-      read('distance').textContent = 'Free flight'
+      const harbor = PORT_IDS.find((id) => distance(p, WORLD_TOWNS[id].center) <= WORLD_TOWN_RADIUS)
+      read('where').textContent = harbor ? PORTS[harbor].name : 'Open sky'
+      read('distance').textContent = harbor ? 'Berth · ' + distanceLabel(distance(p, WORLD_PORTS[harbor])) : 'Free flight'
     }
     read('air').textContent =
       flight.weather.knots + ' kn ' + flight.weather.bearing + ' · ' + flight.weather.summary
