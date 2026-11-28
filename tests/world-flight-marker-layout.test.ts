@@ -41,3 +41,27 @@ test('combat meters separate as two live anchors overlap without snapping at 100
     last = own
   }
 })
+
+test('visible north and south navigators leave a smooth clear lane for offscreen range chips', () => {
+  for (const [w, h, cw, map] of [
+    [1140, 750, 160, { left: 940, top: 64, bottom: 229 }],
+    [390, 844, 147, { left: 244, top: 130, bottom: 265 }],
+    [390, 844, 147, { left: 244, top: 538, bottom: 674 }],
+  ] as const) {
+    let previous
+    for (let i = 0; i < 7200; i++) {
+      const a = (i * Math.PI) / 3600
+      const p = bearingPosition(
+        { x: w / 2 + 20000 * Math.cos(a), y: h / 2 + 20000 * Math.sin(a) },
+        w,
+        h,
+        true,
+        cw,
+        map,
+      )
+      assert.ok(p.x + cw / 2 <= map.left || p.y + 15 < map.top || p.y - 15 > map.bottom)
+      if (previous) assert.ok(Math.hypot(p.x - previous.x, p.y - previous.y) < 7)
+      previous = p
+    }
+  }
+})

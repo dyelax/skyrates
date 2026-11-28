@@ -1,5 +1,5 @@
 import { mountFlightMinimap } from './world-flight-minimap'
-import { bearingPosition, combatLabelPosition } from './world-flight-marker-layout'
+import { bearingPosition, combatLabelPosition, type MapBounds } from './world-flight-marker-layout'
 import { GOODS, PORTS, PORT_IDS, type PortId } from './data'
 import { CITY_ECONOMY } from './city-economy'
 import { npcAtPort, npcName } from './characters'
@@ -143,6 +143,16 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
     get<HTMLCanvasElement>('.flight-foreground'),
     flight.player,
   )
+  const navigator = get<HTMLElement>('.flight-minimap')
+  let mapBounds: MapBounds | undefined
+  function measureNavigator() {
+    mapBounds = undefined
+    if (navigator.hidden || host.inert || paused) return
+    const rect = navigator.getBoundingClientRect(),
+      origin = root.getBoundingClientRect()
+    if (rect.width && rect.height)
+      mapBounds = { left: rect.left - origin.left, top: rect.top - origin.top, bottom: rect.bottom - origin.top }
+  }
   const markLayer = get<HTMLElement>('.flight-marks'),
     marks = new Map<string, HTMLButtonElement>()
   const specs = new Map<string, () => void>(),
@@ -164,6 +174,7 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
     const r = root.getBoundingClientRect()
     w = r.width
     h = r.height
+    measureNavigator()
     sky.resize(w, h)
     paint(0)
     hud()
@@ -261,7 +272,16 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
       const hidden = !anchor.edge && (at.x < -64 || at.y < -64 || at.x > w + 64 || at.y > h + 64)
       if (el.hidden !== hidden) el.hidden = hidden
       if (hidden) continue
-      const pos = anchor.edge ? bearingPosition(at, w, h, underway, widths.get(el) ?? 120) : { ...at, edge: false }
+      const pos = anchor.edge
+        ? bearingPosition(
+            at,
+            w,
+            h,
+            underway,
+            widths.get(el) ?? 120,
+            id.startsWith('port-') ? mapBounds : undefined,
+          )
+        : { ...at, edge: false }
       el.classList.toggle('edge', pos.edge)
       const transform = 'translate3d(' + pos.x.toFixed(2) + 'px,' + pos.y.toFixed(2) + 'px,0) translate(-50%,-50%)'
       if (transforms.get(el) !== transform) {
@@ -533,8 +553,9 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
     }
     const air = worldAir(flight, p)
     flightAmbience(Math.hypot(p.vx - air.wind.x, p.vy - air.wind.y), air.gust, tied, paused || document.hidden)
-    updateMarks()
     combatHud()
+    measureNavigator()
+    updateMarks()
   }
   function paint(dt: number) {
     sky.render(
@@ -546,8 +567,9 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
       state.ship.cannons,
       !!state.garden,
     )
-    positionMarks()
     minimap.update(flight, waypoint, underway)
+    if (Boolean(mapBounds) === navigator.hidden && !host.inert && !paused) measureNavigator()
+    positionMarks()
   }
   function pause(value: boolean) {
     paused = value
