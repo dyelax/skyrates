@@ -1,3 +1,4 @@
+import harborCoasts from './harbor-coasts.json'
 import { PORT_IDS, type PortId } from './data'
 import { wrapAngle, type Point } from './battle-model'
 import type { WeatherReport } from './weather'
@@ -72,7 +73,20 @@ export function worldCoastRadius(port: PortId, angle: number) {
     const diff = wrapAngle(a - angle)
     edge = Math.max(edge, 0.82 + 0.17 * Math.exp((-diff * diff) / 0.052))
   }
-  return edge
+  const coast = harborCoasts[port]
+  const east = port === 'sunstep' || port === 'copperfall' ? 1 : -1
+  const facing = Math.atan2(-Math.sin(angle), east * Math.cos(angle))
+  function inlet(bearing: number, center: number, width: number) {
+    const f = Math.abs(wrapAngle(bearing - center)) / width
+    return f < 1 ? 0.5 + 0.5 * Math.cos(Math.PI * f) : 0
+  }
+  const terrace = coast.terraces.reduce(
+    (sum, [center, width, lift]) => sum + lift * inlet(-angle, center, width),
+    0,
+  )
+  const basin = coast.depth * inlet(facing, coast.mouth, coast.width)
+  const secondaryInlet = coast.inlet * inlet(facing, coast.back, 0.4)
+  return edge + terrace - basin - secondaryInlet
 }
 export const WORLD_TOWN_RADIUS = 510
 export const WORLD_NOTICE_RADIUS = 430
