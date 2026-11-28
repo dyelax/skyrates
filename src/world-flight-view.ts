@@ -1,3 +1,5 @@
+import { mountFlightMinimap } from './world-flight-minimap'
+import { bearingPosition, combatLabelPosition } from './world-flight-marker-layout'
 import { GOODS, PORTS, PORT_IDS, type PortId } from './data'
 import { CITY_ECONOMY } from './city-economy'
 import { npcAtPort, npcName } from './characters'
@@ -28,7 +30,6 @@ import {
   type WorldFlight,
 } from './world-flight'
 import { WorldFlightSky } from './world-flight-sky'
-import { mountFlightMinimap } from './world-flight-minimap'
 import { battery, syncBattery } from './battle-battery'
 import { armamentLabel, armedSide } from './battle-model'
 import { hullContact } from './contact-combat'
@@ -123,7 +124,7 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
   root.className = 'flight-world'
   root.setAttribute('aria-label', 'Skyways')
   root.tabIndex = -1
-  root.innerHTML = `<canvas aria-label="Overhead flight across the four skyports"></canvas><div class="flight-marks"></div>
+  root.innerHTML = `<canvas class="flight-landscape" aria-label="Overhead flight across the four skyports"></canvas><canvas class="flight-towns" aria-hidden="true"></canvas><canvas class="flight-foreground" aria-hidden="true"></canvas><div class="flight-marks"></div>
     <div class="flight-instruments"><div class="flight-position"><span class="flight-rose">${icon('compass')}</span><div><strong data-f="where"></strong><span data-f="distance"></span></div></div>
       <div class="flight-top-actions"><button data-op="chart" title="Sky chart" aria-label="Sky chart">${icon('map')}</button><button data-op="log" title="Captain’s log" aria-label="Captain’s log">${icon('book-open')}</button><button data-op="pause" title="Pause flight (P)" aria-label="Pause flight" aria-pressed="false"><span class="flight-pause-glyph">Ⅱ</span></button></div></div>
     <div class="flight-bearing" data-f="air"></div><div class="flight-actions"><div class="flight-helm"><button data-turn="-1" aria-keyshortcuts="A ArrowLeft" aria-label="Steer to port">↶</button><button data-op="course" aria-keyshortcuts="C" aria-pressed="false">${icon('compass')}<span>Hold course</span></button><button data-turn="1" aria-keyshortcuts="D ArrowRight" aria-label="Steer to starboard">↷</button></div>
@@ -132,15 +133,31 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
     <div class="flight-port-battery" hidden></div><div class="flight-combat-status" aria-live="polite" hidden></div>
     <div class="flight-paused" hidden><strong>Flight paused</strong><p>A / D steers. W / S sets throttle. C holds a course. F docks or hails. M toggles the mini-map.</p><button data-op="sound" aria-label="Flight sound" aria-pressed="false"></button><button data-op="fullscreen" hidden>Full screen</button><button data-op="resume">Resume</button></div>`
   host.replaceChildren(root)
-  const minimap = mountFlightMinimap(root, (port) => isUnlocked(state, port))
   const get = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!
   const button = (op: string) => get<HTMLButtonElement>('[data-op="' + op + '"]')
   const read = (key: string) => get<HTMLElement>('[data-f="' + key + '"]')
-  const sky = new WorldFlightSky(get<HTMLCanvasElement>('canvas'), flight.player)
+  const minimap = mountFlightMinimap(root, (port) => isUnlocked(state, port))
+  const sky = new WorldFlightSky(
+    get<HTMLCanvasElement>('.flight-landscape'),
+    get<HTMLCanvasElement>('.flight-towns'),
+    get<HTMLCanvasElement>('.flight-foreground'),
+    flight.player,
+  )
   const markLayer = get<HTMLElement>('.flight-marks'),
     marks = new Map<string, HTMLButtonElement>()
   const specs = new Map<string, () => void>(),
     visibleMarks = new Set<string>()
+  const anchors = new Map<string, { at: () => Point; edge: boolean }>()
+  const contents = new Map<string, string>()
+  const widths = new WeakMap<HTMLElement, number>(),
+    transforms = new WeakMap<HTMLElement, string>()
+  const markerSize = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const width = entry.borderBoxSize[0]?.inlineSize ?? (entry.target as HTMLElement).offsetWidth
+      if (width) widths.set(entry.target as HTMLElement, width)
+    }
+    positionMarks()
+  })
   let w = 0,
     h = 0
   const resize = new ResizeObserver(() => {
@@ -203,15 +220,12 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
   function mark(
     id: string,
     label: string,
-    at: Point,
+    at: () => Point,
     content: string,
     kind: string,
     action: () => void,
     edge = false,
   ) {
-    if (at.x < -64 || at.y < -64 || at.x > w + 64 || at.y > h + 64) {
-      if (!edge) return
-    }
     let el = marks.get(id)
     if (!el) {
       el = document.createElement('button')
@@ -220,32 +234,46 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
       el.addEventListener('click', () => specs.get(id)?.(), { signal: stop.signal })
       marks.set(id, el)
       markLayer.append(el)
+      markerSize.observe(el)
     }
     visibleMarks.add(id)
     specs.set(id, action)
-    el.hidden = false
-    el.className = 'flight-mark ' + kind
-    if (el.innerHTML !== content) el.innerHTML = content
-    if (el.getAttribute('aria-label') !== label) el.setAttribute('aria-label', label)
-    el.title = label
-    const verticalLimit = underway ? 92 : 66
-    let x = at.x,
-      y = at.y
-    if (edge) {
-      const center = { x: w / 2, y: h / 2 },
-        dx = x - center.x,
-        dy = y - center.y
-      const insetX = w < 550 ? 42 : 76,
-        factor = Math.min(
-          1,
-          (center.x - insetX) / Math.max(1, Math.abs(dx)),
-          (center.y - verticalLimit) / Math.max(1, Math.abs(dy)),
-        )
-      x = center.x + dx * factor
-      y = center.y + dy * factor
-      if (factor < 1) el.classList.add('edge')
+    anchors.set(id, { at, edge })
+    const kindClass = 'flight-mark ' + kind
+    if (el.dataset.kind !== kindClass) {
+      el.dataset.kind = kindClass
+      el.className = kindClass
     }
-    el.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px) translate(-50%,-50%)'
+    if (contents.get(id) !== content) {
+      el.innerHTML = content
+      contents.set(id, content)
+    }
+    if (el.title !== label) {
+      el.title = label
+      el.setAttribute('aria-label', label)
+    }
+  }
+  function positionMarks() {
+    for (const id of visibleMarks) {
+      const el = marks.get(id)!,
+        anchor = anchors.get(id)!,
+        at = anchor.at()
+      const hidden = !anchor.edge && (at.x < -64 || at.y < -64 || at.x > w + 64 || at.y > h + 64)
+      if (el.hidden !== hidden) el.hidden = hidden
+      if (hidden) continue
+      const pos = anchor.edge ? bearingPosition(at, w, h, underway, widths.get(el) ?? 120) : { ...at, edge: false }
+      el.classList.toggle('edge', pos.edge)
+      const transform = 'translate3d(' + pos.x.toFixed(2) + 'px,' + pos.y.toFixed(2) + 'px,0) translate(-50%,-50%)'
+      if (transforms.get(el) !== transform) {
+        el.style.transform = transform
+        transforms.set(el, transform)
+      }
+    }
+  }
+  function offset(point: Point, y: number) {
+    const at = sky.project(point)
+    at.y += y
+    return at
   }
   function bars(name: string, ship: NonNullable<typeof battle>['player'], crew: number, maxCrew: number) {
     const meter = (label: string, symbol: string, current: number, max: number, extra: string) =>
@@ -278,12 +306,11 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
     if (nearbyPort && !battle && (!underway || state.voyage?.phase === 'underway')) {
       for (const site of WORLD_TOWNS[nearbyPort].sites) {
         const id = site.id as Site,
-          label = siteName(nearbyPort, id),
-          at = sky.project(site.position)
+          label = siteName(nearbyPort, id)
         mark(
           'site-' + id,
           label,
-          at,
+          () => sky.project(site.position),
           icon(siteIcon[id]) + '<span>' + label + '</span>',
           'site' + (focused === id || approach === id ? ' active' : ''),
           () => approachSite(id, nearbyPort),
@@ -304,14 +331,12 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
           selected = port === waypoint
         const reference = nearbyBearings.includes(port)
         if (!selected && !reference && d > 570) continue
-        const at = sky.project(point)
-        at.y -= 35
         const short = PORTS[port].name.split(' ')[0],
           label = PORTS[port].name + ' · ' + bearing(flight.player, point) + ' · ' + distanceLabel(d)
         mark(
           'port-' + port,
           label,
-          at,
+          () => offset(point, -35),
           icon(selected ? 'compass' : 'anchor') +
             '<span>' +
             short +
@@ -325,13 +350,11 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
       for (const actor of flight.traffic) {
         const d = distance(flight.player, actor.ship)
         if (d > 480 || actor.id === battle?.worldActor) continue
-        const at = sky.project(actor.ship)
-        at.y -= 29
         const text = actor.name + ' · ' + distanceLabel(d)
         mark(
           'ship-' + actor.id,
           text,
-          at,
+          () => offset(actor.ship, -29),
           icon(actor.kind === 'raider' ? 'flag' : 'sailboat') + '<span>' + escapeText(actor.name) + '</span>',
           'traffic ' + actor.kind,
           () => {
@@ -341,18 +364,13 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
         )
       }
       if (battle) {
-        const p = sky.project(flight.player),
-          q = sky.project(battle.enemy),
-          close = Math.hypot(q.x - p.x, q.y - p.y) < 100,
-          name = flight.traffic.find((t) => t.id === battle?.worldActor)?.name ?? 'Opponent'
-        p.y += close ? 31 : -36
-        q.y -= 36
-        p.x -= close ? 28 : 0
-        q.x += close ? 30 : 0
+        const name = flight.traffic.find((t) => t.id === battle?.worldActor)?.name ?? 'Opponent'
+        const combatAnchor = (enemy: boolean) =>
+          combatLabelPosition(sky.project(flight.player), sky.project(battle?.enemy ?? flight.player), enemy)
         mark(
           'fight-player',
           'Your ship status',
-          p,
+          () => combatAnchor(false),
           bars('You', battle.player, battle.playerCrew, boardingStrength(state)),
           'combat',
           () => pause(true),
@@ -360,7 +378,7 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
         mark(
           'fight-enemy',
           name + ' status',
-          q,
+          () => combatAnchor(true),
           bars(name, battle.enemy, battle.enemyCrew, enemyStrength),
           'combat',
           () => pause(true),
@@ -368,7 +386,19 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
         )
       }
     }
-    for (const [id, el] of marks) if (!visibleMarks.has(id)) el.hidden = true
+    // Keep a keyboard-focused destination mounted while flight instruments refresh.
+    for (const [id, el] of marks) {
+      if (visibleMarks.has(id)) continue
+      if (id.startsWith('ship-')) {
+        markerSize.unobserve(el)
+        el.remove()
+        marks.delete(id)
+        contents.delete(id)
+        specs.delete(id)
+        anchors.delete(id)
+      } else el.hidden = true
+    }
+    positionMarks()
   }
   let fitted = 0,
     lastNotice = ''
@@ -515,6 +545,7 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
       state.ship.cannons,
       !!state.garden,
     )
+    positionMarks()
     minimap.update(flight, waypoint, underway)
   }
   function pause(value: boolean) {
@@ -860,6 +891,7 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
       resize.disconnect()
       stop.abort()
       minimap.destroy()
+      markerSize.disconnect()
       sky.destroy()
       root.remove()
     },

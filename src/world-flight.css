@@ -12,7 +12,7 @@
   font-family: Barlow, sans-serif;
   outline: 0;
 }
-.flight-world canvas,
+.flight-world > canvas,
 .flight-marks {
   position: absolute;
   inset: 0;

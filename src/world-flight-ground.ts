@@ -13,7 +13,15 @@ export class FlightGround {
   private tiles = new Map<string, HTMLCanvasElement>()
   register(port: PortId, source: HTMLCanvasElement) {
     this.sources.set(port, source.getContext('2d')!.getImageData(0, 0, source.width, source.height))
-    this.tiles.clear()
+    // Preserve tiles outside the incoming image's region; loading a distant
+    // painting must not regenerate the current approach under the helm.
+    for (const key of this.tiles.keys()) {
+      const [col, row] = key.split(',').map(Number),
+        x = (col + 0.5) * SPAN,
+        y = (row + 0.5) * SPAN
+      const range = (id: PortId) => Math.hypot(x - WORLD_PORTS[id].x, y - WORLD_PORTS[id].y)
+      if (range(port) < Math.min(...Array.from(this.sources.keys(), range)) + SPAN * 2.45) this.tiles.delete(key)
+    }
   }
   dispose() {
     this.tiles.clear()
@@ -60,6 +68,23 @@ export class FlightGround {
     const xs = Array.from({ length: SIZE }, (_, i) => (col + (i + 0.5) / SIZE) * SPAN)
     const bendX = xs.map((x) => Math.sin(x / 1380) * 270 + Math.sin(x / 540) * 65)
     const grainX = xs.map((x) => Math.sin(x / 2160) * 76 + Math.cos(x / 743) * 27)
+    // Away from regional borders copy packed RGBA pixels without blending.
+    if (regions.length === 1) {
+      const src = regions[0].source,
+        tex = new Uint32Array(src.data.buffer, src.data.byteOffset, src.width * src.height)
+      const target = new Uint32Array(out.data.buffer, out.data.byteOffset, SIZE * SIZE)
+      for (let j = 0; j < SIZE; j++) {
+        const y = (row + (j + 0.5) / SIZE) * SPAN,
+          grainY = Math.sin(y / 1130) * 83 + Math.cos(y / 570) * 24
+        for (let i = 0; i < SIZE; i++)
+          target[j * SIZE + i] =
+            tex[
+              positive(y * 0.25 + grainX[i], src.height) * src.width + positive(xs[i] * 0.25 + grainY, src.width)
+            ]
+      }
+      ctx.putImageData(out, 0, 0)
+      return canvas
+    }
     for (let j = 0; j < SIZE; j++) {
       const y = (row + (j + 0.5) / SIZE) * SPAN,
         bendY = Math.sin(y / 1600) * 315 + Math.cos(y / 470) * 48
