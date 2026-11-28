@@ -36,7 +36,13 @@ function canvas(w: number, h: number) {
 function image(name: string): Promise<HTMLImageElement | undefined> {
   return new Promise((resolve) => {
     const img = new Image()
-    img.onload = () => resolve(img)
+    img.decoding = 'async'
+    img.onload = () => {
+      void img.decode().then(
+        () => resolve(img),
+        () => resolve(img),
+      )
+    }
     img.onerror = () => resolve(undefined)
     img.src = artwork(name)
   })
@@ -48,14 +54,18 @@ function seamlessGround(img: HTMLImageElement) {
     featherX = 29,
     featherY = 17
   const c = canvas(w + featherX, h + featherY),
-    ctx = c.getContext('2d')!
+    ctx = c.getContext('2d', { willReadFrequently: true })!
   ctx.drawImage(img, 0, 0, c.width, c.height)
   const source = ctx.getImageData(0, 0, c.width, c.height).data
-  const tile = canvas(w, h),
-    tc = tile.getContext('2d')!,
-    pixels = tc.createImageData(w, h)
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
+  const pixels = new ImageData(w, h)
+  for (let y = 0; y < h; y++) {
+    const srcRow = y * c.width * 4,
+      destRow = y * w * 4
+    // Only the strips along the top and left need a crossfade. Keep the
+    // remaining opaque regional painting exactly as it was sampled.
+    pixels.data.set(source.subarray(srcRow, srcRow + w * 4), destRow)
+    const limit = y < featherY ? w : featherX
+    for (let x = 0; x < limit; x++) {
       const tx = Math.min(1, x / featherX),
         ty = Math.min(1, y / featherY),
         endX = x < featherX ? x + w : x,
@@ -68,13 +78,13 @@ function seamlessGround(img: HTMLImageElement) {
           ty * ((1 - tx) * read(endX, y, k) + tx * read(x, y, k))
       pixels.data[p + 3] = 255
     }
-  tc.putImageData(pixels, 0, 0)
-  return tile
+  }
+  return pixels
 }
 function cloudSprites(img: HTMLImageElement) {
   return [0.05, 0.32, 0.55].map((offset, i) => {
     const cloud = canvas(264, 156),
-      cc = cloud.getContext('2d')!
+      cc = cloud.getContext('2d', { willReadFrequently: true })!
     cc.drawImage(
       img,
       img.width * offset,
@@ -164,13 +174,7 @@ export class WorldFlightSky {
       .catch(() => {
         /* The flight and calibrated port previews also work without WebGL. */
       })
-    for (const id of PORT_IDS) {
-      void image('battle-' + id).then((img) => {
-        if (img && !this.dead) {
-          this.ground.register(id, seamlessGround(img))
-        }
-      })
-    }
+    void this.loadGround(origin)
     for (const name of ['schooner-top', 'raider-top', 'watch-top'])
       void image(name).then((img) => {
         if (img && !this.dead) {
@@ -181,6 +185,21 @@ export class WorldFlightSky {
     void image('cloud-sea').then((img) => {
       if (img && !this.dead) this.banks = cloudSprites(img)
     })
+  }
+  private async loadGround(origin: Point) {
+    const range = (id: PortId) => Math.hypot(WORLD_PORTS[id].x - origin.x, WORLD_PORTS[id].y - origin.y)
+    const regions = [...PORT_IDS].sort((a, b) => range(a) - range(b))
+    for (const [index, id] of regions.entries()) {
+      if (index) {
+        // Each readback can occupy a display frame on a cold GPU. Prepare the
+        // local landscape first and process the other regions across paints.
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+      }
+      if (this.dead) return
+      const img = await image('battle-' + id)
+      if (this.dead) return
+      if (img) this.ground.register(id, seamlessGround(img))
+    }
   }
   destroy() {
     this.dead = true
