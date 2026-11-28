@@ -62,7 +62,14 @@
   }
 }
 @media (max-width: 600px) {
-  .flight-world:has(.flight-combat-status:not([hidden])) .flight-minimap {
-    visibility: hidden;
+  #app .flight-world:has(.flight-combat-status:not([hidden])) .flight-minimap {
+    top: auto;
+    bottom: max(132px, calc(114px + env(safe-area-inset-bottom)));
+  }
+}
+
+@media (max-width: 899px) {
+  #app:has(#toast:not([hidden])) .flight-minimap {
+    top: calc(max(74px, calc(env(safe-area-inset-top) + 64px)) + var(--notice-space, 0px));
   }
 }

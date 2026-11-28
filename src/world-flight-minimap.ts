@@ -252,7 +252,8 @@ export function mountFlightMinimap(root: HTMLElement, unlocked: (port: PortId) =
       ctx.textAlign = right ? 'left' : 'right'
       ctx.fillStyle = color
       // Offset the text from the diamond even when the pilot is moored on top of it.
-      ctx.fillText(label, at.x + (right ? 6 : -6), at.y - 3)
+      const textY = !local && id === 'sunstep' ? at.y + 8 : at.y - 3
+      ctx.fillText(label, at.x + (right ? 6 : -6), textY)
     }
     if (local) {
       for (const actor of flight.traffic) {
@@ -266,14 +267,15 @@ export function mountFlightMinimap(root: HTMLElement, unlocked: (port: PortId) =
     ctx.save()
     ctx.translate(ship.x, ship.y)
     ctx.rotate(player.heading)
+    circle(0, 0, 6.3, '#173438de')
     ctx.fillStyle = '#ffdd8e'
     ctx.strokeStyle = '#16373b'
     ctx.lineWidth = 1.2
     ctx.beginPath()
-    ctx.moveTo(6, 0)
-    ctx.lineTo(-4.4, 3.9)
+    ctx.moveTo(7.2, 0)
+    ctx.lineTo(-4.8, 4.5)
     ctx.lineTo(-2.6, 0)
-    ctx.lineTo(-4.4, -3.9)
+    ctx.lineTo(-4.8, -4.5)
     ctx.closePath()
     ctx.fill()
     ctx.stroke()
