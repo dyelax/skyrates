@@ -55,7 +55,8 @@ function start(
 ) {
   return initWorldFlight({ seed, origin, destination, weather, load, encounter: 'raiders' })
 }
-const distance = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.hypot(p.x - q.x, p.y - q.y)
+const distance = (p: { x: number; y: number }, q: { x: number; y: number }) =>
+  Math.hypot(p.x - q.x, p.y - q.y)
 function guide(f: WorldFlight, destination: { x: number; y: number }, throttle: Throttle) {
   const s = f.player,
     at = worldCourse(s, destination)
@@ -136,7 +137,7 @@ test('safe opening and multiple distinct contacts are physical, spend once and s
     Object.assign(safe.player, { x: actor.ship.x, y: actor.ship.y })
     assert.equal(nearbyHail(safe), undefined)
   }
-  assert.equal(safe.traffic.length, 6)
+  assert.equal(safe.traffic.filter((ship) => !ship.local).length, 6)
   assert.equal(safe.spentIds.length, 3)
   assert.deepEqual(safe.traffic[0].ship, f.traffic[0].ship)
 })
@@ -224,7 +225,7 @@ test('armed and unarmed traders react only to the pilot’s own attack; struck a
     encounter: 'none',
     previous: f,
   })
-  assert.equal(keep.traffic.length, 5)
+  assert.equal(keep.traffic.filter((ship) => !ship.local).length, 5)
   assert(keep.spentIds.includes(second.id))
   assert.deepEqual(keep.player, f.player)
   let steps = 0
