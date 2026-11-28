@@ -28,6 +28,7 @@ import {
   type WorldFlight,
 } from './world-flight'
 import { WorldFlightSky } from './world-flight-sky'
+import { mountFlightMinimap } from './world-flight-minimap'
 import { battery, syncBattery } from './battle-battery'
 import { armamentLabel, armedSide } from './battle-model'
 import { hullContact } from './contact-combat'
@@ -129,8 +130,9 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
       <div class="flight-throttle"><button data-op="slower" aria-keyshortcuts="S ArrowDown" aria-label="Reduce throttle">−</button><div><strong data-f="throttle"></strong><span data-f="speed"></span></div><button data-op="faster" aria-keyshortcuts="W ArrowUp" aria-label="Increase throttle">+</button></div></div>
     <div class="flight-context"><button data-op="dock"></button><button data-op="hail"></button><button data-op="provoke"></button><button data-op="cast">${icon('sailboat')} Cast off</button><span data-f="locked" hidden></span></div>
     <div class="flight-port-battery" hidden></div><div class="flight-combat-status" aria-live="polite" hidden></div>
-    <div class="flight-paused" hidden><strong>Flight paused</strong><p>A / D steers. W / S sets throttle. C holds a course. F docks or hails.</p><button data-op="sound" aria-label="Flight sound" aria-pressed="false"></button><button data-op="fullscreen" hidden>Full screen</button><button data-op="resume">Resume</button></div>`
+    <div class="flight-paused" hidden><strong>Flight paused</strong><p>A / D steers. W / S sets throttle. C holds a course. F docks or hails. M toggles the mini-map.</p><button data-op="sound" aria-label="Flight sound" aria-pressed="false"></button><button data-op="fullscreen" hidden>Full screen</button><button data-op="resume">Resume</button></div>`
   host.replaceChildren(root)
+  const minimap = mountFlightMinimap(root, (port) => isUnlocked(state, port))
   const get = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!
   const button = (op: string) => get<HTMLButtonElement>('[data-op="' + op + '"]')
   const read = (key: string) => get<HTMLElement>('[data-f="' + key + '"]')
@@ -513,6 +515,7 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
       state.ship.cannons,
       !!state.garden,
     )
+    minimap.update(flight, waypoint, underway)
   }
   function pause(value: boolean) {
     paused = value
@@ -856,6 +859,7 @@ export function mountWorldFlight(host: HTMLElement, options: Options) {
       cancelAnimationFrame(frame)
       resize.disconnect()
       stop.abort()
+      minimap.destroy()
       sky.destroy()
       root.remove()
     },
